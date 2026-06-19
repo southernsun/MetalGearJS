@@ -9,6 +9,13 @@ never leaves the server.
 There is **no temp file**: the ~20s clip is recorded in the browser's memory, POSTed as the request
 body, and streamed straight through `serve.js` to GitHub. No writable disk is required.
 
+> **Just want to host the playable game?** It's pure static files — point any web server
+> (Apache, nginx, Caddy, …) at the `web/` folder and you're done. **No Node, no reverse proxy,
+> no nginx required.** The steps below only add the optional in-game **B** bug reporter, which
+> needs the localhost Node `/report` service proxied through your web server. Sample configs for
+> both **Apache** ([`apache.conf`](apache.conf)) and **nginx** ([`nginx.conf`](nginx.conf)) are
+> in this folder — use whichever you already run.
+
 ## 1. Get the files on the server
 Copy the exported `web/` folder (`index.html`, `game.js`, `serve.js`, `assets/`, `deploy/`) to e.g.
 `/var/www/metalgear/web`. Node 18+ must be installed (only for the `/report` service).
@@ -31,8 +38,14 @@ systemctl status metalgear-report           # should be listening on 127.0.0.1:8
 (`serve.js` honors `HOST`/`PORT`; the unit sets `HOST=127.0.0.1` so the API is not exposed directly.)
 
 ## 4. Web server: static + proxy `/report` + access control
-Use the sample `deploy/nginx.conf` (static `root` + `location = /report` proxy + `auth_basic`),
-or the Caddy equivalent:
+Use the sample for whatever you already run:
+
+- **Apache** — [`deploy/apache.conf`](apache.conf): `DocumentRoot` on `web/` + a `/report`
+  `ProxyPass` to `127.0.0.1:8099` + `auth_basic`. Needs `mod_proxy`/`mod_proxy_http`/`mod_ssl`
+  (`a2enmod ssl proxy proxy_http auth_basic authn_file authz_core`).
+- **nginx** — [`deploy/nginx.conf`](nginx.conf): static `root` + `location = /report` proxy +
+  `auth_basic`.
+- **Caddy** — the equivalent:
 ```caddy
 metalgear.example.com {
     root * /var/www/metalgear/web

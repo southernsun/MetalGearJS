@@ -3,16 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Metal Gear — Snake (browser prototype)</title>
+<title>Metal Gear — metal-gear.nl</title>
 <style>
   :root { --bg:#0a0e0a; --ink:#d8f5d0; --dim:#6f8f6a; --accent:#56d364; }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
-    background:var(--bg); color:var(--ink);
+    /* metal-gear.nl site background (the metalgear.svg poster, saved as site-bg.svg).
+       The --bg colour is the fallback if it's missing. */
+    background:var(--bg) url("assets/site-bg.svg") center center / cover no-repeat fixed;
+    color:var(--ink);
     font-family:"Segoe UI",system-ui,Arial,sans-serif;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    min-height:100vh; gap:14px;
+    min-height:100vh; padding:24px;
+  }
+  /* Centred panel that frames the game over the site background. */
+  #frame{
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+    max-width:96vw;
+    background:rgba(6,10,6,.82);
+    border:1px solid #1c2a1c; border-radius:12px;
+    padding:20px 22px;
+    box-shadow:0 12px 48px rgba(0,0,0,.55);
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
   }
   #stage{position:relative;line-height:0}
   /* Native res 256x192, scaled up with crisp pixels. */
@@ -62,6 +75,7 @@
 </style>
 </head>
 <body>
+  <div id="frame">
   <div id="stage">
     <canvas id="screen" width="256" height="192"></canvas>
     <div id="gate" class="hidden"></div><!-- the canvas boots into the title; first key unlocks audio -->
@@ -92,6 +106,7 @@
   </div>
   <button id="pause">⏸ Pause</button>
   <div id="err"></div>
+  </div><!-- #frame -->
   <script src="game.js"></script>
 </body>
 </html>

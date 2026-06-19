@@ -12,7 +12,8 @@
 const http = require('http'), https = require('https'), fs = require('fs'), path = require('path');
 const root = __dirname;
 const types = { '.html':'text/html', '.js':'text/javascript', '.json':'application/json',
-  '.png':'image/png', '.wav':'audio/wav', '.webm':'video/webm' };
+  '.png':'image/png', '.svg':'image/svg+xml', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
+  '.wav':'audio/wav', '.webm':'video/webm' };
 
 const REPO = () => process.env.GITHUB_REPO || 'southernsun/MetalGearJS';
 const RELEASE_TAG = 'bug-clips';

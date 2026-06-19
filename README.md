@@ -1,5 +1,7 @@
 # Metal Gear — Browser Port (MetalGearJS)
 
+[![tests](https://github.com/southernsun/MetalGearJS/actions/workflows/test.yml/badge.svg)](https://github.com/southernsun/MetalGearJS/actions/workflows/test.yml)
+
 A playable, faithful **browser reimplementation** of *Metal Gear* (Konami, MSX2, 1987,
 cartridge code RC750) in vanilla JavaScript + Canvas — **no build step, no framework**. Snake
 infiltrates Outer Heaven; you sneak past guards, collect gear, take down the bosses, and

@@ -1,0 +1,12 @@
+{
+  "frameWidth": 16,
+  "frameHeight": 32,
+  "anchorX": 8,
+  "anchorY": 30,
+  "frames": {
+    "fire": {"x": 0, "y": 0},
+    "recoil": {"x": 16, "y": 0},
+    "walk1": {"x": 32, "y": 0},
+    "walk2": {"x": 48, "y": 0}
+  }
+}

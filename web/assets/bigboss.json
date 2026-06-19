@@ -1,0 +1,16 @@
+{
+  "frameWidth": 16,
+  "frameHeight": 32,
+  "anchorX": 8,
+  "anchorY": 30,
+  "frames": {
+    "up-walk1": {"x": 0, "y": 0},
+    "up-walk2": {"x": 16, "y": 0},
+    "down-walk1": {"x": 32, "y": 0},
+    "down-walk2": {"x": 48, "y": 0},
+    "left-walk1": {"x": 64, "y": 0},
+    "left-walk2": {"x": 80, "y": 0},
+    "right-walk1": {"x": 96, "y": 0},
+    "right-walk2": {"x": 112, "y": 0}
+  }
+}

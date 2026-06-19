@@ -1,0 +1,19 @@
+<Window x:Class="MetalGearSpriteMover.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Metal Gear - Snake Sprite Mover" Width="528" Height="446"
+        Background="#202830" Focusable="True" ResizeMode="CanMinimize">
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Background="#101418" Padding="8,5">
+            <TextBlock x:Name="txtStatus" Foreground="#9FB4C0"
+                       Text="Arrow keys / WASD to move.  [ ] or PgUp/PgDn to change room." />
+        </Border>
+        <!-- Canvas: room background image, with Snake drawn on top. -->
+        <Canvas x:Name="canvas" Background="#0E5A0E" ClipToBounds="True">
+            <Image x:Name="imgBg" Canvas.Left="0" Canvas.Top="0"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor" Stretch="Fill" />
+            <Image x:Name="imgSnake"
+                   RenderOptions.BitmapScalingMode="NearestNeighbor" Stretch="Fill" />
+        </Canvas>
+    </DockPanel>
+</Window>

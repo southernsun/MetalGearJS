@@ -1,0 +1,3528 @@
+{
+ "0": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "1": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_MEDIUMx2",
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "2": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOW",
+   "ID_GUARD_MEDIUM"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "3": {
+  "exported": true,
+  "romActors": [
+   "ID_SPAWN_GUARD_ELEV",
+   "ID_GUARD_ELEVATORx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "2:t5:l1->240"
+  ],
+  "gaps": []
+ },
+ "4": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_MEDIUM",
+   "ID_GUARD_FAST"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "5": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_EXIT_LORRY"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "101:t1:l10->126",
+   "109:t1:l11->127",
+   "113:t1:l11->128",
+   "117:t1:l1->199",
+   "108:t2:l1->204"
+  ],
+  "gaps": []
+ },
+ "6": {
+  "exported": true,
+  "romActors": [
+   "ID_DOGx2"
+  ],
+  "actorsJson": "dogs:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "3:t1:l5->129",
+   "4:t1:l5->7",
+   "64:t2:l1->204"
+  ],
+  "gaps": []
+ },
+ "7": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_EXIT_LORRYx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "4:t2:l5->6",
+   "118:t1:l1->130",
+   "5:t4:l5->11",
+   "119:t1:l1->131",
+   "120:t1:l1->132"
+  ],
+  "gaps": []
+ },
+ "8": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "1:t1:l2->138"
+  ],
+  "gaps": []
+ },
+ "9": {
+  "exported": true,
+  "romActors": [
+   "ID_LAND_MINEx12"
+  ],
+  "actorsJson": "mines:12",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "116:t1:l1->135",
+   "117:t1:l1->199",
+   "133:t1:l1->173",
+   "146:t1:l1->213",
+   "152:t1:l1->219"
+  ],
+  "gaps": []
+ },
+ "10": {
+  "exported": true,
+  "romActors": [
+   "ID_DOGx3"
+  ],
+  "actorsJson": "dogs:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "7:t1:l5->133"
+  ],
+  "gaps": []
+ },
+ "11": {
+  "exported": true,
+  "romActors": [
+   "ID_SENTINELx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "5:t3:l5->7",
+   "6:t1:l5->64"
+  ],
+  "gaps": []
+ },
+ "12": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "13": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "8:t3:l2->136",
+   "9:t4:l3->137"
+  ],
+  "gaps": []
+ },
+ "14": {
+  "exported": true,
+  "romActors": [
+   "ID_CAMERAx3"
+  ],
+  "actorsJson": null,
+  "cameras": 3,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "10:t3:l3->134"
+  ],
+  "gaps": []
+ },
+ "15": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "11:t5:l1->241"
+  ],
+  "gaps": []
+ },
+ "16": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SWITCH"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "21:t1:l4->139",
+   "22:t4:l5->20"
+  ],
+  "gaps": []
+ },
+ "17": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "23:t4:l4->195",
+   "121:t3:l1->140"
+  ],
+  "gaps": []
+ },
+ "18": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx5"
+  ],
+  "actorsJson": "guards:5",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "19": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_FASTx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "122:t1:l1->141"
+  ],
+  "gaps": []
+ },
+ "20": {
+  "exported": true,
+  "romActors": [
+   "ID_MACH_GUN_KID"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "25:t4:l4->22",
+   "22:t3:l5->16",
+   "155:t1:l2->143"
+  ],
+  "gaps": []
+ },
+ "21": {
+  "exported": true,
+  "romActors": [
+   "ID_CAMERA"
+  ],
+  "actorsJson": null,
+  "cameras": 1,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "124:t1:l1->142",
+   "125:t1:l1->142"
+  ],
+  "gaps": []
+ },
+ "22": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_FASTx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "25:t3:l4->20",
+   "26:t1:l4->144"
+  ],
+  "gaps": []
+ },
+ "23": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "24:t3:l4->142"
+  ],
+  "gaps": []
+ },
+ "24": {
+  "exported": true,
+  "romActors": [
+   "ID_LASER"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 6,
+  "itemsJson": null,
+  "doors": [
+   "27:t1:l2->145"
+  ],
+  "gaps": []
+ },
+ "25": {
+  "exported": true,
+  "romActors": [
+   "ID_LASER"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 5,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "26": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "27": {
+  "exported": true,
+  "romActors": [
+   "ID_CAMERAx2"
+  ],
+  "actorsJson": null,
+  "cameras": 2,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "28:t5:l1->241"
+  ],
+  "gaps": []
+ },
+ "28": {
+  "exported": true,
+  "romActors": [
+   "ID_CAMERA",
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 1,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "29:t3:l2->146",
+   "30:t3:l3->147",
+   "31:t1:l2->29"
+  ],
+  "gaps": []
+ },
+ "29": {
+  "exported": true,
+  "romActors": [
+   "ID_GASx4"
+  ],
+  "actorsJson": "gas:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "31:t2:l2->28",
+   "32:t3:l2->148"
+  ],
+  "gaps": []
+ },
+ "30": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_FASTx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "33:t4:l3->152",
+   "126:t3:l1->149"
+  ],
+  "gaps": []
+ },
+ "31": {
+  "exported": true,
+  "romActors": [
+   "ID_CAMERAx2"
+  ],
+  "actorsJson": null,
+  "cameras": 2,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "34:t5:l1->240"
+  ],
+  "gaps": []
+ },
+ "32": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "127:t1:l1->153",
+   "128:t3:l1->153"
+  ],
+  "gaps": []
+ },
+ "33": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_MEDIUMx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "35:t1:l3->150",
+   "38:t4:l3->35"
+  ],
+  "gaps": []
+ },
+ "34": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_FAST",
+   "ID_GUARD_MEDIUM"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "35": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx2",
+   "ID_GUARD_FAST"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "38:t3:l3->33",
+   "39:t1:l3->156"
+  ],
+  "gaps": []
+ },
+ "36": {
+  "exported": true,
+  "romActors": [
+   "ID_CAMERAx2",
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 2,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "40:t1:l3->158",
+   "41:t1:l2->157"
+  ],
+  "gaps": []
+ },
+ "37": {
+  "exported": true,
+  "romActors": [
+   "ID_POWER_SWITCH"
+  ],
+  "actorsJson": "powerswitch",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "38": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOW",
+   "ID_GUARD_FAST"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "42:t4:l2->159"
+  ],
+  "gaps": []
+ },
+ "39": {
+  "exported": true,
+  "romActors": [
+   "ID_SENTINELx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "43:t5:l1->242"
+  ],
+  "gaps": []
+ },
+ "40": {
+  "exported": true,
+  "romActors": [
+   "ID_JETPACK_SWITCH"
+  ],
+  "actorsJson": "powerswitch",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "44:t1:l4->160"
+  ],
+  "gaps": []
+ },
+ "41": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "45:t4:l3->161"
+  ],
+  "gaps": []
+ },
+ "42": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "130:t4:l1->162"
+  ],
+  "gaps": []
+ },
+ "43": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_MEDIUM",
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "44": {
+  "exported": true,
+  "romActors": [
+   "ID_JETPACK_TAKEOFF"
+  ],
+  "actorsJson": "jetpacks:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "45": {
+  "exported": true,
+  "romActors": [
+   "ID_BRIDGE_CTRL",
+   "ID_BRIDGEx8"
+  ],
+  "actorsJson": "bridges:8",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "46": {
+  "exported": true,
+  "romActors": [
+   "ID_BRIDGE_CTRL",
+   "ID_BRIDGEx8"
+  ],
+  "actorsJson": "bridges:8",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "47": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_MEDIUMx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "48": {
+  "exported": true,
+  "romActors": [
+   "ID_JETPACK_TAKEOFF"
+  ],
+  "actorsJson": "jetpacks:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "49": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_MEDIUMx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "50": {
+  "exported": true,
+  "romActors": [
+   "ID_HIND_D"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "51": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "46:t1:l4->163"
+  ],
+  "gaps": []
+ },
+ "52": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_FASTx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "53": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "47:t5:l1->242"
+  ],
+  "gaps": []
+ },
+ "54": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "12:t12:l15->164",
+   "13:t1:l7->55"
+  ],
+  "gaps": []
+ },
+ "55": {
+  "exported": true,
+  "romActors": [
+   "ID_DOGx2"
+  ],
+  "actorsJson": "dogs:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "13:t2:l7->54",
+   "14:t1:l7->166"
+  ],
+  "gaps": []
+ },
+ "56": {
+  "exported": true,
+  "romActors": [
+   "ID_DOGx4"
+  ],
+  "actorsJson": "dogs:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "131:t1:l2->123"
+  ],
+  "gaps": []
+ },
+ "57": {
+  "exported": true,
+  "romActors": [
+   "ID_SHOT_GUNNER"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "15:t4:l4->58",
+   "154:t2:l10->168",
+   "74:t2:l3->122"
+  ],
+  "gaps": []
+ },
+ "58": {
+  "exported": true,
+  "romActors": [
+   "ID_DOG_BASEMENT",
+   "ID_SPAWN_DOG"
+  ],
+  "actorsJson": "dogs:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "15:t3:l4->57",
+   "17:t2:l5->171",
+   "140:t10:l16->58"
+  ],
+  "gaps": []
+ },
+ "59": {
+  "exported": true,
+  "romActors": [
+   "ID_SPAWN_DOG"
+  ],
+  "actorsJson": "dogs:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "16:t9:l16->169"
+  ],
+  "gaps": []
+ },
+ "60": {
+  "exported": true,
+  "romActors": [
+   "ID_DOG_BASEMENT",
+   "ID_SPAWN_DOG"
+  ],
+  "actorsJson": "dogs:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "142:t7:l16->60"
+  ],
+  "gaps": []
+ },
+ "61": {
+  "exported": true,
+  "romActors": [
+   "ID_DOG_BASEMENT",
+   "ID_SPAWN_DOG"
+  ],
+  "actorsJson": "dogs:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "18:t8:l16->172"
+  ],
+  "gaps": []
+ },
+ "62": {
+  "exported": true,
+  "romActors": [
+   "ID_SPAWN_DOG"
+  ],
+  "actorsJson": "dogs:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "19:t3:l4->170"
+  ],
+  "gaps": []
+ },
+ "63": {
+  "exported": true,
+  "romActors": [
+   "ID_DOG_BASEMENT",
+   "ID_SPAWN_DOG"
+  ],
+  "actorsJson": "dogs:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "141:t11:l16->63",
+   "20:t5:l1->241"
+  ],
+  "gaps": []
+ },
+ "64": {
+  "exported": true,
+  "romActors": [
+   "ID_LAND_MINEx9"
+  ],
+  "actorsJson": "mines:9",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "6:t2:l5->11",
+   "132:t1:l1->174",
+   "133:t1:l1->173"
+  ],
+  "gaps": []
+ },
+ "65": {
+  "exported": true,
+  "romActors": [
+   "ID_SPAWN_TANK_SHELL"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "134:t1:l1->175",
+   "150:t1:l1->217",
+   "148:t1:l1->215"
+  ],
+  "gaps": []
+ },
+ "66": {
+  "exported": true,
+  "romActors": [
+   "ID_SPAWN_TANK_SHELL"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "67": {
+  "exported": true,
+  "romActors": [
+   "ID_TANK"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "68": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "69": {
+  "exported": true,
+  "romActors": [
+   "ID_SENTINELx3",
+   "ID_DESERT_SECURITY"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "49:t1:l12->73"
+  ],
+  "gaps": []
+ },
+ "70": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "50:t1:l5->177",
+   "51:t1:l5->71",
+   "52:t1:l7->176"
+  ],
+  "gaps": []
+ },
+ "71": {
+  "exported": true,
+  "romActors": [
+   "ID_BULLDOZER"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "51:t2:l5->70",
+   "53:t1:l5->72"
+  ],
+  "gaps": []
+ },
+ "72": {
+  "exported": true,
+  "romActors": [
+   "ID_LASER"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 10,
+  "itemsJson": null,
+  "doors": [
+   "53:t2:l5->71",
+   "54:t5:l1->243"
+  ],
+  "gaps": []
+ },
+ "73": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "49:t2:l12->69",
+   "56:t4:l6->76"
+  ],
+  "gaps": []
+ },
+ "74": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "55:t3:l3->178"
+  ],
+  "gaps": []
+ },
+ "75": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "57:t4:l7->179",
+   "58:t1:l8->102"
+  ],
+  "gaps": []
+ },
+ "76": {
+  "exported": true,
+  "romActors": [
+   "ID_PITFALL"
+  ],
+  "actorsJson": "pitfalls:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "59:t1:l6->206",
+   "56:t3:l6->73"
+  ],
+  "gaps": []
+ },
+ "77": {
+  "exported": true,
+  "romActors": [
+   "ID_SENTINEL",
+   "ID_GUARD_SLOWx2"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "78": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "60:t4:l6->180"
+  ],
+  "gaps": []
+ },
+ "79": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_FASTx3",
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "135:t1:l1->181"
+  ],
+  "gaps": []
+ },
+ "80": {
+  "exported": true,
+  "romActors": [
+   "ID_SENTINELx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "81": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "61:t1:l7->182",
+   "62:t5:l1->243"
+  ],
+  "gaps": []
+ },
+ "82": {
+  "exported": true,
+  "romActors": [
+   "ID_SENTINELx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "65:t1:l2->83",
+   "68:t1:l6->83",
+   "114:t1:l1->202"
+  ],
+  "gaps": []
+ },
+ "83": {
+  "exported": true,
+  "romActors": [
+   "ID_ARNOLDx2"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "65:t2:l2->82",
+   "66:t1:l2->84",
+   "67:t1:l3->84",
+   "68:t2:l6->82",
+   "69:t4:l6->86"
+  ],
+  "gaps": []
+ },
+ "84": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_FASTx2",
+   "ID_GUARD_MEDIUMx2"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "66:t2:l2->83",
+   "67:t2:l3->83"
+  ],
+  "gaps": []
+ },
+ "85": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "72:t1:l6->205"
+  ],
+  "gaps": []
+ },
+ "86": {
+  "exported": true,
+  "romActors": [
+   "ID_SENTINEL",
+   "ID_GUARD_SLOWx2"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "69:t3:l6->83",
+   "70:t1:l4->198",
+   "73:t1:l7->185"
+  ],
+  "gaps": []
+ },
+ "87": {
+  "exported": true,
+  "romActors": [
+   "ID_SENTINELx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "71:t1:l7->183",
+   "75:t1:l13->184"
+  ],
+  "gaps": []
+ },
+ "88": {
+  "exported": true,
+  "romActors": [
+   "ID_SHOOTERx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "76:t5:l1->244",
+   "77:t1:l3->186"
+  ],
+  "gaps": []
+ },
+ "89": {
+  "exported": true,
+  "romActors": [
+   "ID_JETPACK_TAKEOFF"
+  ],
+  "actorsJson": "jetpacks:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "78:t1:l5->187"
+  ],
+  "gaps": []
+ },
+ "90": {
+  "exported": true,
+  "romActors": [
+   "ID_SHOOTERx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "91": {
+  "exported": true,
+  "romActors": [
+   "ID_SHOOTERx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "92": {
+  "exported": true,
+  "romActors": [
+   "ID_JETPACK_TAKEOFF"
+  ],
+  "actorsJson": "jetpacks:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "37:t1:l6->154"
+  ],
+  "gaps": []
+ },
+ "93": {
+  "exported": true,
+  "romActors": [
+   "ID_PITFALL"
+  ],
+  "actorsJson": "pitfalls:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "48:t2:l7->125",
+   "100:t17:l16->96",
+   "136:t1:l1->196"
+  ],
+  "gaps": []
+ },
+ "94": {
+  "exported": true,
+  "romActors": [
+   "ID_GASx4"
+  ],
+  "actorsJson": "gas:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "80:t1:l6->197"
+  ],
+  "gaps": []
+ },
+ "95": {
+  "exported": true,
+  "romActors": [
+   "ID_FIRE_TROOPER",
+   "ID_FLAMEx8"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "81:t5:l1->243",
+   "82:t4:l7->98"
+  ],
+  "gaps": []
+ },
+ "96": {
+  "exported": true,
+  "romActors": [
+   "ID_GASx4"
+  ],
+  "actorsJson": "gas:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "85:t4:l6->99",
+   "100:t9:l16->93"
+  ],
+  "gaps": []
+ },
+ "97": {
+  "exported": true,
+  "romActors": [
+   "ID_GASx4"
+  ],
+  "actorsJson": "gas:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "98": {
+  "exported": true,
+  "romActors": [
+   "ID_GASx4"
+  ],
+  "actorsJson": "gas:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "83:t1:l7->188",
+   "84:t1:l6->189",
+   "82:t3:l7->95"
+  ],
+  "gaps": []
+ },
+ "99": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "85:t3:l6->96",
+   "86:t1:l6->203",
+   "87:t1:l6->207",
+   "88:t1:l4->100"
+  ],
+  "gaps": []
+ },
+ "100": {
+  "exported": true,
+  "romActors": [
+   "ID_GASx4"
+  ],
+  "actorsJson": "gas:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "88:t2:l4->99",
+   "144:t18:l16->100"
+  ],
+  "gaps": []
+ },
+ "101": {
+  "exported": true,
+  "romActors": [
+   "ID_GASx4"
+  ],
+  "actorsJson": "gas:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "137:t1:l2->190",
+   "138:t1:l1->191"
+  ],
+  "gaps": []
+ },
+ "102": {
+  "exported": true,
+  "romActors": [
+   "ID_SCORPIONx6"
+  ],
+  "actorsJson": "scorpions:6",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "58:t2:l8->75"
+  ],
+  "gaps": []
+ },
+ "103": {
+  "exported": true,
+  "romActors": [
+   "ID_SCORPIONx6"
+  ],
+  "actorsJson": "scorpions:6",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "104": {
+  "exported": true,
+  "romActors": [
+   "ID_LORRY_SHOOTERx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "89:t1:l8->108",
+   "146:t1:l1->213",
+   "152:t1:l1->219",
+   "147:t1:l1->214",
+   "148:t1:l1->215",
+   "149:t1:l1->216",
+   "150:t1:l1->217",
+   "151:t1:l1->218"
+  ],
+  "gaps": []
+ },
+ "105": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "106": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "107": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOWx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "108": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_REDALERTx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "156:t3:l2->201",
+   "104:t16:l16->108",
+   "89:t2:l8->104"
+  ],
+  "gaps": []
+ },
+ "109": {
+  "exported": true,
+  "romActors": [
+   "ID_PITFALLx3"
+  ],
+  "actorsJson": "pitfalls:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "90:t5:l1->247"
+  ],
+  "gaps": []
+ },
+ "110": {
+  "exported": true,
+  "romActors": [
+   "ID_POWER_SWITCH"
+  ],
+  "actorsJson": "powerswitch",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "92:t1:l8->193",
+   "139:t1:l2->192"
+  ],
+  "gaps": []
+ },
+ "111": {
+  "exported": true,
+  "romActors": [
+   "ID_CAMERA_LASERx2"
+  ],
+  "actorsJson": null,
+  "cameras": 2,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "95:t1:l9->112"
+  ],
+  "gaps": []
+ },
+ "112": {
+  "exported": true,
+  "romActors": [
+   "ID_GASx3"
+  ],
+  "actorsJson": "gas:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "95:t2:l9->111",
+   "96:t1:l9->113",
+   "97:t19:l16->113"
+  ],
+  "gaps": []
+ },
+ "113": {
+  "exported": true,
+  "romActors": [
+   "ID_PITFALLx2"
+  ],
+  "actorsJson": "pitfalls:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "96:t2:l9->112",
+   "63:t1:l2->114"
+  ],
+  "gaps": []
+ },
+ "114": {
+  "exported": true,
+  "romActors": [
+   "ID_LAND_MINEx8",
+   "ID_GASx3"
+  ],
+  "actorsJson": "gas:3 mines:8",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "98:t1:l2->116",
+   "63:t2:l2->113"
+  ],
+  "gaps": []
+ },
+ "115": {
+  "exported": true,
+  "romActors": [
+   "ID_CAMERA_LASERx2"
+  ],
+  "actorsJson": null,
+  "cameras": 2,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "93:t5:l1->250",
+   "94:t4:l9->194",
+   "115:t8:l16->200"
+  ],
+  "gaps": []
+ },
+ "116": {
+  "exported": true,
+  "romActors": [
+   "ID_POWER_SWITCH"
+  ],
+  "actorsJson": "powerswitch",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "98:t2:l2->114"
+  ],
+  "gaps": []
+ },
+ "117": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "145:t20:l1->204"
+  ],
+  "gaps": []
+ },
+ "118": {
+  "exported": true,
+  "romActors": [
+   "ID_METAL_GEAR",
+   "ID_CAMERA_LASERx2"
+  ],
+  "actorsJson": null,
+  "cameras": 2,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "99:t3:l14->119"
+  ],
+  "gaps": []
+ },
+ "119": {
+  "exported": true,
+  "romActors": [
+   "ID_BIG_BOSS"
+  ],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "99:t4:l14->118",
+   "107:t1:l14->224"
+  ],
+  "gaps": []
+ },
+ "120": {
+  "exported": true,
+  "romActors": [
+   "ID_LAND_MINEx9"
+  ],
+  "actorsJson": "mines:9",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "121": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "122": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 24,
+    "y": 112,
+    "x": 66
+   },
+   {
+    "id": 35,
+    "y": 64,
+    "x": 160
+   }
+  ],
+  "doors": [
+   "74:t1:l3->57"
+  ],
+  "gaps": []
+ },
+ "123": {
+  "exported": true,
+  "romActors": [
+   "ID_PITFALLx3"
+  ],
+  "actorsJson": "pitfalls:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "131:t2:l2->56"
+  ],
+  "gaps": []
+ },
+ "124": {
+  "exported": true,
+  "romActors": [
+   "ID_PITFALLx2"
+  ],
+  "actorsJson": "pitfalls:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "125": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "48:t1:l7->93"
+  ],
+  "gaps": []
+ },
+ "126": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 30,
+    "y": 80,
+    "x": 80
+   }
+  ],
+  "doors": [
+   "101:t4:l10->5"
+  ],
+  "gaps": []
+ },
+ "127": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_ALERT"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 22,
+    "y": 80,
+    "x": 112
+   }
+  ],
+  "doors": [
+   "109:t4:l11->5"
+  ],
+  "gaps": []
+ },
+ "128": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 17,
+    "y": 64,
+    "x": 112
+   }
+  ],
+  "doors": [
+   "113:t4:l11->5"
+  ],
+  "gaps": []
+ },
+ "129": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "3:t2:l5->6"
+  ],
+  "gaps": []
+ },
+ "130": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 1,
+    "y": 96,
+    "x": 64
+   }
+  ],
+  "doors": [
+   "118:t4:l1->7"
+  ],
+  "gaps": []
+ },
+ "131": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_ALERTx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "119:t4:l1->7"
+  ],
+  "gaps": []
+ },
+ "132": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_ALERT"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 6,
+    "y": 64,
+    "x": 96
+   }
+  ],
+  "doors": [
+   "120:t4:l1->7"
+  ],
+  "gaps": []
+ },
+ "133": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "7:t2:l5->10"
+  ],
+  "gaps": []
+ },
+ "134": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "10:t4:l3->14"
+  ],
+  "gaps": []
+ },
+ "135": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 25,
+    "y": 96,
+    "x": 128
+   }
+  ],
+  "doors": [
+   "116:t4:l1->9"
+  ],
+  "gaps": []
+ },
+ "136": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "8:t4:l2->13"
+  ],
+  "gaps": []
+ },
+ "137": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 2,
+    "y": 32,
+    "x": 64
+   }
+  ],
+  "doors": [
+   "9:t3:l3->13"
+  ],
+  "gaps": []
+ },
+ "138": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 13,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "1:t2:l2->8"
+  ],
+  "gaps": []
+ },
+ "139": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 12,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "21:t2:l4->16"
+  ],
+  "gaps": []
+ },
+ "140": {
+  "exported": true,
+  "romActors": [
+   "ID_SENTINELx3",
+   "ID_SLEEPING_SIGNx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 6,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "121:t4:l1->17"
+  ],
+  "gaps": []
+ },
+ "141": {
+  "exported": true,
+  "romActors": [
+   "ID_ROLLING_BARREL"
+  ],
+  "actorsJson": "barrels:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "122:t2:l1->19",
+   "123:t4:l4->142"
+  ],
+  "gaps": []
+ },
+ "142": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 5,
+    "y": 128,
+    "x": 80
+   },
+   {
+    "id": 35,
+    "y": 128,
+    "x": 176
+   }
+  ],
+  "doors": [
+   "24:t4:l4->23",
+   "123:t3:l4->141",
+   "124:t2:l1->21",
+   "125:t2:l1->21"
+  ],
+  "gaps": []
+ },
+ "143": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 20,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "155:t2:l2->20"
+  ],
+  "gaps": []
+ },
+ "144": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "26:t2:l4->22"
+  ],
+  "gaps": []
+ },
+ "145": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "27:t2:l2->24"
+  ],
+  "gaps": []
+ },
+ "146": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "29:t4:l2->28"
+  ],
+  "gaps": []
+ },
+ "147": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 7,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "30:t4:l3->28"
+  ],
+  "gaps": []
+ },
+ "148": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "32:t4:l2->29",
+   "102:t1:l2->149"
+  ],
+  "gaps": []
+ },
+ "149": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 35,
+    "y": 32,
+    "x": 160
+   }
+  ],
+  "doors": [
+   "102:t2:l2->148",
+   "126:t4:l1->30"
+  ],
+  "gaps": []
+ },
+ "150": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SILENCERx4"
+  ],
+  "actorsJson": "guards:4",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "35:t2:l3->33",
+   "36:t4:l2->151"
+  ],
+  "gaps": []
+ },
+ "151": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 3,
+    "y": 32,
+    "x": 128
+   }
+  ],
+  "doors": [
+   "36:t3:l2->150"
+  ],
+  "gaps": []
+ },
+ "152": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "33:t3:l3->30"
+  ],
+  "gaps": []
+ },
+ "153": {
+  "exported": true,
+  "romActors": [
+   "ID_ROLLING_BARREL"
+  ],
+  "actorsJson": "barrels:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 5,
+    "y": 56,
+    "x": 48
+   }
+  ],
+  "doors": [
+   "128:t4:l1->32",
+   "127:t2:l1->32"
+  ],
+  "gaps": []
+ },
+ "154": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_ALERT"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "79:t5:l1->246",
+   "37:t2:l6->92"
+  ],
+  "gaps": []
+ },
+ "156": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 33,
+    "y": 96,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "39:t2:l3->35"
+  ],
+  "gaps": []
+ },
+ "157": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 23,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "41:t2:l2->36"
+  ],
+  "gaps": []
+ },
+ "158": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 30,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "40:t2:l3->36"
+  ],
+  "gaps": []
+ },
+ "159": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "42:t3:l2->38"
+  ],
+  "gaps": []
+ },
+ "160": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 15,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "44:t2:l4->40"
+  ],
+  "gaps": []
+ },
+ "161": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "45:t3:l3->41"
+  ],
+  "gaps": []
+ },
+ "162": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 35,
+    "y": 48,
+    "x": 104
+   }
+  ],
+  "doors": [
+   "130:t3:l1->42"
+  ],
+  "gaps": []
+ },
+ "163": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 7,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "46:t2:l4->51"
+  ],
+  "gaps": []
+ },
+ "164": {
+  "exported": true,
+  "romActors": [
+   "ID_GREY_FOX"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "12:t13:l15->54",
+   "103:t15:l15->165"
+  ],
+  "gaps": []
+ },
+ "165": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "103:t14:l15->164"
+  ],
+  "gaps": []
+ },
+ "166": {
+  "exported": true,
+  "romActors": [
+   "ID_HELPME_VOICE",
+   "ID_PITFALL"
+  ],
+  "actorsJson": "pitfalls:1 helpme",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "106:t15:l16->167",
+   "14:t2:l7->55"
+  ],
+  "gaps": []
+ },
+ "167": {
+  "exported": true,
+  "romActors": [
+   "ID_ELLEN"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "106:t14:l16->166"
+  ],
+  "gaps": []
+ },
+ "168": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 34,
+    "y": 32,
+    "x": 136
+   }
+  ],
+  "doors": [
+   "154:t1:l10->57"
+  ],
+  "gaps": []
+ },
+ "169": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 32,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "16:t17:l16->59"
+  ],
+  "gaps": []
+ },
+ "170": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 10,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "19:t4:l4->62"
+  ],
+  "gaps": []
+ },
+ "171": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 9,
+    "y": 32,
+    "x": 136
+   }
+  ],
+  "doors": [
+   "17:t1:l5->58"
+  ],
+  "gaps": []
+ },
+ "172": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 35,
+    "y": 42,
+    "x": 64
+   },
+   {
+    "id": 5,
+    "y": 112,
+    "x": 168
+   }
+  ],
+  "doors": [
+   "18:t12:l16->61"
+  ],
+  "gaps": []
+ },
+ "173": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "133:t4:l1->9"
+  ],
+  "gaps": []
+ },
+ "174": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 5,
+    "y": 96,
+    "x": 96
+   }
+  ],
+  "doors": [
+   "132:t4:l1->64"
+  ],
+  "gaps": []
+ },
+ "175": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 30,
+    "y": 64,
+    "x": 96
+   }
+  ],
+  "doors": [
+   "134:t4:l1->65"
+  ],
+  "gaps": []
+ },
+ "176": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 11,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "52:t2:l7->70"
+  ],
+  "gaps": []
+ },
+ "177": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 6,
+    "y": 112,
+    "x": 128
+   },
+   {
+    "id": 35,
+    "y": 64,
+    "x": 64
+   },
+   {
+    "id": 32,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "50:t2:l5->70"
+  ],
+  "gaps": []
+ },
+ "178": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_SLOW"
+  ],
+  "actorsJson": "guards:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 16,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "55:t4:l3->74"
+  ],
+  "gaps": []
+ },
+ "179": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 5,
+    "y": 32,
+    "x": 136
+   }
+  ],
+  "doors": [
+   "57:t3:l7->75"
+  ],
+  "gaps": []
+ },
+ "180": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "60:t3:l6->78"
+  ],
+  "gaps": []
+ },
+ "181": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_ALERTx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 35,
+    "y": 48,
+    "x": 112
+   },
+   {
+    "id": 35,
+    "y": 64,
+    "x": 56
+   },
+   {
+    "id": 35,
+    "y": 128,
+    "x": 184
+   }
+  ],
+  "doors": [
+   "135:t2:l1->79"
+  ],
+  "gaps": []
+ },
+ "182": {
+  "exported": true,
+  "romActors": [
+   "ID_MADNAR"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "61:t2:l7->81"
+  ],
+  "gaps": []
+ },
+ "183": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_REDALERTx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 21,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "71:t2:l7->87"
+  ],
+  "gaps": []
+ },
+ "184": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 19,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "75:t2:l13->87"
+  ],
+  "gaps": []
+ },
+ "185": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "73:t2:l7->86"
+  ],
+  "gaps": []
+ },
+ "186": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "77:t2:l3->88"
+  ],
+  "gaps": []
+ },
+ "187": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_ALERTx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 26,
+    "y": 32,
+    "x": 72
+   },
+   {
+    "id": 35,
+    "y": 128,
+    "x": 168
+   }
+  ],
+  "doors": [
+   "78:t2:l5->89"
+  ],
+  "gaps": []
+ },
+ "188": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 27,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "83:t2:l7->98",
+   "153:t4:l1->189"
+  ],
+  "gaps": []
+ },
+ "189": {
+  "exported": true,
+  "romActors": [
+   "ID_FAKE_MADNAR"
+  ],
+  "actorsJson": "fakemadnar",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "84:t2:l6->98",
+   "153:t3:l1->188"
+  ],
+  "gaps": []
+ },
+ "190": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "137:t2:l2->101"
+  ],
+  "gaps": []
+ },
+ "191": {
+  "exported": true,
+  "romActors": [
+   "ID_ROLLING_BARREL"
+  ],
+  "actorsJson": "barrels:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 5,
+    "y": 72,
+    "x": 40
+   },
+   {
+    "id": 35,
+    "y": 72,
+    "x": 192
+   },
+   {
+    "id": 30,
+    "y": 96,
+    "x": 192
+   }
+  ],
+  "doors": [
+   "138:t2:l1->101"
+  ],
+  "gaps": []
+ },
+ "192": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 35,
+    "y": 24,
+    "x": 104
+   },
+   {
+    "id": 35,
+    "y": 80,
+    "x": 64
+   }
+  ],
+  "doors": [
+   "139:t2:l2->110"
+  ],
+  "gaps": []
+ },
+ "193": {
+  "exported": true,
+  "romActors": [
+   "ID_COWARD_DUCK",
+   "ID_PRISONER1x3",
+   "ID_PITFALL"
+  ],
+  "actorsJson": "prisoners:3 pitfalls:1 duck",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "92:t2:l8->110"
+  ],
+  "gaps": []
+ },
+ "194": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "94:t3:l9->115"
+  ],
+  "gaps": []
+ },
+ "195": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "23:t3:l4->17"
+  ],
+  "gaps": []
+ },
+ "196": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 35,
+    "y": 80,
+    "x": 96
+   },
+   {
+    "id": 35,
+    "y": 112,
+    "x": 168
+   }
+  ],
+  "doors": [
+   "136:t2:l1->93"
+  ],
+  "gaps": []
+ },
+ "197": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 30,
+    "y": 32,
+    "x": 72
+   }
+  ],
+  "doors": [
+   "80:t2:l6->94"
+  ],
+  "gaps": []
+ },
+ "198": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "70:t2:l4->86"
+  ],
+  "gaps": []
+ },
+ "199": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "117:t4:l1->5"
+  ],
+  "gaps": []
+ },
+ "200": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 18,
+    "y": 32,
+    "x": 136
+   }
+  ],
+  "doors": [
+   "115:t12:l16->115"
+  ],
+  "gaps": []
+ },
+ "201": {
+  "exported": true,
+  "romActors": [
+   "ID_PITFALL"
+  ],
+  "actorsJson": "pitfalls:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "156:t4:l2->108"
+  ],
+  "gaps": []
+ },
+ "202": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "114:t2:l1->82"
+  ],
+  "gaps": []
+ },
+ "203": {
+  "exported": true,
+  "romActors": [
+   "ID_PRISONER1"
+  ],
+  "actorsJson": "prisoners:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "86:t2:l6->99"
+  ],
+  "gaps": []
+ },
+ "204": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "145:t2:l1->117",
+   "129:t2:l1->46",
+   "91:t2:l1->45"
+  ],
+  "gaps": []
+ },
+ "205": {
+  "exported": true,
+  "romActors": [
+   "ID_ROLLING_BARREL",
+   "ID_PITFALL"
+  ],
+  "actorsJson": "pitfalls:1 barrels:1",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "72:t2:l6->85",
+   "111:t5:l1->245"
+  ],
+  "gaps": []
+ },
+ "206": {
+  "exported": true,
+  "romActors": [
+   "ID_SHOOTERx2"
+  ],
+  "actorsJson": "guards:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "59:t2:l6->76",
+   "110:t5:l1->245"
+  ],
+  "gaps": []
+ },
+ "207": {
+  "exported": true,
+  "romActors": [
+   "ID_DOGx2"
+  ],
+  "actorsJson": "dogs:2",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "87:t2:l6->99",
+   "112:t5:l1->245"
+  ],
+  "gaps": []
+ },
+ "208": {
+  "exported": true,
+  "romActors": [
+   "ID_SCORPIONx6"
+  ],
+  "actorsJson": "scorpions:6",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "209": {
+  "exported": true,
+  "romActors": [
+   "ID_SCORPIONx6"
+  ],
+  "actorsJson": "scorpions:6",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "210": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "211": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "212": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "213": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "146:t4:l1->9"
+  ],
+  "gaps": []
+ },
+ "214": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 35,
+    "y": 48,
+    "x": 104
+   }
+  ],
+  "doors": [
+   "147:t4:l1->104"
+  ],
+  "gaps": []
+ },
+ "215": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "148:t4:l1->65"
+  ],
+  "gaps": []
+ },
+ "216": {
+  "exported": true,
+  "romActors": [
+   "ID_GUARD_REDALERTx3"
+  ],
+  "actorsJson": "guards:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": [
+   {
+    "id": 35,
+    "y": 80,
+    "x": 96
+   },
+   {
+    "id": 35,
+    "y": 112,
+    "x": 168
+   }
+  ],
+  "doors": [
+   "149:t4:l1->104"
+  ],
+  "gaps": []
+ },
+ "217": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "150:t4:l1->65"
+  ],
+  "gaps": []
+ },
+ "218": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "151:t4:l1->104"
+  ],
+  "gaps": []
+ },
+ "219": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "152:t4:l1->9"
+  ],
+  "gaps": []
+ },
+ "220": {
+  "exported": true,
+  "romActors": [
+   "ID_PITFALLx3"
+  ],
+  "actorsJson": "pitfalls:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "221": {
+  "exported": true,
+  "romActors": [
+   "ID_PITFALLx3"
+  ],
+  "actorsJson": "pitfalls:3",
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "224": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "107:t6:l14->119"
+  ],
+  "gaps": []
+ },
+ "225": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "226": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "240": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "2:t6:l1->3",
+   "34:t6:l1->31"
+  ],
+  "gaps": []
+ },
+ "241": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "11:t6:l1->15",
+   "20:t6:l1->63",
+   "28:t6:l1->27"
+  ],
+  "gaps": []
+ },
+ "242": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "43:t6:l1->39",
+   "47:t6:l1->53"
+  ],
+  "gaps": []
+ },
+ "243": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "54:t6:l1->72",
+   "81:t6:l1->95",
+   "62:t6:l1->81"
+  ],
+  "gaps": []
+ },
+ "244": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "76:t6:l1->88"
+  ],
+  "gaps": []
+ },
+ "245": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "110:t6:l1->206",
+   "111:t6:l1->205",
+   "112:t6:l1->207"
+  ],
+  "gaps": []
+ },
+ "246": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "79:t6:l1->154"
+  ],
+  "gaps": []
+ },
+ "247": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "90:t6:l1->109"
+  ],
+  "gaps": []
+ },
+ "248": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "249": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [],
+  "gaps": []
+ },
+ "250": {
+  "exported": true,
+  "romActors": [],
+  "actorsJson": null,
+  "cameras": 0,
+  "lasers": 0,
+  "itemsJson": null,
+  "doors": [
+   "93:t6:l1->115"
+  ],
+  "gaps": []
+ }
+}

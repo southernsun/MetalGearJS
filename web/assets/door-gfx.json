@@ -1,0 +1,20 @@
+{
+  "1": {"img":"door-north.png","w":24,"h":32,"offX":0,"offY":0,"shear":0},
+  "2": {"img":"door-south.png","w":32,"h":8,"offX":0,"offY":0,"shear":0},
+  "3": {"img":"door-west.png","w":8,"h":32,"offX":0,"offY":0,"shear":4},
+  "4": {"img":"door-east.png","w":8,"h":32,"offX":0,"offY":0,"shear":-4},
+  "5": {"img":"door-elevator.png","w":24,"h":32,"offX":0,"offY":0,"shear":0},
+  "7": {"img":"wall-7.png","w":32,"h":48,"offX":0,"offY":0,"shear":0},
+  "8": {"img":"wall-8.png","w":32,"h":8,"offX":0,"offY":0,"shear":0},
+  "9": {"img":"wall-9.png","w":24,"h":104,"offX":0,"offY":0,"shear":0},
+  "10": {"img":"wall-10.png","w":40,"h":104,"offX":0,"offY":0,"shear":0},
+  "11": {"img":"wall-11.png","w":40,"h":96,"offX":0,"offY":0,"shear":0},
+  "12": {"img":"wall-12.png","w":32,"h":8,"offX":0,"offY":0,"shear":0},
+  "13": {"img":"wall-13.png","w":32,"h":8,"offX":0,"offY":0,"shear":0},
+  "14": {"img":"wall-14.png","w":24,"h":104,"offX":0,"offY":0,"shear":0},
+  "15": {"img":"wall-15.png","w":16,"h":96,"offX":0,"offY":0,"shear":0},
+  "16": {"img":"wall-16.png","w":64,"h":80,"offX":0,"offY":0,"shear":0},
+  "17": {"img":"wall-17.png","w":16,"h":96,"offX":0,"offY":0,"shear":0},
+  "18": {"img":"wall-18.png","w":40,"h":96,"offX":0,"offY":0,"shear":0},
+  "19": {"img":"wall-19.png","w":48,"h":40,"offX":0,"offY":0,"shear":0}
+}

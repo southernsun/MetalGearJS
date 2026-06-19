@@ -1,0 +1,15 @@
+# Node / web port
+web/.env
+web/deploy/report.env
+
+# .NET build output (C# tools)
+**/bin/
+**/obj/
+
+# IDE / editor / agent
+.vs/
+/.claude
+.aye/
+
+# Claude memory transfer copy (kept locally, not published)
+/docs/claude-memory/

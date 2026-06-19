@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  headless:
+    name: headless suites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The browser port is self-contained: the headless suites load the real web/game.js
+      # under node:vm against the checked-in web/assets, so no disassembly or npm install is
+      # needed. (The C# tools / exporters require the sibling disassembly and are not run here.)
+      - name: Run headless test suites
+        run: |
+          fail=0
+          for f in web/*.headless.mjs; do
+            echo "::group::$f"
+            node "$f" || fail=1
+            echo "::endgroup::"
+          done
+          exit $fail

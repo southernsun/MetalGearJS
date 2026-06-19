@@ -1,0 +1,169 @@
+<Window x:Class="MetalGearGfxViewer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Metal Gear MSX2 Graphics Viewer"
+        Height="700" Width="1000"
+        Background="#1E1E1E">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Toolbar -->
+        <ToolBar Grid.Row="0" Grid.ColumnSpan="2" Background="#2D2D30">
+            <Button x:Name="btnOpenFolder" Click="BtnOpenFolder_Click" Padding="10,5" Margin="5">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Open GFX Folder" Foreground="White"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="btnReference" Click="BtnReference_Click" Padding="10,5" Margin="5"
+                    ToolTip="Open the spriters-resource reference sheets for comparison">
+                <TextBlock Text="Reference Sheets" Foreground="White"/>
+            </Button>
+            <Separator/>
+            <TextBlock Text="Room:" VerticalAlignment="Center" Foreground="White" Margin="6,0,5,0"/>
+            <ComboBox x:Name="cmbRoom" Width="200" SelectionChanged="CmbRoom_SelectionChanged"
+                      ToolTip="Pick a room to load its tileset graphics and palette"/>
+            <Separator/>
+            <TextBlock Text="Zoom:" VerticalAlignment="Center" Foreground="White" Margin="10,0,5,0"/>
+            <ComboBox x:Name="cmbZoom" Width="60" SelectionChanged="CmbZoom_SelectionChanged">
+                <ComboBoxItem Content="1x"/>
+                <ComboBoxItem Content="2x"/>
+                <ComboBoxItem Content="4x" IsSelected="True"/>
+                <ComboBoxItem Content="8x"/>
+                <ComboBoxItem Content="16x"/>
+            </ComboBox>
+            <Separator/>
+            <TextBlock Text="Bit Depth:" VerticalAlignment="Center" Foreground="White" Margin="10,0,5,0"/>
+            <ComboBox x:Name="cmbBitDepth" Width="80" SelectionChanged="CmbBitDepth_SelectionChanged">
+                <ComboBoxItem Content="Auto" IsSelected="True"/>
+                <ComboBoxItem Content="1bpp"/>
+                <ComboBoxItem Content="2bpp"/>
+                <ComboBoxItem Content="3bpp"/>
+                <ComboBoxItem Content="4bpp"/>
+            </ComboBox>
+            <Separator/>
+            <TextBlock Text="Tile Width:" VerticalAlignment="Center" Foreground="White" Margin="10,0,5,0"/>
+            <ComboBox x:Name="cmbTileWidth" Width="50" SelectionChanged="CmbTileWidth_SelectionChanged">
+                <ComboBoxItem Content="8"/>
+                <ComboBoxItem Content="16" IsSelected="True"/>
+                <ComboBoxItem Content="24"/>
+                <ComboBoxItem Content="32"/>
+                <ComboBoxItem Content="64"/>
+                <ComboBoxItem Content="128"/>
+                <ComboBoxItem Content="256"/>
+            </ComboBox>
+            <Separator/>
+            <TextBlock Text="Color Set:" VerticalAlignment="Center" Foreground="White" Margin="10,0,5,0"/>
+            <ComboBox x:Name="cmbColorSet" Width="170" SelectionChanged="CmbColorSet_SelectionChanged"/>
+            <Separator/>
+            <CheckBox x:Name="chkSpriteMode" Content="Sprite Mode (RLE)" Foreground="White"
+                      VerticalAlignment="Center" Margin="10,0,5,0"
+                      Checked="ChkSpriteMode_Changed" Unchecked="ChkSpriteMode_Changed"/>
+            <CheckBox x:Name="chkComposite" Content="Composite (multicolor)" Foreground="White"
+                      VerticalAlignment="Center" Margin="10,0,5,0"
+                      ToolTip="OR-combine sprite pairs the way the game does (3 colors per pair)"
+                      Checked="ChkComposite_Changed" Unchecked="ChkComposite_Changed"/>
+            <TextBlock Text="Color B:" VerticalAlignment="Center" Foreground="White" Margin="6,0,5,0"/>
+            <ComboBox x:Name="cmbColorB" Width="170" SelectionChanged="CmbColorB_SelectionChanged"
+                      ToolTip="Second color for composite pairs (the OR'd partner)"/>
+        </ToolBar>
+
+        <!-- File List + Graphics (label) list -->
+        <Border Grid.Row="1" Grid.Column="0" Background="#252526" Margin="5">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <TextBlock Text="Graphics Files" FontWeight="Bold" Foreground="#CCCCCC"
+                           Padding="10" Background="#333337"/>
+                <ListBox x:Name="lstFiles" Grid.Row="1"
+                         Background="#252526" Foreground="White"
+                         BorderThickness="0"
+                         SelectionChanged="LstFiles_SelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" Padding="5,3"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Grid.Row="2" Text="Graphics" FontWeight="Bold" Foreground="#CCCCCC"
+                           Padding="10" Background="#333337"/>
+                <ListBox x:Name="lstLabels" Grid.Row="3"
+                         Background="#252526" Foreground="White"
+                         BorderThickness="0"
+                         SelectionChanged="LstLabels_SelectionChanged">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Label}" Padding="5,3"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+
+        <!-- Graphics Display -->
+        <Border Grid.Row="1" Grid.Column="1" Background="#1E1E1E" Margin="5">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <Image x:Name="imgGraphics"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                       SnapsToDevicePixels="True"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Top"/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#333337" Padding="5,3">
+            <TextBlock x:Name="txtStatus" Text="Ready" Foreground="#AAAAAA" FontSize="11"/>
+        </Border>
+
+        <!-- Palette Editor -->
+        <Border Grid.Row="3" Grid.ColumnSpan="2" Background="#2D2D30" Padding="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Color Palette:" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ItemsControl x:Name="palettePanel">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="32" Height="32" Margin="2"
+                                        BorderBrush="White" BorderThickness="1"
+                                        Background="{Binding Brush}"
+                                        ToolTip="{Binding ToolTip}"
+                                        MouseLeftButtonDown="PaletteColor_Click"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <TextBlock Text="Preset:" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <ComboBox x:Name="cmbPalettePreset" Width="170" SelectionChanged="CmbPalettePreset_SelectionChanged"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

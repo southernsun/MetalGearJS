@@ -1,0 +1,30 @@
+# systemd unit for the Metal Gear bug-report API (/report).
+# Install: copy to /etc/systemd/system/, then:
+#   systemctl daemon-reload && systemctl enable --now metalgear-report
+# The static site is served by nginx; this process only answers /report on localhost.
+
+[Unit]
+Description=Metal Gear browser port - bug-report API (/report)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/metalgear/web
+Environment=HOST=127.0.0.1
+Environment=PORT=8099
+# The GitHub PAT lives ONLY here (root-only file, chmod 600), never in the repo:
+EnvironmentFile=/etc/metalgear/report.env
+ExecStart=/usr/bin/node serve.js
+Restart=on-failure
+User=www-data
+Group=www-data
+
+# Hardening: no disk writes are needed (the clip is streamed through memory to GitHub).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/var/www/metalgear
+
+[Install]
+WantedBy=multi-user.target

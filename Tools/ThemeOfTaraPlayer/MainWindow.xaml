@@ -1,0 +1,296 @@
+<Window x:Class="ThemeOfTaraPlayer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Metal Gear - Theme of Tara Player"
+        Height="800" Width="700"
+        ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen"
+        Background="#1a1a2e">
+    <Window.Resources>
+        <Style x:Key="MetalGearButton" TargetType="Button">
+            <Setter Property="Background" Value="#16213e"/>
+            <Setter Property="Foreground" Value="#e94560"/>
+            <Setter Property="BorderBrush" Value="#e94560"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#e94560"/>
+                                <Setter Property="Foreground" Value="#1a1a2e"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="DebugLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#888"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style x:Key="DebugValue" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#0f0"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <StackPanel Grid.Row="0" Margin="20,20,20,10">
+            <TextBlock Text="METAL GEAR"
+                       FontSize="28"
+                       FontWeight="Bold"
+                       Foreground="#e94560"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="MSX2 Sound System Emulator"
+                       FontSize="12"
+                       Foreground="#0f3460"
+                       HorizontalAlignment="Center"
+                       Margin="0,5,0,0"/>
+        </StackPanel>
+
+        <!-- Controls -->
+        <StackPanel Grid.Row="1" Margin="20,10">
+            <ComboBox x:Name="SongSelector"
+                      Width="360"
+                      HorizontalAlignment="Center"
+                      Margin="0,0,0,15"
+                      FontSize="14"
+                      MaxDropDownHeight="450"
+                      DisplayMemberPath="DisplayName"
+                      SelectionChanged="SongSelector_SelectionChanged"/>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button x:Name="PlayButton"
+                        Content="PLAY"
+                        Style="{StaticResource MetalGearButton}"
+                        Click="PlayButton_Click"
+                        Margin="10,0"/>
+                <Button x:Name="StopButton"
+                        Content="STOP"
+                        Style="{StaticResource MetalGearButton}"
+                        Click="StopButton_Click"
+                        IsEnabled="False"
+                        Margin="10,0"/>
+            </StackPanel>
+
+            <TextBlock x:Name="StatusText"
+                       Text="Press PLAY to start"
+                       FontSize="12"
+                       Foreground="#666"
+                       HorizontalAlignment="Center"
+                       Margin="0,10,0,0"/>
+        </StackPanel>
+
+        <!-- Debug Panel -->
+        <Border Grid.Row="2" Background="#0d0d1a" BorderBrush="#333" BorderThickness="1" Margin="20,10" CornerRadius="5">
+            <Grid Margin="15">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Debug Header -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                    <TextBlock Text="DEBUG" Foreground="#e94560" FontWeight="Bold" FontFamily="Consolas" FontSize="12"/>
+                    <TextBlock x:Name="FrameCountText" Text=" - Frame: 0" Foreground="#666" FontFamily="Consolas" FontSize="12"/>
+                    <TextBlock x:Name="MixerText" Text="  Mixer: 0x00" Foreground="#666" FontFamily="Consolas" FontSize="12"/>
+                </StackPanel>
+
+                <!-- Column Headers -->
+                <Grid Grid.Row="1" Margin="0,0,0,5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="40"/>
+                        <ColumnDefinition Width="70"/>
+                        <ColumnDefinition Width="40"/>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="50"/>
+                        <ColumnDefinition Width="60"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="CH" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="1" Text="MODE" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="2" Text="NOTE" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="3" Text="OCT" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="4" Text="FREQ" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="5" Text="VOL" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="6" Text="INST" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="7" Text="TEMPO" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="8" Text="CFG" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="9" Text="CMD" Style="{StaticResource DebugLabel}"/>
+                    <TextBlock Grid.Column="10" Text="FLAGS" Style="{StaticResource DebugLabel}"/>
+                </Grid>
+
+                <!-- Channel Data -->
+                <StackPanel Grid.Row="2">
+                    <!-- Channel A -->
+                    <Grid Margin="0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="A" Foreground="#ff6b6b" FontFamily="Consolas" FontSize="11" FontWeight="Bold"/>
+                        <TextBlock Grid.Column="1" x:Name="Ch0Mode" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="2" x:Name="Ch0Note" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="3" x:Name="Ch0Octave" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="4" x:Name="Ch0Freq" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="5" x:Name="Ch0Vol" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="6" x:Name="Ch0Inst" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="7" x:Name="Ch0Tempo" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="8" x:Name="Ch0Cfg" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="9" x:Name="Ch0Cmd" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="10" x:Name="Ch0Flags" Style="{StaticResource DebugValue}"/>
+                    </Grid>
+
+                    <!-- Channel B -->
+                    <Grid Margin="0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="B" Foreground="#4ecdc4" FontFamily="Consolas" FontSize="11" FontWeight="Bold"/>
+                        <TextBlock Grid.Column="1" x:Name="Ch1Mode" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="2" x:Name="Ch1Note" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="3" x:Name="Ch1Octave" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="4" x:Name="Ch1Freq" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="5" x:Name="Ch1Vol" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="6" x:Name="Ch1Inst" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="7" x:Name="Ch1Tempo" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="8" x:Name="Ch1Cfg" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="9" x:Name="Ch1Cmd" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="10" x:Name="Ch1Flags" Style="{StaticResource DebugValue}"/>
+                    </Grid>
+
+                    <!-- Channel C -->
+                    <Grid Margin="0,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="40"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="C" Foreground="#ffe66d" FontFamily="Consolas" FontSize="11" FontWeight="Bold"/>
+                        <TextBlock Grid.Column="1" x:Name="Ch2Mode" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="2" x:Name="Ch2Note" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="3" x:Name="Ch2Octave" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="4" x:Name="Ch2Freq" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="5" x:Name="Ch2Vol" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="6" x:Name="Ch2Inst" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="7" x:Name="Ch2Tempo" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="8" x:Name="Ch2Cfg" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="9" x:Name="Ch2Cmd" Style="{StaticResource DebugValue}"/>
+                        <TextBlock Grid.Column="10" x:Name="Ch2Flags" Style="{StaticResource DebugValue}"/>
+                    </Grid>
+
+                    <!-- Note History -->
+                    <TextBlock Text="Note History:" Foreground="#888" FontFamily="Consolas" FontSize="10" Margin="0,10,0,2"/>
+                    <Grid Margin="0,0,0,5">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="25"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="A:" Foreground="#ff6b6b" FontFamily="Consolas" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <ScrollViewer Grid.Row="0" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Height="18">
+                            <TextBlock x:Name="NoteHistoryA" Foreground="#0f0" FontFamily="Consolas" FontSize="10"/>
+                        </ScrollViewer>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="B:" Foreground="#4ecdc4" FontFamily="Consolas" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <ScrollViewer Grid.Row="1" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Height="18">
+                            <TextBlock x:Name="NoteHistoryB" Foreground="#0f0" FontFamily="Consolas" FontSize="10"/>
+                        </ScrollViewer>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="C:" Foreground="#ffe66d" FontFamily="Consolas" FontSize="10" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <ScrollViewer Grid.Row="2" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Height="18">
+                            <TextBlock x:Name="NoteHistoryC" Foreground="#0f0" FontFamily="Consolas" FontSize="10"/>
+                        </ScrollViewer>
+                    </Grid>
+                </StackPanel>
+
+                <!-- Log output - fills remainder of space -->
+                <DockPanel Grid.Row="3">
+                    <TextBlock DockPanel.Dock="Top" Text="Log:" Foreground="#888" FontFamily="Consolas" FontSize="10" Margin="0,5,0,2"/>
+                    <TextBox x:Name="LogText"
+                             Foreground="#0a0"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             FontFamily="Consolas"
+                             FontSize="9"
+                             TextWrapping="Wrap"
+                             IsReadOnly="True"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Disabled"/>
+                </DockPanel>
+            </Grid>
+        </Border>
+
+        <!-- Footer -->
+        <TextBlock Grid.Row="3"
+                   Text="PSG Emulation - AY-3-8910 @ 60Hz"
+                   FontSize="10"
+                   Foreground="#333"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,10"/>
+    </Grid>
+</Window>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metal Gear — Snake (browser prototype)</title>
+<style>
+  :root { --bg:#0a0e0a; --ink:#d8f5d0; --dim:#6f8f6a; --accent:#56d364; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Segoe UI",system-ui,Arial,sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:100vh; gap:14px;
+  }
+  #stage{position:relative;line-height:0}
+  /* Native res 256x192, scaled up with crisp pixels. */
+  canvas{
+    image-rendering:pixelated; image-rendering:crisp-edges;
+    background:#000; border:1px solid #1c2a1c; display:block;
+  }
+  #gate{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:8px;
+    background:rgba(4,8,4,.82); color:var(--ink); cursor:pointer; text-align:center;
+  }
+  #gate b{color:var(--accent);font-size:16px}
+  #gate span{font-size:12px;color:var(--dim)}
+  #gate.hidden{display:none}
+  .help{font-size:12px;color:var(--dim);max-width:520px;text-align:center;line-height:1.6}
+  kbd{background:#13201360;border:1px solid #1c2a1c;border-radius:4px;padding:1px 6px;color:var(--ink);font-family:Consolas,monospace}
+  #err{color:#ff6b6b;font-size:12px;max-width:560px;text-align:center;white-space:pre-wrap}
+  #pause{background:#13201360;border:1px solid #1c2a1c;border-radius:6px;padding:5px 14px;color:var(--ink);
+    font-family:inherit;font-size:13px;cursor:pointer}
+  #pause:hover{border-color:var(--accent);color:var(--accent)}
+  #report-toast{position:absolute;left:50%;top:8px;transform:translateX(-50%);
+    background:rgba(4,8,4,.92);border:1px solid #1c2a1c;border-radius:6px;padding:6px 12px;
+    color:var(--ink);font-size:12px;white-space:nowrap;opacity:0;pointer-events:none;
+    transition:opacity .2s;z-index:5}
+  #report-toast.show{opacity:1;pointer-events:auto}
+  #report-toast.ok{border-color:var(--accent);color:var(--accent)}
+  #report-toast.err{border-color:#ff6b6b;color:#ff6b6b}
+  #report-toast a{color:inherit;margin-left:4px}
+  #report-form{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(4,8,4,.86);z-index:6}
+  #report-form.hidden{display:none}
+  #report-form .rf-box{background:#0c130c;border:1px solid #1c2a1c;border-radius:8px;
+    padding:14px;width:84%;max-width:340px;display:flex;flex-direction:column;gap:8px}
+  #report-form .rf-title{font-size:13px;font-weight:600;color:var(--accent);letter-spacing:.04em}
+  #report-form .rf-info{font-size:11px;color:var(--dim)}
+  #report-form textarea{width:100%;resize:vertical;min-height:54px;background:#060a06;
+    border:1px solid #1c2a1c;border-radius:5px;color:var(--ink);font-family:inherit;font-size:12px;
+    padding:6px;outline:none}
+  #report-form textarea:focus{border-color:var(--accent)}
+  #report-form .rf-btns{display:flex;justify-content:flex-end;gap:8px}
+  #report-form button{background:#13201360;border:1px solid #1c2a1c;border-radius:6px;
+    padding:5px 14px;color:var(--ink);font-family:inherit;font-size:12px;cursor:pointer}
+  #report-form button:hover{border-color:var(--accent);color:var(--accent)}
+  #report-form #report-submit{border-color:var(--accent);color:var(--accent)}
+  #report-form .rf-hint{font-size:10px;color:var(--dim);text-align:right}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="screen" width="256" height="192"></canvas>
+    <div id="gate" class="hidden"></div><!-- the canvas boots into the title; first key unlocks audio -->
+    <div id="report-toast"></div><!-- bug-report feedback (B key) -->
+    <div id="report-form" class="hidden"><!-- bug-report description prompt (B key) -->
+      <div class="rf-box">
+        <div class="rf-title">File a bug report</div>
+        <div class="rf-info" id="report-info"></div>
+        <textarea id="report-desc" placeholder="Describe the bug (optional)…"></textarea>
+        <div class="rf-btns">
+          <button id="report-cancel" type="button">Cancel</button>
+          <button id="report-submit" type="button">Submit ↗</button>
+        </div>
+        <div class="rf-hint">Esc to cancel · Ctrl/⌘+Enter to submit</div>
+      </div>
+    </div>
+  </div>
+  <div class="help">
+    Move <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>/<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+    &nbsp;·&nbsp; Fire <kbd>Space</kbd>
+    &nbsp;·&nbsp; Punch <kbd>M</kbd>
+    &nbsp;·&nbsp; Weapon <kbd>1</kbd>–<kbd>7</kbd> / <kbd>0</kbd> none
+    &nbsp;·&nbsp; Item <kbd>I</kbd>
+    &nbsp;·&nbsp; Menus <kbd>Q</kbd>/<kbd>E</kbd> (moving the cursor selects; <kbd>Space</kbd> uses the item)
+    &nbsp;·&nbsp; Radio <kbd>R</kbd> (<kbd>←</kbd><kbd>→</kbd> tune · <kbd>↑</kbd> send)
+    &nbsp;·&nbsp; Pause <kbd>P</kbd>
+    &nbsp;·&nbsp; Bug report <kbd>B</kbd> (clip the last ~20s, add a note, file a GitHub issue)
+  </div>
+  <button id="pause">⏸ Pause</button>
+  <div id="err"></div>
+  <script src="game.js"></script>
+</body>
+</html>

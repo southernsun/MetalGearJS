@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>MetalGearRoomViewer</AssemblyName>
+    <RootNamespace>MetalGear.RoomViewer</RootNamespace>
+    <!-- The game data lives one directory up from this project. -->
+    <GameRoot>$(MSBuildProjectDirectory)\..</GameRoot>
+  </PropertyGroup>
+
+</Project>

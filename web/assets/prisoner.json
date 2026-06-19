@@ -1,0 +1,11 @@
+{
+  "frameWidth": 16,
+  "frameHeight": 32,
+  "anchorX": 8,
+  "anchorY": 30,
+  "frames": {
+    "idle-1": {"x": 0, "y": 0},
+    "idle-2": {"x": 16, "y": 0},
+    "rescued": {"x": 32, "y": 0}
+  }
+}

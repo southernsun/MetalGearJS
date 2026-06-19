@@ -1,0 +1,15 @@
+{
+  "frameWidth": 16,
+  "frameHeight": 32,
+  "anchorX": 8,
+  "anchorY": 30,
+  "frames": {
+    "stand": {"x": 0, "y": 0},
+    "roll1": {"x": 16, "y": 0},
+    "roll2": {"x": 32, "y": 0},
+    "roll3": {"x": 48, "y": 0},
+    "pellet1": {"x": 64, "y": 0, "w": 16, "h": 16},
+    "pellet2": {"x": 80, "y": 0, "w": 16, "h": 16},
+    "pellet3": {"x": 96, "y": 0, "w": 16, "h": 16}
+  }
+}

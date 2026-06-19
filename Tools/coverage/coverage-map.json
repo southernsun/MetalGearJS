@@ -1,0 +1,2751 @@
+{
+  "_note": "Curated ROM->JS coverage map. Denominator = routine labels parsed from `files` (+ `extraRoutines` from shared files). Numerator = `status` (done|partial|out-of-scope; anything unlisted defaults to todo). Keep this honest: mark `done` only when the routine is genuinely reimplemented (documented divergences are still `done`). See docs/rom-coverage.md (generated).",
+  "outOfScope": {
+    "_note": "Gameplay-only denominator. Hardware init, PSG/sound-driver internals, and copy-protection are excluded. The files below are MSX plumbing with no behavioural equivalent needed in the canvas port (sprite-attribute upload + flicker shuffle, HUD masking sprites, VDP/PSG init, region lock); they are not assigned to any component. Routine-level exclusions inside counted files use the per-routine \"out-of-scope\" status instead.",
+    "files": [
+      "logic/updatesprites.asm",
+      "logic/hudspritemask.asm",
+      "logic/inithardware.asm",
+      "logic/regionlock.asm",
+      "logic/saveload.asm"
+    ],
+    "routines": []
+  },
+  "components": [
+    {
+      "id": "guard",
+      "title": "Guard (patrol, LOS, alert, chase, shoot, punch)",
+      "files": [
+        "logic/actors/guard.asm",
+        "logic/actors/guardalert.asm",
+        "logic/actors/guardshot.asm",
+        "logic/actors/chkdiscover.asm",
+        "logic/setalert.asm",
+        "logic/checkweaponalert.asm",
+        "logic/punchenemy.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "GetDirToPlayer",
+          "file": "logic/helperdirections.asm"
+        },
+        {
+          "name": "GetDirToPlayer2",
+          "file": "logic/helperdirections.asm"
+        },
+        {
+          "name": "GetDirToPlayer3",
+          "file": "logic/helperdirections.asm"
+        },
+        {
+          "name": "GetOppositeDir",
+          "file": "logic/helperdirections.asm"
+        },
+        {
+          "name": "GetOppositePlayer",
+          "file": "logic/helperdirections.asm"
+        },
+        {
+          "name": "ChkAlarmEnd",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "StopAlert",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TransformAlertGuard",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "Core patrol + the FULL alert state machine + global alarm + reinforcements + punch-KO are ported. The alert AI (guardalert.asm) does chase (commit-then-re-aim, ~3/4 stop-and-shoot), wait-after-shot, obstacle detour, AND the RED-ALERT stand-off (SetGuardWalkAway/GuardWalkAwayShot statuses 3/4 via ChkNearPlayer max(|dx|,|dy|)<0x30), the RED-ALERT double-shot on resume + faster 0x0A cadence (SetGuardRndCounter), the status-4 init beat (GuardWaitChkAlert) that triggers the alarm, ChkGuardWater/MoveAwayExit (turn 180 off a door/lorry/chasm exit tile), and the lorry-interior dedup (InitGuardAlert2/3 + ChkDismissGuard via the Guard1/2/3ExitedLorry flags). LOS is now EXACT (chkdiscover.asm): the up/left-include-level facing asymmetry, the |dx|<8 / guard-|dy|<6 / camera-|dy|<4 sight bands, ChkViewObstacles see-through railings, and the noise/touch discovery (ListenShotsChkTouch/ChkDiscoverPlayer2-6 — a touch or an exploding shot wakes sleeping guards + sentinels). Reinforcements use the card-based budget (SetAlertMode2-4 NumRespawnGuards = highest card + 3; room 216 none; rooms 187/154/88-92 budget 10 via SetRespawnTime) spent on kills (DecRespawnGuards), with ChkAlarmEnd holding a red/camera alarm across rooms until the budget is spent. Documented divergences (partial): patrol pauses at every waypoint instead of UpdateActorPath random stop-and-wait + GuardPatrolTurn look-turn; ChkGuardWater2 in-water sprite omitted; the distinct RED-alert music track and the buggy alert-icon +8/0xBF positioning are not reproduced.",
+      "status": {
+        "ChangeGuardSprDir": "done",
+        "GuardLogic": "done",
+        "GuardPatrolLogic": "done",
+        "GuardPatrolLogic2": "done",
+        "ChkReachPoint": "done",
+        "ChkPathGreater": "done",
+        "ChkPathDown": "done",
+        "ChkPathSmaller": "done",
+        "UpdateActorPath_": "partial",
+        "ChkPathLeft": "done",
+        "ChkPathRight": "done",
+        "GuardPatrolTurn": "partial",
+        "NextGuardStatus": "done",
+        "GuardPatrolWait": "done",
+        "ChkSleepyGuard": "done",
+        "GuardSleeping": "partial",
+        "GuardWakeUp": "done",
+        "InitGuardAlert": "done",
+        "InitGuardAlert2": "done",
+        "InitGuardAlert3": "done",
+        "ChkDismissGuard": "done",
+        "InitGuardAlert4": "done",
+        "SetRespawnTime": "done",
+        "SetRespawnTime2": "done",
+        "SetRespawnTime3": "done",
+        "GuardAlertLogic": "done",
+        "GuardWalk": "done",
+        "GuardWalk2": "done",
+        "GuardChasePlayer": "done",
+        "GuardChasePlayer2": "done",
+        "GuardShot": "done",
+        "AddEnemyShot": "done",
+        "AddEnemyShot2": "done",
+        "SetGuardWalkAway": "done",
+        "GuardWaitShot": "done",
+        "SetGuardRndCounter": "done",
+        "SetGuardRndCounter2": "done",
+        "GuardAvoidObstacle": "done",
+        "ContinueThisWay": "done",
+        "GuardSetNewDirection": "done",
+        "GuardWalkAwayShot": "done",
+        "GuardWaitChkAlert": "done",
+        "SetWalkSpeed": "done",
+        "SetWalkSpeed2": "done",
+        "SetWalkSpeedFast": "done",
+        "SetWalkSpeedFast2": "done",
+        "DirectionSpeeds": "done",
+        "DirectionSpeeds2": "done",
+        "AnimateGuard": "done",
+        "AnimateGuard2": "done",
+        "AnimateGuard3": "done",
+        "GuardLookDirection": "done",
+        "GuardLookDirection2": "done",
+        "ChkNearPlayer": "done",
+        "GetDistancePlayer": "done",
+        "GetDistancePlayer2": "done",
+        "GetDistancePlayer3": "done",
+        "GetDistancePlayer4": "done",
+        "ChkGuardWater": "done",
+        "ChkGuardWater2": "partial",
+        "MoveAwayExit": "done",
+        "GetRandom3": "done",
+        "InitGuardShot": "done",
+        "ChkActSeePlayer": "done",
+        "ChkSeePlayer": "done",
+        "ChkSeePlayer2": "done",
+        "ChkPosAboveUnder": "done",
+        "ChkPosLeftRight": "done",
+        "ChkLookUp": "done",
+        "ChkLookUp2": "done",
+        "ChkLookDown": "done",
+        "ChkLookDown2": "done",
+        "ChkLookLeft": "done",
+        "ChkLookLeft2": "done",
+        "ChkLookRight": "done",
+        "ChkLookRight2": "done",
+        "ChkViewObstacles": "done",
+        "ChkViewObstacles2": "done",
+        "ChkViewObstacles3": "done",
+        "CalcNextTileAddress": "done",
+        "CalcNextTileAddress2": "done",
+        "SetAlert": "done",
+        "SetAlertRoom": "done",
+        "GuardSetAlarm": "done",
+        "GuardSetAlarm2": "done",
+        "GuardSetAlarm3": "done",
+        "GuardSetAlarm4": "partial",
+        "GuardSetAlarm5": "partial",
+        "GuardSetAlarm6": "partial",
+        "GuardSetAlarm7": "partial",
+        "RedAlertRooms": "done",
+        "ChkViewVertical": "done",
+        "ChkViewHorizontal": "done",
+        "ChkViewHorizontal2": "done",
+        "ListenShotsChkTouch": "done",
+        "ChkDiscoverPlayer2": "done",
+        "ChkDiscoverPlayer3": "done",
+        "ChkDiscoverPlayer4": "done",
+        "ChkDiscoverPlayer5": "done",
+        "ChkDiscoverPlayer6": "done",
+        "SetAlertModeRespawn": "partial",
+        "SetAlertMode": "partial",
+        "SetAlertMode2": "done",
+        "SetAlertMode3": "done",
+        "SetAlertMode4": "done",
+        "SetAlertMode5": "partial",
+        "SetAlertMode6": "done",
+        "SetAlertMode7": "done",
+        "ChkAlertTrigger": "partial",
+        "ChkAlertTrigger2": "done",
+        "RoomShotSecure": "done",
+        "PunchEnemies": "partial",
+        "ChkPunchEnemy": "done",
+        "ChkPunchEnemy2": "partial",
+        "ChkPunchEnemy3": "done",
+        "ChkPunchEnemy4": "done",
+        "PunchUpDat": "done",
+        "PunchLeftDat": "done",
+        "PunchDownDat": "done",
+        "PunchRightDat": "done",
+        "ChkArea": "done",
+        "ChkArea2": "done",
+        "ChkArea3": "done",
+        "GetDirToPlayer": "done",
+        "GetDirToPlayer2": "done",
+        "GetDirToPlayer3": "done",
+        "GetOppositeDir": "done",
+        "GetOppositePlayer": "done",
+        "ChkAlarmEnd": "done",
+        "StopAlert": "done",
+        "TransformAlertGuard": "partial"
+      }
+    },
+    {
+      "id": "enemy-bullets",
+      "title": "Enemy bullet actors (aimed shot + axis bullets)",
+      "files": [
+        "logic/actors/bullethv.asm",
+        "logic/actors/shottoplayer.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "InitShotToPlayer (ID_BULLET 0x3D: jetpacks, Hind D, lorry shooters, guard-switch) is ported as fireGuardBullet (hind-d change): the faithful quantized CalcShot2 aim at ShotSpeed 0x90 (QuadrantDegrees + the sin table, ported verbatim), player collision, the bullet sprite, and the pool cap; the Hind D compensates the torso-origin offset to fire from the actor's own XY like the ROM. Minor divergence: fireGuardBullet plays the shot SFX, which the ROM's InitShotToPlayer does not (SFX 5 belongs to InitBulletVert2). The InitBulletHor/InitBulletVert axis bullets (fixed ±5px/iteration along the axis toward screen centre + a random ±0x40 perpendicular jitter from the R register) are NOT implemented: their ROM spawners are the Shooter actor (rooms 88/90/91/206), the room-150 GuardSilencer pop-out shots, and Big Boss — the port substitutes aimed fireGuardBullet shots for Big Boss and approximates Shooter rooms with forced-alarm alert guards (undocumented divergences). InitBulletVert2's shared spawn tail (Moving=1, COLLISION_CFG=1, sprite 0x72, SFX 5) is effectively present via fireGuardBullet + updateBullets, hence partial.",
+      "status": {
+        "InitShotToPlayer": "done",
+        "InitBulletHor": "done",
+        "InitBulletVert": "done",
+        "InitBulletVert2": "done"
+      }
+    },
+    {
+      "id": "snake-movement",
+      "title": "Snake movement + tile collision",
+      "files": [
+        "logic/collisions.asm",
+        "logic/controls.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "ControlPlayer",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ControlPlayer2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "StopPlayer",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "PlayerMovUp",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "PlayerMovDown",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "PlayerMovLeft",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "PlayerMovRight",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "UpdatePlayerSpd",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkPlayerColl",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "8-direction walk, speed (PlayerMovSpeed=2px/frame), and the shape-0 box collider are ported. Input is read from the browser keyboard rather than the PSG/keyboard-matrix routines (equivalent, hence partial). Player bullets are tracked under player-weapons. The enemy-bullet tile check (BulletLogic/BulletLogic2) is ported in updateBullets: railing tiles 0x6B/0x6E never stop a bullet, and a solid hit only removes it when the tile two rows down (the +0x40 probe) is also solid and non-railing; applied to the tile-checked dispatch classes (0x2F guard bullets, 0x3B shooter bullets) while 0x3A/0x3C/0x3D/0x3E fly through walls, matching the EnemyLogic dispatch table (fixed by the hind-d change's fireGuardBullet shadowing repair).",
+      "status": {
+        "ChkTileCollision": "done",
+        "ChkTileCollision_": "done",
+        "ChkTileCollision2": "done",
+        "ChkTileCollision3": "done",
+        "ChkTileCollision4": "done",
+        "BoxColliderDat": "done",
+        "GetTilePlayer": "done",
+        "GetTileInXY": "done",
+        "BulletLogic": "done",
+        "BulletLogic2": "done",
+        "UpdateControls": "partial",
+        "ReadControls": "partial",
+        "ReadControls2": "partial",
+        "StoreControls": "partial",
+        "StoreControls_": "partial",
+        "ReadFKeys": "done",
+        "ControlPlayer": "done",
+        "ControlPlayer2": "done",
+        "StopPlayer": "done",
+        "PlayerMovUp": "done",
+        "PlayerMovDown": "done",
+        "PlayerMovLeft": "done",
+        "PlayerMovRight": "done",
+        "UpdatePlayerSpd": "done",
+        "ChkPlayerColl": "done"
+      }
+    },
+    {
+      "id": "common-logic",
+      "title": "CommonLogic per-frame checks + bridge flag",
+      "files": [
+        "logic/common.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "The CommonLogic check chain is reproduced across the play tick: ChkPlayerShots, ChkTouchEnemies (guards + lasers), ChkOnBridge (bridgeTick), ChkElectricFloor, ChkGasRooms, ChkDoors (incl. the punch-opened locks every frame), ChkTakeItems, then the capture trigger with the exact ROM constants (EquipBagTaken gate, Room 8, X 0xC0-0xD0 -> the capture scene). Dead gating is via gameState/enterDead rather than the GameMode compare; ordering is slightly rearranged but each check runs every play frame like the ROM. SetOnBridge's flag-plus-TOUCH_INFO behaviour is in bridgeTick. The file's includes (touchenemy/pitfall/etc.) are tracked under their own components.",
+      "status": {
+        "CommonLogic": "done",
+        "SetOnBridge": "done"
+      }
+    },
+    {
+      "id": "room-traversal",
+      "title": "Room traversal (transitions + entry placement)",
+      "files": [
+        "logic/nextroom.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "Edge transitions, door entry (PlayerInDoorDat copied verbatim, SetPlayerInDoor2-4 exact 8-bit-wrap centering), elevators (SetNextRoomElev shaft exits park the cabin at 0xD0/0x18 with player Y-4; SetElevatorPosY door entry at 0xD8/floor Y, cabin 0x70; SetElevatorCtrl mode 2 facing left), the roof jump and bridge falls (ChkParachute room 204 x2 / FreeFall lands dead, jumpId 1/2/3 from doors 0x5B/0x81/0x91), and the fixed yard landings (SetLandingPos2/DogsR/Lorries/DogsL values verbatim, playtest-Test-2 confirmed) are all ported in web/game.js. Remaining gaps: SetNextRoom's desert get-lost redirect (leaving room 103 without the compass loops back to 103) is unported; non-door edge entry uses ENTER_MARGIN 12 mirroring plus an invented nearest-open-spot scan instead of the EntryRoomXY constants (0xB8/0x12/0xF2/0x0C, no scan); SetLadderRoomEntry's ladder-walk entry (0xD8/0x9E, mode 6) exists but only the ?room=224 dev hook calls it — the real door 0x6B from Big Boss room 119 goes through generic enterDoor (type-6 row [0,0,0], normal control). PreviousRoom is not modeled as state but each consumer (elevator exit mode reset, parachute landing) is handled contextually.",
+      "status": {
+        "SetNextRoom": "partial",
+        "SetNextRoom2": "done",
+        "NormalGameMode": "done",
+        "SetNextRoomElev": "done",
+        "SetNextRoomElev2": "done",
+        "ChkDoorDestination": "done",
+        "ChkDoorDest2": "done",
+        "SetDoorDestination": "done",
+        "GetDoorDest2": "done",
+        "SetElevatorPosY": "done",
+        "NormalGameMode__": "done",
+        "ChkParachute": "done",
+        "FreeFall": "done",
+        "NextParachuteRoom": "done",
+        "SetLandingRoom": "done",
+        "SetLandingRoom2": "done",
+        "NormalGameMode_": "done",
+        "LocatePlayerEntry": "partial",
+        "SetDoorOrElev": "done",
+        "SetRoomEntryXY": "partial",
+        "SetRoomEntryX": "partial",
+        "EntryRoomXY": "done",
+        "SetElevatorCtrl": "done",
+        "DisableControls": "done",
+        "SetPlayerInDoor": "done",
+        "SetPlayerInDoor2": "done",
+        "SetPlayerInDoor3": "done",
+        "SetPlayerInDoor4": "done",
+        "PlayerInDoorDat": "done",
+        "SetParachuteMode": "done",
+        "ChkParachuteXY": "done",
+        "SetParachuteStartY": "done",
+        "SetLandingXY": "done",
+        "SetLandingPos2": "done",
+        "SetLandingDogsR": "done",
+        "SetLandingLorries": "done",
+        "SetLandingDogsL": "done",
+        "SetLadderRoomEntry": "partial"
+      }
+    },
+    {
+      "id": "doors",
+      "title": "Doors (open / enter / draw)",
+      "files": [
+        "logic/doors/opendoor.asm",
+        "logic/doors/enterdoor.asm",
+        "logic/doors/erasedoor.asm",
+        "logic/doors/drawdoors.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "The full ChkOpenDoor lock dispatch is ported: plain doors, keycards (ChkCard1-8), elevator doors (lock 1: type 5 up / type 6 right), the punch door (10), the lorry door (11), the desert/compass/Big-Boss event doors (12/13/14 via one-shot flags), the punchable prison walls (15: PunchWallDirs, PrisonWall1/2Life 0x28), and the lock-16 bomb/secret walls. The breakable/secret WALLS (render types 7-19, DrawBasemWall*/DrawWall) are drawn closed from their own wall-N.png sprites and made solid (closedWallSolid), then opened by a bomb/punch and wiped away (EraseBasemWall*), revealing the room art behind — RestoreSavedTiles' VRAM save/restore is replaced by the pre-rendered room PNG (documented). ChkEnterDoor is ported including the hidden doors 0x40/0x6C (never auto-entered), the IN-ROOM walls (dest === room; rooms 58/60/63/100/108 open a passage without a room reload — the 0x20 logic bit), and the MetalGear_KO door-0x62 lockout. Open/enter areas come from door-types.json (DoorOpenEnterDat verbatim). Divergences (partial): the per-wall erase WIPE is one shared directional approximation; ChkDoorLorry2 is a stand-in; SetDoorOpen's DoorOpenArray persistence is event-doors-only.",
+      "status": {
+        "ChkOpenDoor": "done",
+        "ChkOpenDoor2": "done",
+        "ChkElevatorDoor": "done",
+        "ChkNoCardDoorUp": "done",
+        "ChkTouchDoor_": "done",
+        "ChkCard1": "done",
+        "ChkCard2": "done",
+        "ChkCard3": "done",
+        "ChkCard4": "done",
+        "ChkCard5": "done",
+        "ChkCard6": "done",
+        "ChkCard7": "done",
+        "ChkCard8": "done",
+        "ChkCard": "done",
+        "ChkPunchDoor": "done",
+        "ChkDoorLorry": "done",
+        "ChkDoorLorry2": "partial",
+        "ChkDesertDoorBuild2": "done",
+        "ChkDesertDoorBuild2_": "done",
+        "ChkCompassDoor": "done",
+        "ChkBigBossDoor": "done",
+        "ChkPrisonWalls": "done",
+        "ChkPrisonWalls2": "done",
+        "ChkBasementWall": "done",
+        "ChkPunchBaseWall": "done",
+        "PlayBreakableSfx": "done",
+        "PunchWallDirs": "done",
+        "ChkTouchDoor": "done",
+        "ChkTouchDoor2": "done",
+        "ChkTouchDoor3": "done",
+        "DoorLocked": "done",
+        "DoorUnlocked": "done",
+        "ChkBombLocation": "done",
+        "ChkDoors": "done",
+        "ChkDoors1": "done",
+        "ChkDoors2": "done",
+        "ChkEnterDoor": "done",
+        "ChkEnterDoor2": "done",
+        "ChkEnterDoor3": "done",
+        "ChkNextDoor": "done",
+        "EraseDoorLogic": "done",
+        "InitOpenDoor": "done",
+        "InitOpenDoor2": "done",
+        "DoorOpenSfxs": "done",
+        "EraseDoorNorth": "done",
+        "EraseDoorSouth": "done",
+        "EraseDoorWest": "done",
+        "EraseDoorWest2": "done",
+        "EraseDoorEast": "done",
+        "EraseDoorEast2": "done",
+        "EraseDoorElevator": "done",
+        "EraseDoorDummy": "done",
+        "EraseBasemWall60": "done",
+        "EraseBasemWall61": "done",
+        "EraseBasemWall59": "done",
+        "EraseBasemWall58": "done",
+        "EraseBasemWall63": "done",
+        "EraseWallPrison2": "done",
+        "EraseBasemWall93": "done",
+        "EraseWallBuil3_108": "done",
+        "EraseBasemWall112": "done",
+        "RestoreSavedTiles": "partial",
+        "SetDoorOpen": "done",
+        "SetDoorOpen2": "done",
+        "EraseDoor": "done",
+        "EraseDoor2": "done",
+        "SetOpenDoorTilesEW": "done",
+        "SetOpenDoorTiles": "done",
+        "GetOpeningDoorDat": "done",
+        "EraseDoorDat": "done",
+        "DrawDoors": "done",
+        "DrawDoors2": "done",
+        "DrawDoors3": "done",
+        "DrawDoorDummy": "done",
+        "DrawDoorType": "done",
+        "DrawDoorSouth": "done",
+        "PutDoorCollTiles": "done",
+        "DrawDoorWest": "done",
+        "DrawDoorWest2": "done",
+        "DrawDoorEast": "done",
+        "DrawDoorEast2": "done",
+        "SetDoorEWColl": "done",
+        "DrawDoorNorth": "done",
+        "DrawDoorElevator": "done",
+        "DrawBasemWall60": "done",
+        "DrawBasemWall61": "done",
+        "DrawBasemWall59_96": "done",
+        "DrawBasemWall58": "done",
+        "DrawBasemWall63": "done",
+        "DrawWallPrison2": "done",
+        "DrawWallPrison2_": "done",
+        "DrawWallPrison1": "done",
+        "DrawWallPrison": "done",
+        "DrawWallBuil3_108": "done",
+        "DrawBasemWall93": "done",
+        "DrawBasemWall100": "done",
+        "DrawWallBasem112": "done",
+        "DrawWall": "done"
+      }
+    },
+    {
+      "id": "elevators",
+      "title": "Elevators (ride, cabin, elevator guards)",
+      "files": [
+        "logic/elevatorroom.asm",
+        "logic/actors/guardelevator.asm",
+        "logic/actors/elevatorguardspawner.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "The full relieve ceremony is ported (elevReliefTick): the two posted guards (InitGuardElevat) look around (GuardRandomDir), leave after the post timer announcing \"Relieve\" (GuardElevIdle -> Walk/Leave), and a spawner (InitSpawnGuardElev/SpawnGuardElev) marches a fresh pair in from the right (InitGuardRelieve); a player in the corridor (PlayerY<0x3D, GuardElevSetAlert/Leave) sounds the alarm — guard 1 becomes a chasing alert guard, guard 2 flees right (GuardElevAlert/GuardElevFlees). Partial: the 0xF-iteration look-at-player delay before the transform is collapsed and DrawAlertSign's \"!!\" icon shows via the normal alert icon (SaveAlertIconBacknd/Draw16x16 are VDP page-copy plumbing, out of scope). The elevator RIDE (GameMode 6 / ElevatorRoomLogic) is a verbatim port — 1px cabin+player movement, the 0x38/0x78/0xB8 floor stops, the express-shaft hold-to-skip quirks, shaft-end chaining with 0xD0/0x18 parking, and held-dir-as-facing at a stop; the 12-sprite cabin is composed offline into elevator.png. Divergence: a shaft exit whose neighbour room isn't exported stops the cabin in place.",
+      "status": {
+        "ElevatorRoomLogic": "done",
+        "ElevatorLogic2": "done",
+        "ElevatorNextRoom": "done",
+        "MoveElevator": "done",
+        "ChkDoNotStop": "done",
+        "ChkStopFloor": "done",
+        "ChkStopFloor2": "done",
+        "ElevatorDown": "done",
+        "ChkDoNotStop2": "done",
+        "ElevatorDown3": "done",
+        "ElevatorDown4": "done",
+        "ElevatorNextStatus_": "done",
+        "ElevatorNextStatus": "done",
+        "ElevatorExitRoom": "done",
+        "SetElevatorSpr": "done",
+        "SetElevatorSpr2": "done",
+        "SetElevatorSpr3": "done",
+        "SetElevatorSpr4": "done",
+        "SprElevatorDat": "done",
+        "InitGuardElevat": "done",
+        "InitGuardRelieve": "done",
+        "GuardElevator": "done",
+        "GuardElevator2": "done",
+        "GuardElevatorWalk": "done",
+        "GuardReachElevator": "done",
+        "GuardElevIdle": "done",
+        "GuardElevSetAlert": "partial",
+        "GuardElevSetAlert2": "partial",
+        "DrawAlertSign": "partial",
+        "SaveAlertIconBacknd": "out-of-scope",
+        "Draw16x16": "out-of-scope",
+        "GuardRandomDir": "done",
+        "GuardElevLeave": "done",
+        "GuardElevAlert": "partial",
+        "GuardElevFlees": "done",
+        "InitSpawnGuardElev": "done",
+        "SpawnGuardElev": "done"
+      }
+    },
+    {
+      "id": "player-damage-hud",
+      "title": "Player damage, life, death + life bar",
+      "files": [
+        "logic/hud.asm",
+        "logic/touchenemy.asm",
+        "logic/damagegas.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "InitPlayerVars",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprDead",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DeadLogic",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawWeaponHUD",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawItemHUD",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "EraseWeaponBox",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "EraseItemBox",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RenderAmmoHUD",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSnakeSprCol2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSnakeSprCol3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSnakeSprCol4",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSnakeSprCol5",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSnakeSprEnd",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "Life (rank-scaled MaxLife 24/32/40/48 over the 0x30 bar), damage with the 0x20-frame DamageDelayTimer window, the death sequence (SetDead + DeadLogic timer), the LIFE bar + CLASS stars, the weapon (icon + Render3Numbers ammo) and item HUD, and the red damage flash are ported (change: player-hud). The guard touch path is faithful (guard-touch-alert): ChkTouchEnemies/ChkTouchEnemy with the ROM shape-8 touch box, the stunned skip, TOUCH_INFO bit 7, TouchPlayer damage from any non-stunned guard; TouchPlayer's no-damage exemptions (prisoners/Ellen/Grey Fox/Madnar/fake Madnar) and per-actor ActorTouchDamage values are honoured across the actor branches. The former touch-branch gaps are now live actors: laser/laser-shot (lasers change), pitfall (ellen-pitfalls), bridge SetOnBridge flag (roof-traversal), scorpion poison via ChkScorpion's box (desert-scorpions; the damage SFX fires only on the poison transition — minor divergence). DrawCallTimer/DrawCallTimer2 are done (incoming-radio-call + intro-scene): bit-3 blink, menu erase, the mod-16 SFX 0x22 cadence, txtCALL as the exported call-sign.png; DrawDestrucTimer is done (endgame): the 3000-unit countdown's red digits own the CALL slot once armed, cigarettes add 2000. Gas rooms are done (ellen-pitfalls): the GAS_ROOMS set matches the 9 GasRooms bytes verbatim, 2 life per 0x10 frames without the mask (DecrementLife_C). ChkUsingArmor (the bullet-proof vest, item 1, halves incoming damage) is now done. ChkTouchEnemy2's land-mine self-destruct branch — room 9's ID_LAND_MINE enemy actors are not exported or built, so it's partial. InitPlayerVars/DeadLogic stay partial (init + continue flow not fully modeled).",
+      "status": {
+        "RenderHUD": "done",
+        "DrawCallTimer": "done",
+        "DrawCallTimer2": "done",
+        "DrawDestrucTimer": "done",
+        "DecrementLife_4": "done",
+        "DecrementLife_B": "done",
+        "DecrementLifeLoop": "done",
+        "SetDead": "done",
+        "DrawLife": "done",
+        "EraseLifeBar": "done",
+        "DrawClass": "done",
+        "DrawStars": "done",
+        "DrawStar": "done",
+        "Render2Numbers_": "done",
+        "RenderTens": "done",
+        "RenderUnits": "done",
+        "Render3Numbers": "done",
+        "RenderNumber": "done",
+        "RenderNumber2": "done",
+        "ChkTouchEnemies": "done",
+        "ChkTouchEnemies2": "done",
+        "ChkTouchEnemies3": "done",
+        "ChkTouchEnemy": "done",
+        "ChkTouchEnemy2": "partial",
+        "ChkScorpion": "done",
+        "PlayDamageSfx": "done",
+        "TouchPlayer": "done",
+        "TouchPlayer2": "done",
+        "ChkUsingArmor": "done",
+        "DecrementLife": "done",
+        "ChkGasRooms": "done",
+        "ChkGasRooms2": "done",
+        "ChkGasMask": "done",
+        "DecrementLife_C": "done",
+        "DecrementLife_2": "done",
+        "GasRooms": "done",
+        "InitPlayerVars": "partial",
+        "SetSprDead": "done",
+        "DeadLogic": "partial",
+        "DrawWeaponHUD": "done",
+        "DrawItemHUD": "done",
+        "EraseWeaponBox": "done",
+        "EraseItemBox": "done",
+        "RenderAmmoHUD": "done",
+        "SetSnakeSprCol2": "done",
+        "SetSnakeSprCol3": "done",
+        "SetSnakeSprCol4": "done",
+        "SetSnakeSprCol5": "done",
+        "SetSnakeSprEnd": "done"
+      }
+    },
+    {
+      "id": "player-control-modes",
+      "title": "Player control modes (dispatch + ladders + intro)",
+      "files": [
+        "logic/introscene.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "PlayerControlLogic",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "NormalCtrl",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "PunchLogic",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "Dead",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ElevatorCtrl",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ParachuteLogic",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "AirFlowLogic",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "IntroScene",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "LaddersWalk",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "LaddersClimb",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkStartClimb",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkExitLadders",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkLadderLimits",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkLadderDownlimit",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkNextLadderRoom",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprLadder",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprLadder2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprLadder3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetLeavedOuterH",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GetDirUpDown",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ControlPlayerV",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkWater",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkWater2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkWaterTiles",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkWaterTiles2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkWaterTiles3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkDeepShadow",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetInWaterMode",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetInWaterMode2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetInWaterMode3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetDeepWaterMode",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprWater",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprWater2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprWater3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprDeepWater",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprBox",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "Every PlayerControlMod the dispatch reaches is now ported: walk=0, punch=1, dead=3 (player-control-modes), elevator=2 (elevators change: ElevatorCtrl's ride-start check, walk-only horizontal control, the ChkLimitXElevator left clamp at 104 — the 243 right clamp stands in for the ROM's undefined X>=244 exit, documented), parachute=4 (roof-traversal: ParachuteLogic's 1px/iteration fall with the TickCounter-bit-4 ±1 sway, anim 3, the multi-screen NextParachuteRoom repeats and the SetLandingPos2 touchdown), air flow=5 (roof-traversal: AirFlowLogic's 3px/iteration push-up until Y<0x30 then walk, entered by the room-53 band unless the bomb blast suit is selected), the building-2 escape-ladder modes 6/7 (snake-ladders), and the INTRO scene mode 8 (intro-scene: the full 13-state scripted infiltration in room 121 with the call, the radio text-2 briefing, the fence-climb snaps, the BounceOffsets hop, and the landing checkpoint via restart). Shallow/deep water is RoomsWater-gated (snake-water); deep-water oxygen drain runs (oxygen tank not ownable yet — documented). Box is tracked separately. SetLadderRoomEntry is counted by the room-traversal component.",
+      "status": {
+        "PlayerControlLogic": "done",
+        "NormalCtrl": "done",
+        "PunchLogic": "done",
+        "Dead": "done",
+        "ElevatorCtrl": "done",
+        "ParachuteLogic": "done",
+        "AirFlowLogic": "done",
+        "IntroScene": "done",
+        "LaddersWalk": "done",
+        "LaddersClimb": "done",
+        "ChkStartClimb": "done",
+        "ChkExitLadders": "done",
+        "ChkLadderLimits": "done",
+        "ChkLadderDownlimit": "done",
+        "ChkNextLadderRoom": "done",
+        "SetSprLadder": "done",
+        "SetSprLadder2": "done",
+        "SetSprLadder3": "done",
+        "SetLeavedOuterH": "done",
+        "GetDirUpDown": "done",
+        "ControlPlayerV": "done",
+        "IntroSceneLogic": "done",
+        "idxIntroScene": "done",
+        "IntroScene1": "done",
+        "IntroScene1b": "done",
+        "IntroScene2": "done",
+        "IntroScene2b": "done",
+        "IntroScene3": "done",
+        "IntroScene3b": "done",
+        "IntroScene4": "done",
+        "IntroScene4b": "done",
+        "IntroScene5": "done",
+        "IntroScene5b": "done",
+        "IntroScene6": "done",
+        "IntroScene7": "done",
+        "IntroScene8": "done",
+        "NextIntroScene": "done",
+        "IntroScene9": "done",
+        "IntroSceneControls": "done",
+        "IntroChkExitScreen": "done",
+        "IntroScene9b": "done",
+        "IntroScene10": "done",
+        "IntroScene10b": "done",
+        "IntroScene11": "done",
+        "IntroScene11b": "done",
+        "IntroScene12": "done",
+        "IntroScene13": "done",
+        "BounceOffsets": "done",
+        "ChkWater": "done",
+        "ChkWater2": "done",
+        "ChkWaterTiles": "done",
+        "ChkWaterTiles2": "done",
+        "ChkWaterTiles3": "done",
+        "ChkDeepShadow": "done",
+        "SetInWaterMode": "done",
+        "SetInWaterMode2": "done",
+        "SetInWaterMode3": "done",
+        "SetDeepWaterMode": "done",
+        "SetSprWater": "done",
+        "SetSprWater2": "done",
+        "SetSprWater3": "done",
+        "SetSprDeepWater": "done",
+        "SetSprBox": "done"
+      }
+    },
+    {
+      "id": "player-weapons",
+      "title": "Player weapons (handgun + shots + selection)",
+      "files": [
+        "logic/weapon/handgun.asm",
+        "logic/damagetoenemy.asm",
+        "logic/weaponuse.asm",
+        "logic/weapon/smg.asm",
+        "logic/weapon/grenade.asm",
+        "logic/weapon/rocket.asm",
+        "logic/weapon/plasticbomb.asm",
+        "logic/weapon/mine.asm",
+        "logic/weapon/missile.asm",
+        "logic/menuequipment.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "GetWeaponDamages",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GetShapeInfo",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "KillActor",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "KillActor2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "KillActor3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "KillEnemy",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SelectWeapon",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetSprWalk",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DecItemUnits",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GetWeaponInvAdd",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawWeaponMenu",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawEquipMenu",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GetMenuCursor",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetShotSpr",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "The FULL ARSENAL is ported (change: player-weapons-full): the ChkWeaponShot dispatch with its room/water/box gates; handgun + SMG (hold-autofire every 2 iterations cycling the SMG_BulletSpeeds 8-step fan); grenades (±3 GrenadeSpeeds, the GrenadeYOffsets parabola verbatim, 0x18 fuse, 1-iteration ±20 blast window); rockets (±5, contact 0x0A + wall explosion); plastic bombs (PBombDirOffset verbatim, 0x30 fuse, ChkBasementWall + the Metal Gear leg order); mines; the remote missile (±4 MissileIniSpeed, ControlMissile re-aim, Snake frozen via the shot-ID-7 gate). Shots run at the ROM iteration boundary (~30Hz) so speeds/fuses are literal. The hit pipeline (ChkPlayerShots/ChkHitEnemies/ChkEneHitByShot) is done: per-weapon shapes, per-enemy damage columns (the bosses; guards use the flat WEAPON_DMG row), the explosives contact branch (ChkEnemyHitByShot4) without double hits, and the Metal Gear 16-bomb sequence (ChkBombOrder/ChkBombOrder2 with the PlasticBombOrder bytes VERBATIM — playtest Test 7). The KillActor family is done: SFX 0x16 (decoded guard-dead.wav) at every kill site, the IdsKillLogic dispatch targets all live, ChkDropItem drops, and reinforcements (ChkRespawnEnemy via hazards-reinforcements; the NumRespawnGuards counter is approximated by the live-guard count — minor divergence). The 6-slot shot pool and per-type max-actives are done; the VDP sprite-plane reservation internals (ReserveShotSpr2/3, NumSprShot, SetPlayerShotSpr2-5) are out of scope (canvas draws shots.png), leaving ReserveShotSpr/SetPlayerShotSpr/SetShotSpr partial as the entry points. The weapon + EQUIPMENT menus (logic/menuequipment.asm) are done (changes: equipment-menus, menu-door-fidelity): the compacted owned grid, exact SelectIdx clamps, ControlHoldWait 8 repeat, moving-is-selecting (EquipRemoved → empty menus selecting 0, capture flow), and ChkUseItem fully live — ration full-heal (deep-water gated), the bugged-transmitter drop, antidote (scorpion poison), cigarettes +2000 on the countdown — with SFX 0x20/0x21 decoded. ExitEquipMenu is partial: the close works but the binoculars branch (and BinocularSprAtt) awaits the unported binoculars mode (SESSION-STATE 'Remaining polish').",
+      "status": {
+        "ChkHandGunShot": "done",
+        "ChkHandGunShot2": "done",
+        "ShootDirSpeeds": "done",
+        "PlayerBulletLogic": "done",
+        "PlayerBulletlogic2": "done",
+        "ChkPlayerShots": "done",
+        "ChkPlayerShots2": "done",
+        "ChkPlayerShots3": "done",
+        "ChkHitEnemies": "done",
+        "ChkHitEnemies2": "done",
+        "ChkEneHitByShot": "done",
+        "ChkEnemyHitByShot2": "done",
+        "ChkEnemyHitByShot3": "done",
+        "ChkEnemyHitByShot4": "done",
+        "ChkEnemyHitByShot5": "done",
+        "ChkBombOrder": "done",
+        "ChkBombOrder2": "done",
+        "DecEnemyLife": "done",
+        "SetEnemyLife": "done",
+        "NoDamage": "done",
+        "PlasticBombOrder": "done",
+        "ChkWeaponShot": "done",
+        "GetEmptyShotDat": "done",
+        "GetEmptyShotDat2": "done",
+        "GetEmptyShotDat3": "done",
+        "ReserveShotSpr": "partial",
+        "ReserveShotSpr2": "out-of-scope",
+        "ReserveShotSpr3": "out-of-scope",
+        "ReserveShotSpr4": "done",
+        "NumSprShot": "out-of-scope",
+        "PlayerShotsLogic": "done",
+        "PlayerShotsLogic2": "done",
+        "PlayerShotLogic": "done",
+        "SetPlayerShotSpr": "partial",
+        "SetPlayerShotSpr2": "out-of-scope",
+        "SetPlayerShotSpr3": "out-of-scope",
+        "SetPlayerShotSpr4": "out-of-scope",
+        "SetPlayerShotSpr5": "out-of-scope",
+        "MovePlayerShot": "done",
+        "MovePlayerShotX": "done",
+        "MovePlayerShotAlt": "done",
+        "MovePlayerShotAlt2": "done",
+        "ChkShotCollision": "done",
+        "ChkShotCollisionA": "done",
+        "ChkShotCollision2": "done",
+        "ChkShotBoundaries": "done",
+        "RemoveShot": "done",
+        "RemoveShot2": "done",
+        "SMG_NoAmmo": "done",
+        "ResetSMGunCnt": "done",
+        "ChkSMGShot": "done",
+        "chkSMGShot2": "done",
+        "SetSMG_Sfx": "done",
+        "SMG_BulletSpeeds": "done",
+        "ChkGrenadeShot": "done",
+        "GrenadeSpeeds": "done",
+        "PlayerGrenadeLogic": "done",
+        "MoveGrenade": "done",
+        "GrenadeYOffsets": "done",
+        "GrenadeExplode": "done",
+        "SmallExplosionLogic": "done",
+        "SmallExplosionLogic2": "done",
+        "ChkFireRocket": "done",
+        "RocketSpeeds": "done",
+        "PlayerRocketLogic": "done",
+        "RocketMove": "done",
+        "RocketMove2": "done",
+        "RocketExplode": "done",
+        "NextRocketStat": "done",
+        "ChkPBombShot": "done",
+        "PBombDirOffset": "done",
+        "PlayerPBombLogic": "done",
+        "PBombTimer": "done",
+        "PBombExplode": "done",
+        "PBombNextStat": "done",
+        "MedExplosionLogic": "done",
+        "MedExplosionLogic2": "done",
+        "ChkLMineShot": "done",
+        "PlayerMineLogic": "done",
+        "MineExplode": "done",
+        "MineDummy": "done",
+        "ChkMissileShot": "done",
+        "SetMissileSpr": "done",
+        "MissileIniSpeed": "done",
+        "PlayerMissileLogic": "done",
+        "ControlMissile": "done",
+        "ControlMissile2": "done",
+        "ControlMissile3": "done",
+        "ControlMissile4": "done",
+        "MissileExplode": "done",
+        "NextMissileStat": "done",
+        "MenuEquip": "done",
+        "MenuEquipLogic": "done",
+        "MenuEquipLogic2": "done",
+        "MenuEquipUp": "done",
+        "MenuEquipDown": "done",
+        "MenuEquipLeft": "done",
+        "MenuEquipMove": "done",
+        "SetSelectedItem": "done",
+        "SetSelectedItem2": "done",
+        "ChkUseItem": "done",
+        "ChkDropTransmitter": "done",
+        "ChkUseAntidote": "done",
+        "ChkUseCigarettes": "done",
+        "UseItemSfx": "done",
+        "ExitEquipMenu": "partial",
+        "BinocularSprAtt": "partial",
+        "GetWeaponDamages": "done",
+        "GetShapeInfo": "done",
+        "KillActor": "done",
+        "KillActor2": "done",
+        "KillActor3": "done",
+        "KillEnemy": "done",
+        "SelectWeapon": "done",
+        "SetSprWalk": "done",
+        "DecItemUnits": "done",
+        "GetWeaponInvAdd": "done",
+        "DrawWeaponMenu": "done",
+        "DrawEquipMenu": "done",
+        "GetMenuCursor": "done",
+        "SetShotSpr": "partial"
+      }
+    },
+    {
+      "id": "item-pickups",
+      "title": "Item/weapon pickups (room items, inventory, drops)",
+      "files": [
+        "logic/items.asm",
+        "logic/addroomitems.asm",
+        "logic/spawnitem.asm",
+        "logic/maxammo.asm",
+        "logic/drawitemsinroom.asm",
+        "logic/shrinkitems.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "GetItemAmount",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GetItemInvAdd",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkDropItem",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkDropItem2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkDropItem3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ItemTakeText",
+          "file": "data/itemtaketextid.asm"
+        }
+      ],
+      "notes": "The acquisition loop is ported (changes: item-pickups, the world slices): AddRoomItems from exported items.json (the ROM's real rooms 122-217 live across the connected world; the demo overlay rooms 3/9/10 are a documented divergence), the ChkTakeItem pickup box (32/16-wide per the WeaponGfxXY/ItemGfxXY odd-X rule), the full dispatch (PickUpWeapon + GetWeapon first-pick auto-select, PickSupressor → silent handgun, PickAmmoCrate owned-only grants, AddItemInventory/AddItemAmount with rank clamps), SetItemAsTaken respawn rules, and ChkDropItem/SpawnItem punch-kill drops (slot-faithful: 3 fixed slots, no compaction, SpawnItem2 checks only slot 0; room 150's suppressor drop included). EraseTakenItem/ErasePickedItem2/3 are done: slot release, SFX 0x24, the last-item description path — the VRAM background restore is inherent to the per-frame canvas redraw. ItemTakeText shipped verbatim (wired-prisoner-texts) INCLUDING the Western ROM's gate (only text 62 ever shows — the disassembly's own bug/limitation note, so silent pickups are the ported behaviour). RecoverEquipment/AddTransmitter are live with the capture flow. Max-ammo: MaxAmmoLv1-4 + the per-rank ration caps (3/6/9/18) are used VERBATIM via the rank clamp; SetMaxAmmo3 and the MaxAmmoVals 999 table are the INTRUDER/ISOLATION password cheats — no password system, todo. logic/shrinkitems.asm (the menu slot compaction) is tracked here: CompactWeapons/CompactEquipment are done as the once-per-open compacted snapshot, but the inner slot-movers are partial — JS rebuilds from Map insertion order, so the ROM's documented compaction BUG (a leftover gap after two consecutive drops/uses) is not reproduced. Remaining: ClearGameVars (the new-game wipe — the port's restart is a continue, a documented divergence) and DrawRoomItems (floor items use the HUD icon sheet instead of the dedicated VRAM bitmaps — documented approximation). Integer ammo instead of BCD stays a documented divergence; pickup/spawn SFX 0x24/0x25 decoded.",
+      "status": {
+        "ChkTakeItems": "done",
+        "ChkTakeItems2": "done",
+        "ChkTakeItems3": "done",
+        "ChkTakeItems4": "done",
+        "ChkTakeItem": "done",
+        "ChkTakeItem2": "done",
+        "ChkTakeItem3": "done",
+        "ChkTakeItem4": "done",
+        "AddItemInventory": "done",
+        "AddItemInventory2": "done",
+        "AddItemInventory3": "partial",
+        "AddItemInventory4": "done",
+        "PickSupressor": "done",
+        "PickUpWeapon": "done",
+        "GetWeapon": "done",
+        "GetWeapon2": "done",
+        "GetWeapon3": "done",
+        "GetWeapon4": "done",
+        "GetWeapon5": "done",
+        "RecoverEquipment": "done",
+        "RecoverEquipment2": "done",
+        "AddTransmitter": "done",
+        "PickAmmoCrate": "done",
+        "EraseTakenItem": "done",
+        "ErasePickedItem2": "done",
+        "ErasePickedItem3": "done",
+        "AddItemAmount": "done",
+        "AddAmmo": "done",
+        "LimitAmmo": "done",
+        "SetItemAsTaken": "done",
+        "SetItemAsTaken2": "done",
+        "SetItemAsTaken3": "done",
+        "ClearGameVars": "done",
+        "AddRoomItems": "done",
+        "AddRoomItems2": "done",
+        "AddRoomItems3": "done",
+        "AddRoomItems4": "done",
+        "AddRoomItems5": "done",
+        "AddItemToRoom": "done",
+        "SpawnItem": "done",
+        "SpawnItem2": "done",
+        "ListDropItems": "done",
+        "SetMaxAmmoVals": "partial",
+        "SetMaxAmmo2": "done",
+        "SetMaxAmmo3": "done",
+        "ChkMaxRations": "done",
+        "ChkMaxAmmo": "done",
+        "ChkMaxAmmo2": "done",
+        "ChkMaxAmmo3": "done",
+        "MaxAmmoLv1": "done",
+        "MaxAmmoLv2": "done",
+        "MaxAmmoLv3": "done",
+        "MaxAmmoLv4": "done",
+        "MaxAmmoVals": "done",
+        "ChkMaxAmount": "done",
+        "DrawRoomItems": "partial",
+        "DrawRoomItems2": "partial",
+        "DrawRoomItems3": "partial",
+        "DrawRoomItems4": "partial",
+        "DrawRoomItems5": "partial",
+        "DrawRoomItems6": "partial",
+        "CompactWeapons": "done",
+        "CompactEquipment": "done",
+        "FindEmptySlot": "partial",
+        "FindUsedSlot": "partial",
+        "MoveItemSlot": "partial",
+        "MoveItemSlot2": "partial",
+        "GetItemAmount": "done",
+        "GetItemInvAdd": "done",
+        "ChkDropItem": "done",
+        "ChkDropItem2": "done",
+        "ChkDropItem3": "done",
+        "ItemTakeText": "done"
+      }
+    },
+    {
+      "id": "rank-progression",
+      "title": "Rank progression (prisoners, Class up/down)",
+      "files": [
+        "logic/actors/prisoner.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "IncRescued",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "IncClassLv",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "IncClassLv_",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "UpdateLevels",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "UpdateLevels2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DowngradeRank",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DowngradeRank2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "KillPrisoner",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "KillPrisoner2",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "Rank core is ported (change: rank-progression): prisoner actors (idle 2-frame animation, the ActorsShapeTouch 0x17 touch box, no damage/alarm on touch, shootable with LIFE 2), every 5 rescues -> IncClassLv (cap 3, SFX 0x26) -> UpdateLevels (MaxLife 24/32/40/48, FULL heal on rank-up, per-rank ammo clamps), and kill -> DowngradeRank (regular-17 flag reset with the 6 RoomsPrisoner specials preserved, Class-1 floor 0, SFX 0x27, clamped levels). The texts are now WIRED (changes: wire-item-prisoner-texts, ellen-pitfalls, madnar): PrisonerRescued's full dispatch — Ellen 167 -> text 129 (RescuePrisoner), Coward Duck 193 -> ChkRescJenBro (Y 0x54 -> 140, else 131), Madnar 182 -> the Ellen-gated 124/125, else the verbatim 19-pair PrisonerTexts table (RescuedLogic2/3). The HELP-ME voice is live: room 166's actor cries text 128 unskippable every 0xC0 iterations (ChkSayHelpMe). Real prisoners spawn from actors.json with their sheets (Grey Fox 164 / Ellen 167 / Madnar 182); the room-189 fake-Madnar trap is its own actor (fakemadnar.asm, madnar change). Remaining gaps: MadnarLogic's pre-Ellen no-SetAsRescued respawn exploit isn't reproduced (JS always marks him rescued and counts once); PrisonerIdle's Coward-Duck Card8 rescue gate and Ellen's OWN idle help-me call aren't wired; InitEllenVoice doesn't dismiss after Ellen's rescue and first-cries after 2 iterations vs the ROM's 0x20; KillPrisoner's room-193 JennifBrotherDead flag is missing (the radio gate it feeds is also a pass-through); rooms hold ONE prisoner (ROM rooms like 193 hold several) and DEMO prisoners persist in cluster rooms 3/5-9; Class/rescues survive the restart (ROM continue). IncClassLv_ is the password-cheat trampoline — passwords aren't ported.",
+      "status": {
+        "PrisonerLogic": "done",
+        "InitPrisoner": "partial",
+        "PrisonerIdle": "partial",
+        "PrisonerIdle2": "done",
+        "ChkSayHelpMe": "done",
+        "RescuePrisoner": "done",
+        "MadnarLogic": "partial",
+        "RescueAndShowTxt": "partial",
+        "PrisonerNextStat": "done",
+        "ChkRescJenBro": "partial",
+        "PrisonerWait": "done",
+        "PrisonerRescued": "done",
+        "RescuedLogic2": "done",
+        "RescuedLogic3": "done",
+        "PrisonerTexts": "done",
+        "InitEllenVoice": "partial",
+        "SetAsRescued": "done",
+        "PrisonerDummy": "done",
+        "RoomsPrisoner": "done",
+        "IncRescued": "done",
+        "IncClassLv": "done",
+        "IncClassLv_": "done",
+        "UpdateLevels": "done",
+        "UpdateLevels2": "done",
+        "DowngradeRank": "done",
+        "DowngradeRank2": "done",
+        "KillPrisoner": "partial",
+        "KillPrisoner2": "done"
+      }
+    },
+    {
+      "id": "capture-flow",
+      "title": "Capture flow (trigger, scene, prison, recovery)",
+      "files": [
+        "logic/capturescene.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "CommonLogic trigger + the scripted scene + PutInPrison + the punched-out cell walls + RecoverEquipment with the bugged transmitter. The fade is a canvas alpha approximation of the palette fade.",
+      "status": {
+        "CaptureSceneLogic": "done",
+        "AddCaptureGuard": "done",
+        "CaptureSetup": "done",
+        "DummyRet4": "done",
+        "CaptureWait": "done",
+        "CaptureFadeOut": "partial",
+        "PutInPrison": "done",
+        "InitCaptureScene": "done",
+        "CaptureGuardsLogic": "done",
+        "CaptureDelay": "done",
+        "AddCaptureGuardB": "done",
+        "AddCaptureGuardB2": "done",
+        "CaptureGuardBX": "done",
+        "CaptureGuardBX2": "done",
+        "CaptureGuardBY": "done",
+        "CaptureGuardBSpeak": "done",
+        "CaptureWaitText": "done",
+        "CaptureDummy": "done"
+      }
+    },
+    {
+      "id": "lasers-cameras",
+      "title": "Lasers + cameras (beams, goggles, camera patrol/sight, laser shots)",
+      "files": [
+        "logic/laserbeams.asm",
+        "logic/drawlaserbeams.asm",
+        "logic/actors/camera.asm",
+        "logic/actors/rendercameras.asm",
+        "logic/actors/lasershot.asm",
+        "logic/damagelaser.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "InitLaserRoom",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "InitLaserRoom2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "InitLaserRoom3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "InitLaserRoom4",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawMovingLasers",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawMovingLasers2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawMovingLasers3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GetPathPoints",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "Fully shipped (changes: lasers + its playtest fixes, building-2, world-complete/endgame Test-7 fixes). Beams: lasers.json (from data/laserconfig.asm), InitLaserRoom's no-beams-in-alert gate, ChkTouchLaser's exact inequalities -> RED alert + RemoveLaserBeans, DrawLaserBeams' goggles-selected + no-alert gate drawing the ROM's exact 1px line geometry (canvas fillRect replaces the VDP LINE command; the goggles infrared palette ships as .goggles.png room variants). Room 72's DrawMovingLasers five-pattern 0xC0 cycle is LIVE since building-2 (status AND collision bytes both switched). The RestLasersBack family (VRAM page-1->page-0 background restore) is out of scope — the canvas redraws every frame. Cameras: cameras.json bakes RoomsWithCamera/RoomCamTypes/CamDirs1-7 + actorsinrooms positions + idxRoomPaths patrols (GetPathPoints); CameraDrawOffsets is the CAMERA_EYE lens verbatim; sight -> CamAlertAnim's 0x20 bit-2 red flash -> RenderCamera freeze (status 2, collisions off; rendercameras.asm's DrawCamera frame math = the camera.png blit at X-8/Y-8). Laser cams: the full LaserCameraShot tail is ported, INCLUDING the checkpoint columns after LaserCameraShot9 (LaserCameraShot4/5's KO_POINTER_H momentary pause — the old 'room-115 checkpoint not ported' note was STALE; rooms 115/118/149 ship since world-complete and the Test-7 fix made the sweeps nonstop per ChkReachPoint), CameraChkContinue toward the PATH point with the exact-X hold, |dx|>=0x60 path re-init (InitCamera3), shots growing one 16px segment per iteration with ChkLaserShot's LaserLenghts-span 0x10 damage and SFX 4. Gaps: InitCameraLaser's room-118 MetalGear_KO dismissal isn't wired (cameras stay active after Metal Gear is destroyed); LaserSetSprColor's red/white alternation is a fixed red; camera point-waits use Math.random for the ROM's R-register read (documented).",
+      "status": {
+        "ChkTouchLaser": "done",
+        "ChkTouchLaser2": "done",
+        "ChkTouchLaser3": "done",
+        "ChkTouchLaser4": "done",
+        "ChkTouchLaser5": "done",
+        "ChkTouchLaser6": "done",
+        "TouchLaserAlarm": "done",
+        "RemoveLaserBeans": "done",
+        "RemoveLaserBeans2": "done",
+        "DrawLaserBeams": "done",
+        "DrawLaserBeams2": "done",
+        "DrawLaserBeams3": "done",
+        "DrawLaserBeams4": "done",
+        "DrawLaserBeams5": "done",
+        "RestLasersBack": "out-of-scope",
+        "RestLaserBack2": "out-of-scope",
+        "RestLaserBack3": "out-of-scope",
+        "RestLaserBack4": "out-of-scope",
+        "InitLaserRoom": "done",
+        "InitLaserRoom2": "done",
+        "InitLaserRoom3": "done",
+        "InitLaserRoom4": "done",
+        "DrawMovingLasers": "done",
+        "DrawMovingLasers2": "done",
+        "DrawMovingLasers3": "done",
+        "GetPathPoints": "done",
+        "InitCameraLaser": "partial",
+        "InitCameraLaser2": "done",
+        "InitCamera": "done",
+        "InitCamera2": "done",
+        "InitCamera3": "done",
+        "RoomsWithCamera": "done",
+        "RoomCamTypes": "done",
+        "CamDirs1": "done",
+        "CamDirs2": "done",
+        "CamDirs3": "done",
+        "CamDirs4": "done",
+        "CamDirs5": "done",
+        "CamDirs6": "done",
+        "CamDirs7": "done",
+        "CameraLogic": "done",
+        "CamameraMove": "done",
+        "CamMoveWait": "done",
+        "CamAlertAnim": "done",
+        "CamAlertAnim2": "done",
+        "DummyCamLogic": "done",
+        "CameraDrawOffsets": "done",
+        "LaserCameraLogic": "done",
+        "LaserCameraMove": "done",
+        "LaserCamChkShot": "done",
+        "LaserCameraShot": "done",
+        "LaserCameraShot2": "done",
+        "LaserCameraShot3": "done",
+        "LaserCameraShot4": "done",
+        "LaserCameraShot5": "done",
+        "StopLaserCamera": "done",
+        "CameraChkContinue": "done",
+        "LaserCameraShot8": "done",
+        "LaserCameraShot9": "done",
+        "LaserCamDummy": "done",
+        "RenderCamera": "done",
+        "DrawCamera": "done",
+        "DrawCameras": "done",
+        "DrawCameras2": "done",
+        "DrawCamera_": "done",
+        "InitLaserShot": "done",
+        "InitLaserShot2": "done",
+        "LaserShotLogic": "done",
+        "LaserIncrease": "done",
+        "LaserSetSprColor": "partial",
+        "LaserSetSprColor2": "partial",
+        "LaserSetSprColor3": "partial",
+        "LaserDecrease": "done",
+        "LaserDecrease2": "done",
+        "EraseLaserTrace": "done",
+        "LaserShotDummy": "done",
+        "ChkLaserShot": "done",
+        "ChkLaserShot2": "done",
+        "ChkLaserShot3": "done",
+        "ChkLaserShot4": "done",
+        "ChkLaserShot5": "done",
+        "ChkLaserShot6": "done",
+        "LaserLenghts": "done"
+      }
+    },
+    {
+      "id": "pitfalls-traps",
+      "title": "Pitfalls + the help-me voice",
+      "files": [
+        "logic/pitfall.asm",
+        "logic/actors/pitfall.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "The full pitfall life cycle is ported (ellen-pitfalls; staging re-verified in the madnar change + playtest Test 6): a closed pit arms TOUCH_INFO bit 7 within ±40 of the centre (ChkTriggerPitfall), opens 2px/iteration to 0x40 with SFX 7 (PitfallLogic/PitfallLogic2), and standing inside the half-size box kills outright, ignoring i-frames (ChkPitfall -> DecrementLife_B with all life). The hole is the REAL GfxPitfall art — Tools/RoomViewer --export-pitfall writes the 64x64 pitfall.png — revealed as a centre-out window exactly like PitfallLogic3/RenderPitfallP0's expanding page-1 copy (the per-edge 1px VDP line copies are replaced by a whole-window blit with the same visible result; the even-coordinate snap and the 0x3F-vs-0x40 clamp are sub-pixel divergences). Dark rooms hide the hole without the flashlight while it stays lethal. The fake-Madnar trap pushes a pitfall with ROM staging: text 109 first, the pitfall + open SFX only after the text, 1px/iteration sink (Test 6 confirmed). Pitfall positions come from actors.json. InitPitfall stays partial: the room-190 pre-opened branch (Status=2, HOLE_SIZE 0x3F, the page-1 open image) is unimplemented and the export has no pitfall for room 190 — the ROM's own room-190 actor list holds only a prisoner, so where its pitfall actor comes from needs disassembly investigation. The HELP-ME voice (room 166, text 128 every 0xC0 iterations) is live in game.js but its routine (ChkSayHelpMe, logic/actors/prisoner.asm) is counted under rank-progression.",
+      "status": {
+        "ChkPitfall": "done",
+        "ChkPitfall2": "done",
+        "ChkPitfall3": "done",
+        "ChkTriggerPitfall": "done",
+        "ChkTriggerPitfall2": "done",
+        "ChkTriggerPitfall3": "done",
+        "PitfallLogic": "done",
+        "NextPitfallStat": "done",
+        "PitfallLogic2": "done",
+        "PitfallLogic3": "done",
+        "GetPitfallCoord": "done",
+        "InitPitfall": "partial",
+        "DrawOpenPitfalls": "done",
+        "DrawOpenPitfalls2": "done",
+        "DrawOpenPitfalls3": "done",
+        "DrawOpenPitfalls4": "done",
+        "RenderPitfallP0": "done",
+        "RenderPitfallP0_2": "done"
+      }
+    },
+    {
+      "id": "hazards",
+      "title": "Hazards + reinforcements (gas, barrels, electric floors, guard variants)",
+      "files": [
+        "logic/actors/gas.asm",
+        "logic/actors/rollingbarrels.asm",
+        "logic/actors/powerswitch.asm",
+        "logic/damageelectric.asm",
+        "logic/actors/guardsupressor.asm",
+        "logic/actors/hideguards.asm",
+        "logic/actors/snoringsymbol.asm",
+        "logic/actors/guardswitch.asm",
+        "logic/actors/mine.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "Mines (contact + detector reveal), gas clouds, rolling barrels, and the electric floor + power switches (ChkElectricFloor, rooms 16/40/110/116) are ported. The room-16 GUARD_SWITCH operator (GuardSwitchLogic: patrol/look/alarm/run-to-switch/power-the-floor/guard-it), the room-150 SUPPRESSOR guards (GuardSilencerLogic move-then-cross-fire + ChkChasePlayer transform + the SUPPRESSOR drop), the per-room HideGuards entry-edge culls, and the sleepy-guard Zzz are all live. Divergences (partial): PowerSwitchLogic's palette fade is a translucent pulse over the live tiles (ChkRevertFade's bright/delta math isn't ported); the switch guard's exact LOS uses the box-aware guardSeesSnake.",
+      "status": {
+        "InitGas": "done",
+        "GasLogic": "done",
+        "GasWait": "done",
+        "GasShow": "done",
+        "RollingBarrelLogic": "done",
+        "RollingBarrelLogic2": "out-of-scope",
+        "RollingBarrelLogic3": "out-of-scope",
+        "RB_IncrementSpeed": "done",
+        "RB_IncrementSpeed2": "done",
+        "ChkBarrelBounce": "done",
+        "ChangeBarrelDir": "done",
+        "InitRollingBarrel": "done",
+        "InitRollingBarrel2": "done",
+        "InitPowerSwitch": "done",
+        "PowerSwitchLogic": "partial",
+        "PowerSwitchLogic2": "done",
+        "ChkRevertFade": "partial",
+        "ChkRevertFade2": "partial",
+        "ChkRevertFade3": "partial",
+        "ChkElectricFloor": "done",
+        "ChkElectricFloor2": "done",
+        "ChkElectricFloor3": "done",
+        "InitGuardSilencer": "done",
+        "InitGuardSilencer2": "done",
+        "GuardSilencerLogic": "done",
+        "GuardSilencIdle": "done",
+        "GuardSilencMovShot": "done",
+        "GuardSilencTurn": "done",
+        "GuardSilencWalk": "done",
+        "SetGuardSprId_": "done",
+        "SetGuardSprId": "done",
+        "ChkChasePlayer": "done",
+        "ChkChasePlayer2": "done",
+        "ChkChasePlayer3": "done",
+        "HideGuardRoom1": "done",
+        "HideGuardRoom1_2": "done",
+        "HideGuardSpr": "done",
+        "HideGuardRoom13": "done",
+        "HideGuardRoom15": "done",
+        "HideGuardRoom17": "done",
+        "HideGuardRoom18": "done",
+        "HideGuardChkCoordN": "done",
+        "HideGuardChkCoord": "done",
+        "HideGuardRoom19": "done",
+        "HideGuardRoom22": "done",
+        "HideGuardRoom35": "done",
+        "HideGuardRoom39": "done",
+        "InitSnoringSymbol": "partial",
+        "SnoringSymbolLogic": "partial",
+        "RemoveSnoringSymbol": "partial",
+        "InitGuardSwitch": "done",
+        "GuardSwitchLogic": "done",
+        "GuardSwPatrol": "done",
+        "GuardSwPatrol2": "done",
+        "GuardSwTurn": "done",
+        "GuardSwLookNorth": "done",
+        "GuardSwTurnLeft": "done",
+        "GuardSwChkPlayer": "partial",
+        "GuardSwChkSee": "partial",
+        "GuardSwChkSeeY": "partial",
+        "GuardSwChkBox": "partial",
+        "GuardSwAlarm": "done",
+        "GuardSwGoToSw": "done",
+        "GuardSwWait": "done",
+        "GuardSwRight": "done",
+        "GuardSwShot": "done",
+        "GuardSwWaitSwitch": "done",
+        "SetStatGoToSwitch": "done",
+        "InitMines": "done",
+        "DrawMine": "done",
+        "DrawMines": "done",
+        "DrawMines2": "done",
+        "DrawMines3": "done",
+        "GetMineBackXY": "out-of-scope"
+      }
+    },
+    {
+      "id": "bosses",
+      "title": "First bosses (Machine Gun Kid, Shotgunner)",
+      "files": [
+        "logic/actors/machinegunkid.asm",
+        "logic/actors/shotgunner.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "Machine Gun Kid (room 20: the 5-state hide/shoot machine, the Mercenary loop, the 0..4..0 downward fan) and the Shotgunner (room 57: invulnerable rolls, aimed expanding blasts, the crate-corner hold-fire zone) are fully ported (changes: machine-gun-kid, shotgunner); their shots use the guard-bullet pool. The remaining bosses are tracked by the mid-bosses, dogs-wing and finale components.",
+      "status": {
+        "InitMachGunKid": "done",
+        "MachGunKidLogic": "done",
+        "MachGunKidIntro": "done",
+        "MachGunKidIntro2": "done",
+        "MG_ThinkMovement": "done",
+        "MG_ThinkMovement2": "done",
+        "MG_ThinkMovement3": "done",
+        "MG_ChkSameWall": "done",
+        "MG_ThinkMovement5": "done",
+        "MG_MoveToShot": "done",
+        "MG_MoveToShot2": "done",
+        "MG_Shooting": "done",
+        "MG_Shooting2": "done",
+        "MG_ChoseDir": "done",
+        "MG_ChoseDir2": "done",
+        "MG_MoveToHide": "done",
+        "MG_MoveToHide2": "done",
+        "InitMGunKidShot": "done",
+        "MGunKidShotLogic": "done",
+        "InitShotGunner": "done",
+        "InitShotGunner2": "done",
+        "ShotGunnerLogic": "done",
+        "ShotGunnerIntro": "done",
+        "ShotGunnerIntro2": "done",
+        "ShotGunnerRoll": "done",
+        "ShotGunnerRoll2": "done",
+        "ShotGunnerStop": "done",
+        "SGunnerShotLogic": "done",
+        "SGunnerShotLogic2": "done",
+        "SGunnerThinkDir": "done",
+        "SGunnerThinkDir2": "done",
+        "SetSGunnerRollSpr": "done",
+        "InitShotGunnerShot": "done",
+        "ShotGunnerShot": "partial",
+        "ShotGunnerShot2": "partial",
+        "SGunnerRollSpr": "partial"
+      }
+    },
+    {
+      "id": "mid-bosses",
+      "title": "Mid-bosses (Tank, Bulldozer, Arnolds, Fire Trooper)",
+      "files": [
+        "logic/actors/tank.asm",
+        "logic/actors/tankshell.asm",
+        "logic/actors/tankshot.asm",
+        "logic/actors/shellspawner.asm",
+        "logic/actors/bulldozer.asm",
+        "logic/actors/arnold.asm",
+        "logic/actors/firetropper.asm",
+        "logic/actors/flame.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "All four bosses are ported by the mid-bosses change (plus the Test-5 playtest fixes): the tank's cannon-column shell + alternating machine-gun bursts (ChkMachineGun1/2 timers 0x1E/0x2D, the NumberShots 0..4 fan, SpeedY 6 shells/bullets) at the real ActorsRoom067 spot with the mines-only damage column; the bulldozer's 0x60/0x80/0xC0/0xE0 phase push halting at Y 160 (grenades-only); the complete ArnoldLogic watch/chase/walk-back/bounce-back machine including the ROM's player-position push bug (rockets-only, CARD7 on the second death); and the Fire Trooper's real 6-status routine (FT_Walk clamped to X 0x60..0x80, the FT_MoveFlames pendulum ANGLE 0x18..0x3F with sin/16-cos/16 steps and the FLAME_MOV_ID sign cycle) with the red+yellow Fire1/Fire2 flames. Boss sprite composition is the documented best-effort multi-pair layout; KO latches/boss-music handoffs follow SetBossMusic/SetBulldozerKO. Known gaps: the tank's every-128-iteration idle beat (AnimateTank status 2 / TankIdle) is missing and its up/down scheduling approximates TankMove/TankMoveLong with a vy flip; the MG fan is signed outward per gun side instead of TankShotLogic's centered SpeedXUnsigned-2; SetArnoldRndWait's range is roughly halved; past BuldozerStop3 the port keeps cycling stop/move instead of BulldozerDummy's continuous final push. The desert falling-shell barrage (all of tankshell.asm + shellspawner.asm, ID_TANK_SHELL_AIR gated on BossTank_KO) is entirely unported. TankAlive and loc_106472/loc_106499/loc_10649F are unreachable ROM dead code (out of scope / no-op). TankIdle's every-128-iteration idle beat is the one documented behavioural partial. FlamesLogic2/FlameOutScreen/SetSprColor_ are MSX sprite plumbing (hiding flames via color 0 on the 8-bit X wrap) — out of scope; FT_BringInFlames' retraction maps to shrinking the flames array instead.",
+      "status": {
+        "InitTank": "done",
+        "SetBossMusic": "done",
+        "TankLogic": "done",
+        "ChkMachineGun1": "done",
+        "ChkMachineGun2": "done",
+        "TankMachineGun": "done",
+        "TankMachineGun2": "done",
+        "TankMachineGun3": "done",
+        "AnimateTank": "partial",
+        "AnimateTank2": "done",
+        "TankStatusLogic": "partial",
+        "TankMove": "partial",
+        "TankMoveDown2": "partial",
+        "TankMoveLong": "partial",
+        "TankIdle": "partial",
+        "TankAlive": "out-of-scope",
+        "InitTankShell": "done",
+        "ThankShellLogic": "done",
+        "ThankShellLogic2": "done",
+        "InitTankShellBoss": "done",
+        "InitTankShot": "done",
+        "TankShotLogic": "partial",
+        "InitSpawnTankShell": "done",
+        "SpawnTankShell": "done",
+        "SpawnTankShell2": "done",
+        "SpawnTankShell3": "done",
+        "BulldozerLogic": "done",
+        "BuldozerMoving": "done",
+        "BuldozerStop1": "done",
+        "BuldozerSetSpeed": "done",
+        "BulldozerNextStat": "done",
+        "BuldozerStop2": "done",
+        "BuldozerStop3": "done",
+        "StopBulldozer": "done",
+        "InitBulldozer": "done",
+        "SetBulldozerKO": "done",
+        "BulldozerDummy": "partial",
+        "InitArnold": "done",
+        "ArnoldLogic": "done",
+        "ArnoldWatch": "done",
+        "ArnoldSeePlayer": "done",
+        "ArnoldSeePlayer2": "done",
+        "ArnoldWaitTurn": "done",
+        "ArnoldTurn": "done",
+        "ArnoldTowardsPlayer": "done",
+        "ArnoldTowards2": "done",
+        "ArnoldStopChase": "done",
+        "ArnoldStopChase2": "done",
+        "ArnoldReturn": "done",
+        "ArnoldReturn2": "done",
+        "ArnoldBounceBack": "done",
+        "ArnoldBounceBack2": "done",
+        "ArnoldBounceBack3": "done",
+        "ArnoldBounceBack4": "done",
+        "ArnoldBounceBack5": "done",
+        "SetArnoldWalkSpr": "done",
+        "SetArnoldWalkSpr2": "done",
+        "SetArnoldSpr": "done",
+        "SetArnoldSprStill": "done",
+        "SetArnoldSprStill2": "done",
+        "SetArnoldRndWait": "partial",
+        "FireTrooperLoogic": "done",
+        "FireTrooperIntro": "done",
+        "FT_GetFlames": "done",
+        "FT_GetFlames2": "done",
+        "FT_GetFlames3": "done",
+        "FT_GetFlames4": "done",
+        "FT_MoveToPlayer_": "done",
+        "FT_MoveToPlayer": "done",
+        "FT_MoveToPlayer2": "done",
+        "FT_Walk": "done",
+        "FT_InitFlames2": "done",
+        "FT_InitFlames3": "done",
+        "FT_InitFlames4": "done",
+        "FT_NextStatus": "done",
+        "FT_ThrowFlames": "done",
+        "FT_ThrowFlames2": "done",
+        "FT_ThrowFlames3": "done",
+        "FT_MoveFlames": "done",
+        "FT_MoveFlames2": "done",
+        "FT_MoveFlames3": "done",
+        "FT_MoveFlames4": "done",
+        "FT_MoveFlames5": "done",
+        "FT_MoveFlames6": "done",
+        "FT_MoveFlames7": "done",
+        "FT_MoveFlames8": "done",
+        "FT_MoveFlames9": "done",
+        "FT_MoveFlames10": "done",
+        "FT_MoveFlames11": "done",
+        "FT_MoveFlames12": "done",
+        "FT_BringInFlames": "done",
+        "RestartFireTropper": "done",
+        "loc_106472": "done",
+        "loc_106499": "done",
+        "loc_10649F": "done",
+        "InitFireTrooper": "done",
+        "InitFireTrooper2": "done",
+        "InitFlame": "done",
+        "InitFlame2": "done",
+        "jpSetActorSpeed": "done",
+        "FlamesLogic": "done",
+        "FlamesLogic2": "out-of-scope",
+        "FlamesLogic3": "done",
+        "FlameOutScreen": "out-of-scope",
+        "SetFlameSprColor": "done",
+        "SetSprColor_": "out-of-scope"
+      }
+    },
+    {
+      "id": "dogs-wing",
+      "title": "Dogs wing (dogs, shooters, Coward Duck)",
+      "files": [
+        "logic/actors/dog.asm",
+        "logic/actors/dogbasement.asm",
+        "logic/actors/dogspawner.asm",
+        "logic/actors/cowardduck.asm",
+        "logic/actors/shooter.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "Room-207 surface dogs (DogLogic: sleep/listen/charge) and the Coward Duck (CowardDuckLogic + the elliptical boomerang + the CARD8 drop) are verbatim. The basement dogs (dogbasement.asm, rooms 6/10/55/56/58-63, basementDogMove) free-roam: sleep -> run (roam, turning at walls via the 8px probe) -> chase (re-aim on the current axis with a bark, ChkDogNearPlayer); a placed dog starts asleep, a spawned dog (ID_SPAWN_DOG) running. The ambush shooters (shooter.asm, rooms 88/90/91/206, shooterLogic) strafe sideways, fire VERTICAL bullets, return to the start X, and transform into an alert chaser after 3 cycles or when the player closes in vertically — rooms 88/90/91 set the alarm directly (timer 0x80, budget 0x0A), room 206 doesn't. Divergences (partial): the shooter's player-entry Y-relocation is simplified to the exported positions, and the dog spawner's cross-room NumBasementDogs carry-over is approximated by placed dogs.",
+      "status": {
+        "InitDog": "done",
+        "DogLogic": "done",
+        "DogSleep": "done",
+        "DogListen": "done",
+        "DogStartMoving": "done",
+        "DogStartMoving2": "done",
+        "DogMove": "done",
+        "DogMove2": "done",
+        "DogMove3": "done",
+        "DogMove4": "done",
+        "AnimateRunningDog": "done",
+        "AnimateRunningDog2": "done",
+        "AnimateRunningDog3": "done",
+        "SetChaseSpeed": "done",
+        "_DummyAddr2": "done",
+        "DogSpeeds": "done",
+        "ChkDogCollision": "done",
+        "_dummyAddr": "done",
+        "DirCollisionPoints": "done",
+        "InitDogBasement": "done",
+        "ResetActorSpeed": "done",
+        "SetActorSpeed_": "done",
+        "InitRunningDog": "done",
+        "SetVertDogSpeed": "done",
+        "SetBaseDogSprSpeed": "done",
+        "DogBasementLogic": "done",
+        "DogBasementLogic2": "done",
+        "DogBaseChase": "done",
+        "SetDogHorSpeed": "done",
+        "DogBaseSleep": "done",
+        "SetDogSprColNxStat": "done",
+        "DogBaseRun": "done",
+        "ChkDogChgDir": "done",
+        "ChkDogChgDir2": "done",
+        "ChkDogChgDir3": "done",
+        "ChkDogChgDir4": "done",
+        "ChkDogChgDir5": "done",
+        "ChkDogChgDir6": "done",
+        "ChkDogChgDir7": "done",
+        "ChangeDogDir": "done",
+        "DogSpeedDat": "done",
+        "ChkDogNearPlayer": "done",
+        "ChkDogNearPlayer2": "done",
+        "ChkDogNearPlayer3": "done",
+        "ChkDogNearPlayer4": "done",
+        "InitSpawnDog": "partial",
+        "SpawnDogInit2": "partial",
+        "SpawnDogLogic": "partial",
+        "CowardDuckLogic": "done",
+        "CowardDuckIntro": "done",
+        "CowardDuckIntro2": "done",
+        "CD_ChoseLR": "done",
+        "CD_ChoseLR2": "done",
+        "CowDuckNextStat": "done",
+        "CD_MoveAndShot": "done",
+        "CD_ChoseLRCenter": "done",
+        "CD_ChoseLRCenter2": "done",
+        "CW_MoveRestart": "done",
+        "InitBoomerang": "done",
+        "InitBoomerang2": "done",
+        "BoomerangLogic": "done",
+        "BoomerangLogic2": "done",
+        "BoomerangLogic3": "done",
+        "BoomerangLogic4": "done",
+        "BoomerangLogic5": "done",
+        "BoomerangLogic6": "done",
+        "BoomInvertYSpeed": "done",
+        "DismissActor_": "done",
+        "BoomChgXDelta": "done",
+        "InitCowardDuck": "done",
+        "InitShooter": "done",
+        "InitShooter2": "partial",
+        "InitShooterRoom90": "partial",
+        "InitShooterRoom91": "partial",
+        "InitShooter5": "done",
+        "InitShooterElev": "partial",
+        "SetShooterDir": "done",
+        "SetShooterDir2": "done",
+        "ShooterLogic": "done",
+        "ShooterWait": "done",
+        "ShooterSetDir": "done",
+        "ShooterWalk": "done",
+        "ShooterShot": "done",
+        "ShooterTurnBack": "done",
+        "ShooterHide": "done",
+        "ShooterHide2": "done",
+        "SetRandomWait": "done"
+      }
+    },
+    {
+      "id": "desert",
+      "title": "Desert (scorpions, desert security)",
+      "files": [
+        "logic/actors/scorpion.asm",
+        "logic/actors/desertsecurity.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "Scorpions shipped complete with the desert-scorpions change and survived playtest Test 1: the three-state machine (wander/attack/wait) runs on the ROM's literal values — the 0x51 detection distance, RandomWait5_8 bursts, the ±1 diagonal ScorpionSpeedDat table, ChkScorpionLimits' exact wrap margins, the 0x14 rest, and SetScorpionSprId's call-site-only frame updates. Playtest fixes made the charge CalcShot's constant-magnitude quantized dash at the default ShotSpeed 0x80 and re-exported the sprites in the real SprsetPal4 reds; the sting's poison path (ChkScorpion/the drain/the antidote) is counted under player-damage-hud. desertsecurity.asm is entirely unported: lock 12's consuming gate exists (ChkDesertDoorBuild2) but doorBuild2Open is never set true, so the uniform check (DesertSecurity1/2), the alarm-on-no-uniform, the FOXHOUNDER warning text (ChkDesertGuardTxt), and the Come-in door-opening sequence (DesertSecurity3/4) do not exist — building 2's desert entrance cannot be opened by the guards, and the enemy uniform has no effect there.",
+      "status": {
+        "InitScorpion": "done",
+        "ScorpionLogic": "done",
+        "ScorpionWander": "done",
+        "ScorpionNewDir": "done",
+        "ScorpionSeePlayer": "done",
+        "ScorpionTurn": "done",
+        "ScorpionAttack": "done",
+        "ScorpionAttackEnd": "done",
+        "ScorpionWait": "done",
+        "RandomWait5_8": "done",
+        "SetScorpionSprId": "done",
+        "SetScorpionSprId2": "done",
+        "ScorpionSetSpeed": "done",
+        "DummyAddr3": "done",
+        "ScorpionSpeedDat": "done",
+        "ChkScorpionLimits": "done",
+        "InitDesertSecurity": "done",
+        "DesertSecurityLogic": "done",
+        "DesertSecurity1": "done",
+        "DesertSecurity2": "done",
+        "ChkDesertGuardTxt": "done",
+        "DesertSecurity3": "done",
+        "DesertSecurity4": "done"
+      }
+    },
+    {
+      "id": "roof-traversal",
+      "title": "Roof (bridges, chasm falls, parachute, air flow, jetpack, sentinels)",
+      "files": [
+        "logic/bridge.asm",
+        "logic/actors/bridge.asm",
+        "logic/actors/jetpack.asm",
+        "logic/actors/sentinel.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "Shipped by the roof-traversal change (playtest Test 2 confirmed). The bridges are fully ported: eight segments at BridgesSpeeds 0x40..0x100 reversing every 0x20 iterations off one controller (BridgeCtrlLogic), the flag-only shape-7 touch box (the ROM never carries Snake), and ChkOnBridge's GetTilePlayer two-column chasm probe feeding the fall chain — documented divergences: the <=8 seam closure on the touch band and the 0x10 first-flip centering. The jetpack event chain is ported end-to-end (JetpackSwitchLogic descend to Y 0x86 + alarm 0x5A, the click + power switch at 0x44/0x70, JetpacTakeoff 0x20 rise, JetPackAlert 0x1E, JetPackMove's exact 0x18/0x30 accelerations, the random 0x1E+ shot cadence), but the directional sprite routines are not driven (the real SprJetGuard sheet always draws the down facing, SetJetpackFloorSpr unused), the PreviousRoom-160 dismissal is absent, InitJetpack's standalone flying spawn only exists via the takeoff transform, and the port adds touch damage the ROM's COLLISION_CFG 2 forbids (undocumented divergence). Sentinels live inside the guard system with exported direction-byte lists (InitSentinel4/GetSentinelLookDirs) and TransformAlertGuard via the shared alert AI; SENTINEL_WAIT is the documented fixed-0x40 approximation of the ROM's per-cycle random R. InitSentinel's room specials are unported: the room-140 sleepy config (InitSentinel2), HideGuardRoom39, and the room-69 DESERT_GUARD flag with SentinelLogic's LOS skip (tied to the unported desert security).",
+      "status": {
+        "ChkOnBridge": "done",
+        "ChkOnBridge2": "done",
+        "ChkOnBridge3": "done",
+        "BridgeLogic": "done",
+        "BridgeLogic2": "done",
+        "BridgeLogic3": "done",
+        "BridgeLogic4": "done",
+        "BridgeLogic5": "done",
+        "BridgeLogic6": "done",
+        "NextBridgeStatus": "done",
+        "BridgeCtrlLogic": "done",
+        "BridgeCtrlLogic2": "done",
+        "BridgesSpeeds": "done",
+        "InitBridge": "done",
+        "InitJetpackTakeoff": "partial",
+        "InitJetpackTakeoff2": "partial",
+        "JetpacTakeoff": "done",
+        "JetpackTakeoffEnd": "done",
+        "InitJetpackSwitch": "partial",
+        "JetpackSwitchLogic": "done",
+        "JetpackSwitchLogic2": "done",
+        "InitJetpack": "partial",
+        "JetPackAlert": "done",
+        "JetpackLogic": "done",
+        "SetJetpackFloorSpr": "done",
+        "SetJetpackFlySpr": "partial",
+        "SetJetpackFlySpr2": "partial",
+        "JetPackMove": "done",
+        "JetPackMove2": "done",
+        "JetPackMove3": "done",
+        "JetPackMove4": "done",
+        "JetPackMove5": "done",
+        "InitSentinel": "partial",
+        "InitSentinel2": "done",
+        "InitSentinel3": "done",
+        "InitSentinel4": "done",
+        "SentinelChkPlayer": "partial",
+        "SentinelLogic": "partial",
+        "SentinelLogic2": "done",
+        "SentinelLogic3": "done"
+      }
+    },
+    {
+      "id": "lorry-ride",
+      "title": "Lorry ride + lorry guards",
+      "files": [
+        "logic/lorry.asm",
+        "logic/actors/guardlorry.asm",
+        "logic/actors/lorryshooter.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "The moving-lorry RIDE (GameMode 5) is a verbatim port (MovingLorries arms it for 0x90 iterations, the VertScrollOffset wobble, the once-per-game text 91, LorryEnd). The lorry GUARDS (guardlorry.asm, rooms 5/7, lorryGuardLogic) run the full emerge/patrol/return cycle — hidden in the lorry, walk down out (setting Guard1/2/3ExitedLorry), patrol the path once, walk back up in (clearing the flag), re-arm; while out, the alarm transforms them into chasers. The room-104 lorry SHOOTERS (lorryshooter.asm, lorryShooterLogic) are the faithful HIDDEN pop-out ambush — think -> shoot-from-inside / show+shoot / walk-out+shoot+walk-in, aimed ID_BULLET — with the alert MUSIC (no AlertMode) on entry; hidden lorry actors are non-drawn and non-collidable. The exit flags are saved and drive the InitGuardAlert dedup (rooms 127/131/132). Divergences: the engine SFX loops the whole ride; SetVertScroll is the canvas shake (out of scope).",
+      "status": {
+        "ChkLorryMov": "done",
+        "MovingLorries": "done",
+        "LorryMoving": "done",
+        "LorryMoving2": "done",
+        "LorryMovFX": "done",
+        "VertScrollOffset": "done",
+        "SetVertScroll": "out-of-scope",
+        "LorryEnd": "done",
+        "InitGuardLorry": "done",
+        "InitGuardLorry2": "done",
+        "ResetSpanwGuard": "done",
+        "NotResetSpanwGuard": "done",
+        "InitGuardLorry5": "done",
+        "GuardLorryLogic": "done",
+        "SetGuardExitsLorry": "done",
+        "GuardLorryLogic3": "done",
+        "GuardExitingLorry": "done",
+        "GuardLorryNextStat": "done",
+        "GuardLorryWalk": "done",
+        "GuardLorryWalkEnd": "done",
+        "GuardEnterLorry": "done",
+        "GuardEnterLorry2": "done",
+        "GuardEnterLorry3": "done",
+        "InitLorryShooter": "done",
+        "LorrySetRndWait": "done",
+        "LorryShooterLogic": "done",
+        "LorryShooterThink": "done",
+        "LorryShooterShow": "done",
+        "LorryShooterShot": "done",
+        "LorryShooterWait": "done",
+        "LorryShooterWalkOut": "done",
+        "LorryShooterWaitOut": "done",
+        "LorryShooterWalkIn": "done",
+        "LorShooterSetCol": "done"
+      }
+    },
+    {
+      "id": "finale",
+      "title": "Hind D, Big Boss, Metal Gear + self-destruct",
+      "files": [
+        "logic/actors/hindd.asm",
+        "logic/actors/bigboss.asm",
+        "logic/actors/bigexplosion.asm",
+        "logic/madnarbigbossevent.asm",
+        "logic/destructiontimer.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "InitMetalGear_",
+          "file": "BanksABC.asm"
+        },
+        {
+          "name": "ChkDrawMetalGear",
+          "file": "BanksABC.asm"
+        },
+        {
+          "name": "RemoveMetalGear",
+          "file": "BanksABC.asm"
+        },
+        {
+          "name": "DrawMetalGear",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "EraseMetalGear",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "BossDefeatedLogic",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "BossDefeatedLogic2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "BossDefeatedLogic3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DestroyMetalG",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DestroyMetalG2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ShowEmergencyText",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ClearMetalGear",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "The hind-d gunship (room 50) and the TX-55 Metal Gear (room 118: the bomb-order destruction arming the self-destruct, DoorOpenArray doors 99/107, the Beyond-Big-Boss music takeover) are faithful, and the destruction now shows ShowEmergencyText's text 150 (unskippable) + arms the room-111 SwitchOffMSXF (ChkSwitchMsxOff). Big Boss (bigBossTick) is the six-state corridor/crate AI (Think/Run/ShowUp/Shoot/Cover, bbCovered crate spots, bbTurnCorner 24/200/56/168 corners) firing the straight axis bullet (BB_Shoot, fireAxisBullet) with the real SprBigBoss sprite; the confession (text 147) + death latch are faithful. The endgame countdown (destructiontimer.asm: DecNukeTimer, the zero-kill, ChkUseCigarettes +2000) is done. Divergences (partial): DestroyMetalG's 0x22-iteration palette-FLASH is skipped (the wreck + emergency text are instant); the room-133/113 \"Madnar moved / too late\" story events (ChkMadnarMsx/chkMadnarLate) and bigexplosion.asm's tank-shell burst actor are unported.",
+      "status": {
+        "InitHindD": "done",
+        "ChkDrawHindD": "done",
+        "HindDLogic": "done",
+        "HindDLogic2": "done",
+        "HindDLogic3": "done",
+        "HindDBurstWait": "done",
+        "DummyLogic2": "done",
+        "RemoveHindD": "done",
+        "InitBigBoss": "done",
+        "BigBossLogic": "done",
+        "BigBossSpeech": "done",
+        "BigBossThink": "done",
+        "BigBossSetRunAway": "done",
+        "BigBossSetSpr_": "done",
+        "BBSetMovToPlayer": "done",
+        "BigBossRun": "done",
+        "BigBossShowUp": "done",
+        "BB_Shoot": "done",
+        "BigBossCover": "done",
+        "BigBossSetSpr": "done",
+        "BigBossSetSpr2": "done",
+        "BigBossSetSpr3": "done",
+        "BBAimToPlayer": "done",
+        "BBAimToPlayer2": "done",
+        "BigBossCalcAway": "done",
+        "BigBossSetDir": "done",
+        "BigBossSetSpeed": "done",
+        "BigBossCalcAway2": "done",
+        "BBSetDirToPlayer": "done",
+        "BBCalcShowUpDir2": "done",
+        "BBChkTurnCorner": "done",
+        "BBChkTurnCorner2": "done",
+        "BBChkTurnCorner3": "done",
+        "BBChkTurnCorner4": "done",
+        "SetRandomWait1_20": "done",
+        "BBChkCovered": "done",
+        "BBChkCovered2": "done",
+        "BBChkCovered3": "done",
+        "BBChkPlayerNear": "done",
+        "BBChkShoot": "done",
+        "CheckCrateColumn": "done",
+        "CheckCrateSize": "done",
+        "BBChkUpDownCorridors": "done",
+        "BigBossChkSpeedY": "done",
+        "BigExplosionLogic": "partial",
+        "BigExplosionLogic2": "partial",
+        "BigExplSprCols": "partial",
+        "ChkMadnarMsx": "partial",
+        "ChkSwitchMsxOff": "done",
+        "chkMadnarLate": "partial",
+        "DecNukeTimer": "done",
+        "DecNukeTimer2": "done",
+        "InitMetalGear_": "done",
+        "ChkDrawMetalGear": "done",
+        "RemoveMetalGear": "done",
+        "DrawMetalGear": "done",
+        "EraseMetalGear": "done",
+        "BossDefeatedLogic": "done",
+        "BossDefeatedLogic2": "done",
+        "BossDefeatedLogic3": "done",
+        "DestroyMetalG": "partial",
+        "DestroyMetalG2": "partial",
+        "ShowEmergencyText": "done",
+        "ClearMetalGear": "partial"
+      }
+    },
+    {
+      "id": "radio-text",
+      "title": "Radio/transceiver, incoming calls + text windows",
+      "files": [
+        "logic/incomingcall.asm",
+        "logic/textboxappear.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "ChkRadioCalls",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkRadioCalls2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkRadioCalls3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkRadioCalls4",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkRadioCalls5",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetTextUnskippable",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetTextUnskip2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetText",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetText2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TextBoxLogic",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TextBoxLogic2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_Init",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "NextTextStatus",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TextBoxAppear",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintChar",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintChar2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintChar3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintChar3b",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintChar4",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintChar5",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintChar6",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintChar7",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawSnakeFrame",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawSnakeFrame1",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawSnakeFrame2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_TextEnd",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintNewLine",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_PrintNewLine2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SkipText",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_Wait",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_Wait2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "EraseWinText",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawEnterIcon",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawEnterIcon2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TW_GetTextPage",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TextBox_End",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "EraseTextBox",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TextBoxExit",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TextBoxExit2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GetTextBoxXYSize",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GetTextBoxXYSize2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TextBoxEffectDat",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TextXYSize",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "TextBoxXYSize",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RadioLogic",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawRadio",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RadioIdle",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RadioIdle2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetRadioSend",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RadioSignalUp",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "NextRadioStat",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "SetupRadioReply",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RadioSignalOFF",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "PrintRecv",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "PrintSend",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChgRadioFreq",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChgRadioFreq2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChgRadioFreq3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DecrementFreq",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkRadioReceiv",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkRadioReceiv2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkRadioReceiv3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkRadioReceiv4",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RadioAutoReply",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RadioAutoReply2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkRadioReply",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkReplyBigBoss",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkReplyBigBoss2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkReplyBigBoss3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkReplyBigBoss4",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkReplySchneider",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkReplySchneider2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkReplyJeniffer",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkReplyMadnar",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RadioReplyOk",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "NoRadioReply",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawRadioFreq",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "PrintDigit",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "RedDigitTiles",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "txtRecv",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "txtSend",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawRadioLeds",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawRadioLeds2",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawRadioLeds3",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "DrawRadioLeds4",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ExitRadio",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "idxTexts",
+          "file": "data/texts.asm"
+        },
+        {
+          "name": "SnakePicture0",
+          "file": "data/tileblocks.asm"
+        },
+        {
+          "name": "SnakePicture1",
+          "file": "data/tileblocks.asm"
+        },
+        {
+          "name": "SnakePicture2",
+          "file": "data/tileblocks.asm"
+        }
+      ],
+      "notes": "The transceiver (RadioLogic GameMode 4) is ported: the DrawRadio UI, the red 120.xx BCD frequency with ChgRadioFreq hold-repeat, UP=SEND (text 10 + talking portrait), the 12-LED RadioSignalUp, ChkRadioReceiv auto-reply/wait-call from radiocalls.json with the AutoReplyDone/ReplyRequested latches, and RadioSignalOFF; opening the radio stops the incoming CALL (ChkIncomingCall lifecycle + the CALL-sign blink). The SEND reply GATES are ported (ChkRadioReply -> radioReplyGate): Big Boss (0x85/0x13) orders \"switch off your MSX\" [text 136] after room 111 (switchOffMsx via ChkSwitchMsxOff) and warns \"you have been bugged\" [text 50] when transmiTaken; a CAPTURED Schneider (0x79/0x26) is silent; Jennifer (0x48) needs rank class >= 3. The text window (TextBoxAppear/TW_PrintChar/SkipText/SetTextUnskippable) is done. Divergences (partial/inert): the MapZone>=5 ANTENNA gate, Jennifer's dead-brother gate, and the Madnar/text-15 gate need unmodelled progression; DrawTextBoxIn's exact box-grow + per-page TW_Wait pacing are approximated.",
+      "status": {
+        "ChkIncomingCall": "done",
+        "ChkIncomingCall2": "done",
+        "DrawTextBoxIn": "partial",
+        "DrawTextBoxIn2": "partial",
+        "DrawTextBoxIn3": "done",
+        "DrawTextBoxIn4": "done",
+        "ChkRadioCalls": "partial",
+        "ChkRadioCalls2": "done",
+        "ChkRadioCalls3": "partial",
+        "ChkRadioCalls4": "done",
+        "ChkRadioCalls5": "done",
+        "SetTextUnskippable": "done",
+        "SetTextUnskip2": "done",
+        "SetText": "done",
+        "SetText2": "done",
+        "TextBoxLogic": "done",
+        "TextBoxLogic2": "done",
+        "TW_Init": "partial",
+        "NextTextStatus": "done",
+        "TextBoxAppear": "partial",
+        "TW_PrintChar": "done",
+        "TW_PrintChar2": "partial",
+        "TW_PrintChar3": "done",
+        "TW_PrintChar3b": "done",
+        "TW_PrintChar4": "done",
+        "TW_PrintChar5": "done",
+        "TW_PrintChar6": "partial",
+        "TW_PrintChar7": "done",
+        "DrawSnakeFrame": "done",
+        "DrawSnakeFrame1": "done",
+        "DrawSnakeFrame2": "done",
+        "TW_TextEnd": "done",
+        "TW_PrintNewLine": "done",
+        "TW_PrintNewLine2": "done",
+        "SkipText": "partial",
+        "TW_Wait": "done",
+        "TW_Wait2": "done",
+        "EraseWinText": "done",
+        "DrawEnterIcon": "done",
+        "DrawEnterIcon2": "done",
+        "TW_GetTextPage": "done",
+        "TextBox_End": "done",
+        "EraseTextBox": "done",
+        "TextBoxExit": "partial",
+        "TextBoxExit2": "done",
+        "GetTextBoxXYSize": "done",
+        "GetTextBoxXYSize2": "done",
+        "TextBoxEffectDat": "partial",
+        "TextXYSize": "done",
+        "TextBoxXYSize": "done",
+        "RadioLogic": "done",
+        "DrawRadio": "done",
+        "RadioIdle": "partial",
+        "RadioIdle2": "done",
+        "SetRadioSend": "done",
+        "RadioSignalUp": "done",
+        "NextRadioStat": "done",
+        "SetupRadioReply": "done",
+        "RadioSignalOFF": "done",
+        "PrintRecv": "done",
+        "PrintSend": "done",
+        "ChgRadioFreq": "done",
+        "ChgRadioFreq2": "done",
+        "ChgRadioFreq3": "done",
+        "DecrementFreq": "done",
+        "ChkRadioReceiv": "done",
+        "ChkRadioReceiv2": "done",
+        "ChkRadioReceiv3": "done",
+        "ChkRadioReceiv4": "done",
+        "RadioAutoReply": "done",
+        "RadioAutoReply2": "done",
+        "ChkRadioReply": "done",
+        "ChkReplyBigBoss": "done",
+        "ChkReplyBigBoss2": "done",
+        "ChkReplyBigBoss3": "done",
+        "ChkReplyBigBoss4": "done",
+        "ChkReplySchneider": "done",
+        "ChkReplySchneider2": "done",
+        "ChkReplyJeniffer": "done",
+        "ChkReplyMadnar": "partial",
+        "RadioReplyOk": "done",
+        "NoRadioReply": "done",
+        "DrawRadioFreq": "done",
+        "PrintDigit": "done",
+        "RedDigitTiles": "done",
+        "txtRecv": "done",
+        "txtSend": "done",
+        "DrawRadioLeds": "done",
+        "DrawRadioLeds2": "done",
+        "DrawRadioLeds3": "done",
+        "DrawRadioLeds4": "done",
+        "ExitRadio": "done",
+        "idxTexts": "done",
+        "SnakePicture0": "done",
+        "SnakePicture1": "done",
+        "SnakePicture2": "done"
+      }
+    },
+    {
+      "id": "title-boot",
+      "title": "Title/boot sequence + attract demo",
+      "files": [
+        "logic/konamilogo.asm",
+        "logic/mainmenu.asm",
+        "logic/gamedemo.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "GS_KonamiLogo",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GS_LoadIntroGfx",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GS_IntroMenu",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GS_InitKonamiLogo",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GS_WaitMenu",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GS_DemoPlay",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GS_PlayStart",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GS_StartGame",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "ChkAnykeyStart",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GoToMenu",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "The title-boot change (archived) ported the full boot state machine: GS_KonamiLogo's white-screen line reveal (49 lines at one per two ROM iterations, then the 0x20 hold), and MenuLogoLogic's five idxIntro states — LogoSfx (SFX 0x47, MenuCnt 0x0C), LogoScroll/DrawMG_Logo stepping the METAL/GEAR blocks down MGLogoYpos with the ROM's no-erase smear trail on an accumulating surface, EraseLogoRests parking the logo, PrintPushSpace/txtPushSpace, and DrawMenuNow via titleSkip. ChkAnykeyStart is faithful: any key before the menu jumps to the parked title via GoToMenu (SFX 0x4A), Fire 1/2 on the menu starts GS_PlayStart's blinking PLAY START (0x50 iterations, bit-2 draw/erase) into GS_StartGame's black beat. The logo data tables (KonamiLogoPal, KonamiLogoTiles, MGLogoColors, MenuPalette, MetalTilesDat, GearTilesDat) are consumed by the RoomViewer exporter into konami-logo.png/metal.png/gear.png, which also bakes SetMetalGearLogo's DrawTiles layout. The attract demo (all of gamedemo.asm — the GS_DemoPlay input replays and the tutorial screens) is NOT ported, a documented divergence: the title idles on PUSH SPACE KEY forever, so GS_WaitMenu's countdown into the demo is also todo.",
+      "status": {
+        "InitKonamiLogo": "done",
+        "KonamiLogoPal": "done",
+        "DrawKonamiLogo": "done",
+        "DrawKonamiLogo2": "done",
+        "KonamiLogoTiles": "done",
+        "LoadIntroGfx": "done",
+        "MenuLogoLogic": "done",
+        "JumpIndex2": "done",
+        "idxIntro": "done",
+        "LogoSfx": "done",
+        "NextMenuStatus": "done",
+        "LogoScroll": "done",
+        "DrawMG_Logo": "done",
+        "EraseLogoRests": "done",
+        "PrintPushSpace": "done",
+        "PrintPushSpace2": "done",
+        "DrawMenuNow": "done",
+        "txtPushSpace": "done",
+        "MGLogoColors": "done",
+        "SetMetalGearLogo": "done",
+        "DrawTiles": "done",
+        "DrawTiles2": "done",
+        "MGLogoYpos": "done",
+        "MenuPalette": "done",
+        "MetalTilesDat": "done",
+        "GearTilesDat": "done",
+        "SetupDemoPlay": "done",
+        "SetTutorialDemo": "done",
+        "SetDemoPlay1": "done",
+        "SetDemoPlay2": "done",
+        "SetDemoPlay3": "done",
+        "SetDemoPlay4": "done",
+        "SetDemoPlay5": "done",
+        "SetDemoPlay6": "done",
+        "GameDemoLogic": "done",
+        "ShowGameTutorial": "done",
+        "NextTutorialStatus": "done",
+        "TutorialDummy": "done",
+        "DemoControler": "done",
+        "DemoControler2": "done",
+        "EndDemoMode": "done",
+        "idxDemoPlayCtrl": "done",
+        "DemoGameplay1": "done",
+        "DemoTutorial": "done",
+        "DemoGameplay2": "done",
+        "GS_KonamiLogo": "done",
+        "GS_LoadIntroGfx": "done",
+        "GS_IntroMenu": "done",
+        "GS_InitKonamiLogo": "done",
+        "GS_WaitMenu": "done",
+        "GS_DemoPlay": "done",
+        "GS_PlayStart": "done",
+        "GS_StartGame": "done",
+        "ChkAnykeyStart": "done",
+        "GoToMenu": "done"
+      }
+    },
+    {
+      "id": "font-loading",
+      "title": "Font / symbol / CALL-sign glyph loading (via asset export)",
+      "files": [
+        "logic/loadfont.asm"
+      ],
+      "extraRoutines": [],
+      "notes": "LoadFont's four loads all have consumed equivalents: the 108-glyph gfxFont+gfxSymbChars run exported as font.png/font.json (including the yellow CLASS star appended at starX) and drawn by drawText/drawStar; gfxFreqDigits (red) exported as freq-digits.png and used by the radio frequency + self-destruct timer digits; gfxCALL decoded through the colorsCALL palette into call-sign.png. ClearP1_24x8 is a pure VRAM page-1 rectangle clear with no behavioural content — out of scope.",
+      "status": {
+        "LoadFont": "done",
+        "colorsCALL": "done",
+        "ClearP1_24x8": "out-of-scope"
+      }
+    },
+    {
+      "id": "ending-persistence",
+      "title": "Ending, checkpoints, save/load + passwords",
+      "files": [
+        "logic/ending.asm",
+        "logic/checkpoints.asm",
+        "logic/passwords.asm"
+      ],
+      "extraRoutines": [
+        {
+          "name": "GS_Ending",
+          "file": "Banks0123.asm"
+        },
+        {
+          "name": "GS_Ending2",
+          "file": "Banks0123.asm"
+        }
+      ],
+      "notes": "The full checkpoint/continue flow is ported: ChkSaveGameStatus scans the 31-pair SaveStatRooms table on every (Room, PreviousRoom) transition (chkSaveGameStatus, armed from setRoom; ChkSaveGameStatus2/3) and skips while MetalGear_KO (mgDestroyed); StoreGameStat snapshots the whole GameDataAreas block (serializeProgress via takePendingCheckpoint; SaveGameStaus2-5) and RestoreGameStat rolls EVERYTHING — room, position, ammo, doors, equipment, rank — back to that snapshot on death (restart -> restoreProgress, clearing DamageDelayTimer/Poisoned), so progress made since the checkpoint is lost as in the ROM. Documented divergence: the snapshot is a JS object rather than the GameProgressBuffer byte block (same effect); a pre-checkpoint death (intro bypassed via ?room) falls back to the intro landing keeping live inventory. Verified by web/checkpoints.headless.mjs. The endgame change shipped the in-game escape ladders + self-destruct countdown, but the ending cinematics are entirely todo: every ending.asm state — EndingEscaping's run-away with the live countdown, the explosions, the radio news auto-tune to 120.77, the staff roll, the fade, Big Boss's threat — is stood in for by the minimal drawEscapeBanner; GS_Ending is on the Remaining-polish list. Cassette save/load (saveload.asm) and the password system (passwords.asm) are wholly unported real features, all todo — none are marked out-of-scope: every saveload routine wraps game flow (filename UI, verify/retry prompts, checksums) around the TAPION/TAPIN/TAPOUT BIOS calls, so a future port would keep the flow and diverge only at the storage backend.",
+      "status": {
+        "EndingSetup": "done",
+        "EndingLogic": "done",
+        "EndingLogic2": "done",
+        "EndingLogic3": "done",
+        "EndingLogic4": "done",
+        "EndingLogic5": "done",
+        "EndingLogic6": "done",
+        "EndingLogic7": "done",
+        "NextEndingStatus": "done",
+        "EndingLogic8": "done",
+        "EndingSetText__": "done",
+        "EndingLogic9": "done",
+        "EndingSetText_": "done",
+        "EndingLogic10": "done",
+        "EndingLogic11": "done",
+        "EndingLogic12": "done",
+        "EndingSetText": "done",
+        "EndingLogic13": "done",
+        "EndingEscaping": "done",
+        "EndingEscaping2": "done",
+        "EndingTimerEnd": "done",
+        "EndingTextBox": "done",
+        "EndingSnakeRun": "done",
+        "EndingSnakeRun2": "done",
+        "EndingSnakeRun3": "done",
+        "EndingExplosion": "partial",
+        "EndingExplosion2": "partial",
+        "EndDrawExplosBig": "partial",
+        "EndDrawExplos": "partial",
+        "ChkSaveGameStatus": "done",
+        "ChkSaveGameStatus2": "done",
+        "ChkSaveGameStatus3": "done",
+        "RestoreGameStat": "done",
+        "StoreGameStat": "done",
+        "SaveGameStaus2": "done",
+        "SaveGameStaus3": "done",
+        "SaveGameStaus4": "done",
+        "SaveGameStaus5": "done",
+        "GameDataAreas": "done",
+        "SaveStatRooms": "done",
+        "ChkCharTyped": "done",
+        "ReadKeyboard": "done",
+        "ReadKeyboard2": "done",
+        "GetTyped": "done",
+        "GetTyped2": "done",
+        "GetTyped3": "done",
+        "GetTyped4": "done",
+        "AddCharPassBuf": "done",
+        "PassDS_4": "done",
+        "PassANTA_WA": "done",
+        "PassINTRUDER": "done",
+        "PassISOLATION": "done",
+        "PassHIRAKE": "done",
+        "ChkPassword": "done",
+        "ChkPassword2": "done",
+        "ChkPasswords": "done",
+        "SetMaxClass": "done",
+        "IncreaseClass": "done",
+        "SetMaxAmmount": "done",
+        "SetMaxAmmount2": "done",
+        "SetMaxRations": "done",
+        "SetAllCards": "done",
+        "SetAllCards2": "done",
+        "AddCardToEquip": "done",
+        "AddCardToEquip2": "done",
+        "AddCardToEquip3": "done",
+        "GS_Ending": "done",
+        "GS_Ending2": "done"
+      }
+    }
+  ],
+  "tooling": [
+    {
+      "id": "asset-export",
+      "title": "Asset export (sprites / rooms / doors / alert icon / guard bullet)",
+      "status": "reimplemented in C# (MetalGearSpriteMover)",
+      "notes": "RLE/sprite-attribute decoding + colour-combine compositing rebuilt offline to emit web/assets PNGs + atlases. Tracked qualitatively, not by routine count."
+    },
+    {
+      "id": "audio-export",
+      "title": "Audio export (SFX + music to WAV)",
+      "status": "reimplemented in C# (ThemeOfTaraPlayer)",
+      "notes": "PSG emulation + the music/SFX driver rebuilt offline to render punch/door/alert/dead WAVs. The driver internals are out-of-scope for the gameplay denominator; tracked qualitatively here."
+    }
+  ]
+}

@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprite compression in the Metal Gear ROM (MSX2)</title>
+<style>
+  :root{
+    --bg:#0a0e0a; --panel:#0f160f; --ink:#d8f5d0; --dim:#6f8f6a;
+    --accent:#56d364; --accent2:#ffd166; --red:#ff6b6b; --blue:#5aa9ff;
+    --grid:#1c2a1c; --mono:"Consolas","SF Mono",ui-monospace,monospace;
+    --teal:#244748; --tan:#da916d; --gray:#6d6d6d;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 700px at 80% -5%, #12251a 0%, transparent 60%),
+      radial-gradient(900px 600px at -10% 105%, #102018 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:"Segoe UI",system-ui,Arial,sans-serif;
+    scroll-snap-type:y proximity;
+  }
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(transparent 0 2px,rgba(0,0,0,.18) 2px 3px);
+    mix-blend-mode:multiply;opacity:.35;
+  }
+  .prog{height:3px;background:var(--grid);position:fixed;top:0;left:0;right:0;z-index:60}
+  .prog>i{display:block;height:100%;background:linear-gradient(90deg,#2faa44,#56d364);width:0}
+
+  section.slide{
+    min-height:100vh;display:flex;flex-direction:column;justify-content:center;
+    padding:9vh 7vw;scroll-snap-align:start;border-bottom:1px solid #122012;
+    opacity:0;transform:translateY(26px);transition:opacity .6s ease,transform .6s ease;
+  }
+  section.slide.in{opacity:1;transform:none}
+  section.slide.center{align-items:center;text-align:center}
+
+  h1{font-size:clamp(28px,5vw,64px);margin:0 0 .2em;line-height:1.03;
+     background:linear-gradient(90deg,#eafff0,#56d364 60%,#2faa44);
+     -webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-.5px}
+  h2{font-size:clamp(22px,3.3vw,42px);margin:0 0 .4em;color:#eafff0}
+  h2 .tag{color:var(--accent);font-family:var(--mono);font-size:.5em;vertical-align:middle;
+    border:1px solid var(--grid);padding:.15em .5em;border-radius:6px;margin-right:.5em;background:#0c140c}
+  h3{margin:.1em 0 .35em;color:var(--accent2);font-size:clamp(16px,2vw,23px)}
+  p,li{font-size:clamp(14px,1.55vw,21px);line-height:1.5;color:var(--ink)}
+  .lead{font-size:clamp(16px,2vw,27px);color:#cdeac6;max-width:62ch}
+  .dim{color:var(--dim)} .accent{color:var(--accent)} .accent2{color:var(--accent2)}
+  .red{color:var(--red)} .blue{color:var(--blue)}
+  code,.mono{font-family:var(--mono)}
+  .cols{display:flex;gap:3vw;align-items:flex-start;flex-wrap:wrap}
+  .card{background:linear-gradient(180deg,#10180f,#0c120c);border:1px solid var(--grid);
+    border-radius:14px;padding:16px 20px;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+  .grow{flex:1 1 320px;min-width:280px}
+  ul{margin:.3em 0 0;padding-left:1.1em} li{margin:.3em 0}
+  .footer{padding:42px 7vw 60px;font-family:var(--mono);font-size:13px;color:var(--dim);text-align:center}
+  .pill{display:inline-block;font-family:var(--mono);font-size:13px;color:#0a120a;background:var(--accent);
+    padding:.2em .7em;border-radius:20px;font-weight:700;letter-spacing:.5px}
+  .scrollcue{margin-top:26px;font-family:var(--mono);color:var(--dim);font-size:14px;animation:bob 1.8s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}
+  .byte{display:inline-flex;align-items:center;justify-content:center;min-width:2.3em;height:2.1em;padding:0 .2em;
+    border-radius:6px;font-family:var(--mono);font-size:clamp(11px,1.3vw,16px);margin:2px;border:1px solid var(--grid)}
+  .b-ctrl{background:#3a2230;color:#ff9ec4;border-color:#5a2a44}
+  .b-run{background:#23304a;color:#9ec8ff;border-color:#33507a}
+  .b-lit{background:#243a26;color:#9ff0a8;border-color:#356b3a}
+  table{border-collapse:collapse;font-family:var(--mono);font-size:clamp(12px,1.35vw,17px)}
+  th,td{border:1px solid var(--grid);padding:5px 11px;text-align:center}
+  th{background:#0c140c;color:var(--accent)}
+  canvas{image-rendering:pixelated;border:1px solid var(--grid);border-radius:8px;background:#0c120c}
+  .swatch{display:inline-block;width:1.05em;height:1.05em;border-radius:3px;vertical-align:-.16em;
+    border:1px solid rgba(255,255,255,.25);margin-right:.3em}
+  .hint{font-size:13px;color:var(--dim);font-family:var(--mono);margin-top:8px}
+  .big{font-size:clamp(36px,6vw,80px);line-height:1}
+  button.btn{font-family:var(--mono);background:#13251a;color:var(--accent);border:1px solid #28482f;
+    padding:8px 14px;border-radius:8px;cursor:pointer;font-size:15px}
+  button.btn:hover{background:#1a3322}
+  .out-cells{display:flex;flex-wrap:wrap;gap:3px;margin-top:10px;min-height:2.2em}
+  .out-cells .byte{min-width:2em;height:1.9em;animation:pop .25s ease both}
+  @keyframes pop{from{transform:scale(.2);opacity:0}to{transform:scale(1);opacity:1}}
+  .quadwrap{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+  .qgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .qlabel{font-family:var(--mono);font-size:12px;color:var(--accent);text-align:center;margin-top:3px}
+  .sprrow{display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap}
+  .sprrow figure{margin:0;text-align:center}
+  .sprrow figcaption{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:6px}
+  .num{font-family:var(--mono);color:var(--accent2);font-weight:700}
+  a{color:var(--accent)}
+  /* pipeline */
+  .pipe{display:flex;gap:10px;align-items:stretch;justify-content:center;flex-wrap:wrap;margin-top:18px}
+  .pipe .stage{display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 16px;min-width:150px}
+  .pipe figcaption{font-family:var(--mono);font-size:13px;color:var(--accent);text-align:center}
+  .pipe small{font-family:var(--mono);font-size:12px}
+  .pipe .parrow{display:flex;align-items:center;font-size:1.8em;color:var(--accent)}
+  .pipe .bytes{margin:0;font-family:var(--mono);font-size:11px;line-height:1.5;color:#9ff0a8;
+    background:#0b110b;border:1px solid var(--grid);border-radius:8px;padding:8px 10px;max-width:170px;
+    white-space:pre-wrap;word-break:break-all}
+  .pipe .stencils{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .pipe .stencils>div{display:flex;flex-direction:column;align-items:center}
+  .pipe .stencils .qlabel{margin-top:2px}
+  .pipe canvas{width:auto;height:auto}
+  #pp0,#pp4,#pp8,#ppC{width:64px;height:64px}
+  #ppOver,#ppColor{width:80px;height:160px}
+  @media(max-width:900px){ .pipe .parrow{transform:rotate(90deg)} }
+</style>
+</head>
+<body>
+<div class="prog"><i id="progbar"></i></div>
+
+<!-- 1 — TITLE -->
+<section class="slide center in">
+  <div class="pill">METAL GEAR · MSX2 · 1987</div>
+  <h1>Sprite compression in the<br>Metal Gear ROM</h1>
+  <p class="lead">How the MSX2 release stores its character sprites compactly — explained from first
+    principles, with every Snake sprite below <span class="accent">decoded in real time from the
+    original ROM data.</span></p>
+  <div class="scrollcue">▼ scroll ▼</div>
+</section>
+
+<!-- 2 — THE PROBLEM -->
+<section class="slide">
+  <h2><span class="tag">CONTEXT</span>The constraint: limited ROM, many patterns</h2>
+  <div class="cols">
+    <div class="grow">
+      <p class="lead">A <b>sprite</b> is a small bitmap the hardware draws as an independently movable
+      object — a character, an enemy, a projectile. Each is a grid of pixels.</p>
+      <ul>
+        <li>Metal Gear's sprites are <b>16×16</b> = <span class="num">256</span> pixels each.</li>
+        <li>At full color (16-color palette = 4 bits/pixel) that is <span class="num">128 bytes</span> per sprite.</li>
+        <li>Snake alone requires <b>dozens of frames</b> (four facings × walk cycle × crawling, etc.),
+          and the entire game must fit within a cartridge measured in <b>kilobytes</b>.</li>
+      </ul>
+      <p>The pixel data is therefore stored in a compressed, compact form and expanded at draw time.
+      Five distinct techniques do the work, covered below.</p>
+    </div>
+    <div class="card grow center">
+      <div class="big">256 → ?</div>
+      <p class="dim">256 pixels, 128 bytes uncompressed.<br>In practice a single Snake frame is
+      stored in roughly <span class="num">32–60</span> bytes.</p>
+      <p class="hint">Largest reduction first.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3 — TECHNIQUE 1: 1-BIT MONOCHROME -->
+<section class="slide">
+  <h2><span class="tag">1 · 1-BIT</span>Encode shape only — one bit per pixel</h2>
+  <div class="cols">
+    <div class="grow">
+      <p class="lead">The video hardware can render a sprite as a one-bit-per-pixel <b>stencil</b>:
+      each pixel is either <span class="accent">set</span> or <span class="dim">clear</span>, with no
+      color stored in the pattern itself.</p>
+      <p>This reduces a 16×16 sprite from <span class="num">128 bytes</span> (4 bits/pixel) to
+      <span class="num">32 bytes</span> — a <b>4× reduction</b>.</p>
+      <p class="hint">Right: a single 16×16 stencil taken directly from Snake's idle (facing-down)
+      sprite in the ROM. Green marks a set bit; dark marks a clear bit.</p>
+      <p class="dim">The pattern carries no color yet; techniques 3–4 reintroduce it at low cost.</p>
+    </div>
+    <div class="card grow center">
+      <canvas id="cMono" width="160" height="160" style="width:230px;height:230px"></canvas>
+      <p class="dim mono">16×16 = 32 bytes · 1 bit/pixel</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 — TECHNIQUE 2: 8x8 TILE DECOMPOSITION -->
+<section class="slide">
+  <h2><span class="tag">2 · TILES</span>Compose 16×16 sprites from 8×8 tiles</h2>
+  <div class="cols">
+    <div class="grow">
+      <p class="lead">The hardware's native pattern unit is <b>8×8</b>. A 16×16 sprite is stored as
+      <b>four</b> 8×8 tiles, in the order the hardware reads them:</p>
+      <p class="pill mono">TL · BL · TR · BR</p>
+      <p>Top-left, then <b>bottom</b>-left, then top-right, then bottom-right (column-major).
+      Decomposing sprites into 8×8 tiles also lets a tile be <b>reused</b> across multiple sprites
+      rather than stored repeatedly.</p>
+      <p class="hint">Right: the four 8×8 tiles of Snake's head and torso, reassembled into the 16×16 pattern.</p>
+    </div>
+    <div class="card grow">
+      <div class="quadwrap">
+        <div>
+          <div class="qgrid">
+            <div><canvas id="qTL" width="64" height="64" style="width:72px;height:72px"></canvas><div class="qlabel">1 TL</div></div>
+            <div><canvas id="qTR" width="64" height="64" style="width:72px;height:72px"></canvas><div class="qlabel">3 TR</div></div>
+            <div><canvas id="qBL" width="64" height="64" style="width:72px;height:72px"></canvas><div class="qlabel">2 BL</div></div>
+            <div><canvas id="qBR" width="64" height="64" style="width:72px;height:72px"></canvas><div class="qlabel">4 BR</div></div>
+          </div>
+          <div class="qlabel dim">stored order 1 · 2 · 3 · 4</div>
+        </div>
+        <div style="font-size:2em;color:var(--accent)">→</div>
+        <div style="text-align:center">
+          <canvas id="qFull" width="128" height="128" style="width:150px;height:150px"></canvas>
+          <div class="qlabel">assembled 16×16</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 — TECHNIQUE 3: SEPARATE COLOR ATTRIBUTE -->
+<section class="slide">
+  <h2><span class="tag">3 · ATTR</span>Store color in a separate attribute</h2>
+  <div class="cols">
+    <div class="grow">
+      <p class="lead">The stencil encodes shape and position. <i>Color</i> is supplied separately, by a
+      compact <b>attribute</b> entry — one byte per hardware sprite.</p>
+      <p>Each entry holds four fields:</p>
+      <p class="mono"><span class="dim">screen-Y, screen-X, pattern index,</span> <span class="accent2">color</span></p>
+      <p>Because color is stored independently of the pixels, a <b>single stencil</b> can be displayed
+      in several colors at no additional storage cost — a guard and a palette-swapped variant share
+      one pattern.</p>
+      <p class="hint">Snake's actual attribute entries (one row per 8×8-built hardware sprite):</p>
+    </div>
+    <div class="card grow">
+      <table>
+        <tr><th>Y</th><th>X</th><th>pattern</th><th>color</th></tr>
+        <tr><td>E8</td><td>F8</td><td>0</td><td class="mono">07</td></tr>
+        <tr><td>E8</td><td>F8</td><td>4</td><td class="mono">4A</td></tr>
+        <tr><td>F8</td><td>F8</td><td>8</td><td class="mono">07</td></tr>
+        <tr><td>F8</td><td>F8</td><td>C</td><td class="mono">4C</td></tr>
+      </table>
+      <p class="hint">Two entries sit at Y=E8 (upper), two at Y=F8 (lower), forming a 16×32 figure.
+      The color values <span class="mono">4A / 4C</span> are explained by the next technique.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6 — TECHNIQUE 4: OR / CC BIT -->
+<section class="slide">
+  <h2><span class="tag">4 · OR</span>Overlay two stencils to extend the palette</h2>
+  <div class="cols">
+    <div class="grow">
+      <p class="lead">A single sprite displays one color. Additional colors are obtained — without
+      storing full-color pixel data — by drawing <b>two</b> sprites at the same position and
+      <b>combining</b> them.</p>
+      <p>Bit 6 of the color byte (hence <span class="mono">4A</span> = <code>40 | 0A</code>) sets the
+      color-combination flag, instructing the hardware to merge this sprite with the one beneath it.
+      Within the overlap, the two color indices are combined with a bitwise <b>OR</b>:</p>
+      <ul>
+        <li>stencil A only → <span class="swatch" style="background:var(--teal)"></span>color&nbsp;7 (teal)</li>
+        <li>stencil B only → <span class="swatch" style="background:var(--tan)"></span>color&nbsp;10 (tan)</li>
+        <li>overlap of both → <span class="swatch" style="background:#000"></span><code>7 OR 10 = 15</code> (dark outline)</li>
+      </ul>
+      <p>Two 32-byte stencils (64 bytes) thus yield a <b>three-color</b> character, versus 128 bytes
+      for an equivalent full-color sprite.</p>
+    </div>
+    <div class="card grow center">
+      <canvas id="cOR" width="128" height="128" style="width:220px;height:220px"></canvas>
+      <div style="margin-top:10px"><button class="btn" id="orBtn">▶ step through the combination</button></div>
+      <p class="dim mono" id="orLabel" style="margin-top:8px">A + B (overlap) — Snake's upper half</p>
+    </div>
+  </div>
+</section>
+
+<!-- 7 — TECHNIQUE 5: RLE -->
+<section class="slide">
+  <h2><span class="tag">5 · RLE</span>Run-length encode the pattern bytes</h2>
+  <div class="cols">
+    <div class="grow">
+      <p class="lead">Finally, the pattern bytes are run-length encoded: a sequence of identical bytes
+      is stored as a count and a value. Uniform margins and solid fills compress substantially.</p>
+      <p>Each chunk begins with a <span class="red">control byte B</span>:</p>
+      <table>
+        <tr><th>control B</th><th>meaning</th></tr>
+        <tr><td class="mono">B &lt; 80</td><td><span class="blue">RUN</span> — repeat the following byte <b>B</b> times</td></tr>
+        <tr><td class="mono">B ≥ 80</td><td><span class="accent">COPY</span> — copy the following <b>(B−80)</b> bytes verbatim</td></tr>
+        <tr><td class="mono">B = 00</td><td>end of frame</td></tr>
+      </table>
+      <p class="hint">Detailed sprites such as Snake consist mostly of COPY chunks (little repetition),
+      so RLE yields only a small reduction here; graphics with large uniform regions (logos,
+      backgrounds) compress considerably more.</p>
+    </div>
+    <div class="card grow">
+      <b>Interactive — decode a run from Snake's data</b>
+      <p class="dim mono" style="margin:.5em 0 .2em">stored bytes</p>
+      <p class="mono" style="line-height:2.4"><span class="b-run byte">04</span><span class="byte">1F</span>
+        <span class="b-ctrl byte">86</span><span class="byte">0F</span><span class="byte">17</span><span class="byte">13</span><span class="byte">1B</span><span class="byte">17</span><span class="byte">0E</span></p>
+      <p style="margin:.3em 0"><span class="b-run byte">04</span> = RUN → repeat the next byte 4×.&nbsp;
+         <span class="b-ctrl byte">86</span> = COPY → copy the next 6 bytes.</p>
+      <button class="btn" id="rleGo">▶ Decode</button> <button class="btn" id="rleReset">reset</button>
+      <div class="out-cells" id="rleOut"></div>
+      <div class="hint" id="rleNote">9 stored bytes → 10 output bytes. Press Decode.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 7b — PIPELINE SIDE-BY-SIDE -->
+<section class="slide">
+  <h2><span class="tag">PIPELINE</span>A single sprite through the full pipeline</h2>
+  <p class="lead">The same data — Snake's idle (facing-down) frame — at each stage, left to right:
+    stored bytes → decoded stencils → overlaid → colored.</p>
+  <div class="pipe">
+    <figure class="stage card">
+      <figcaption>1 stored bytes <span class="dim">(RLE)</span></figcaption>
+      <pre id="pipeBytes" class="bytes"></pre>
+      <small class="dim">118 B in the ROM</small>
+    </figure>
+    <div class="parrow">→</div>
+    <figure class="stage card">
+      <figcaption>2 decoded stencils <span class="dim">(1-bit)</span></figcaption>
+      <div class="stencils">
+        <div><canvas id="pp0" width="64" height="64"></canvas><span class="qlabel">0</span></div>
+        <div><canvas id="pp4" width="64" height="64"></canvas><span class="qlabel">4</span></div>
+        <div><canvas id="pp8" width="64" height="64"></canvas><span class="qlabel">8</span></div>
+        <div><canvas id="ppC" width="64" height="64"></canvas><span class="qlabel">C</span></div>
+      </div>
+      <small class="dim">4 × 32 B = 128 B</small>
+    </figure>
+    <div class="parrow">→</div>
+    <figure class="stage card">
+      <figcaption>3 overlaid <span class="dim">(OR pairs)</span></figcaption>
+      <canvas id="ppOver" width="80" height="160"></canvas>
+      <small class="dim"><span class="swatch" style="background:#7fbf86"></span>A&nbsp;
+        <span class="swatch" style="background:#c9a25a"></span>B&nbsp;
+        <span class="swatch" style="background:#2a2a2a"></span>both</small>
+    </figure>
+    <div class="parrow">→</div>
+    <figure class="stage card">
+      <figcaption>4 colored <span class="dim">(palette)</span></figcaption>
+      <canvas id="ppColor" width="80" height="160"></canvas>
+      <small class="dim">final sprite</small>
+    </figure>
+  </div>
+  <p class="hint" style="text-align:center">Stages 3 and 4 contain the same pixels: 3 indicates <i>which</i> stencil set each pixel;
+    4 substitutes the palette colors (where the two overlap, <code>7 OR 10 = 15</code>, the dark outline).</p>
+</section>
+
+<!-- 8 — PAYOFF: REAL SNAKE -->
+<section class="slide center">
+  <h2><span class="tag">RESULT</span>All five techniques combined</h2>
+  <p class="lead">Each sprite below is decoded <b>in real time in the browser</b> from the exact bytes
+    stored in the Metal Gear ROM — run-length-decoded, de-tiled, color-combined, and palette-mapped.</p>
+  <div class="sprrow" style="justify-content:center;margin-top:14px">
+    <figure><canvas id="sWalk" width="80" height="160" style="width:120px;height:240px"></canvas><figcaption>walk cycle (live)</figcaption></figure>
+    <figure><canvas id="sUp"    width="80" height="160" style="width:96px;height:192px"></canvas><figcaption>up</figcaption></figure>
+    <figure><canvas id="sLeft"  width="80" height="160" style="width:96px;height:192px"></canvas><figcaption>left</figcaption></figure>
+    <figure><canvas id="sDown"  width="80" height="160" style="width:96px;height:192px"></canvas><figcaption>down</figcaption></figure>
+    <figure><canvas id="sRight" width="80" height="160" style="width:96px;height:192px"></canvas><figcaption>right</figcaption></figure>
+  </div>
+  <p class="dim mono" style="margin-top:14px"><span class="swatch" style="background:var(--teal)"></span>body&nbsp;7 &nbsp;
+    <span class="swatch" style="background:var(--tan)"></span>skin&nbsp;10 &nbsp;
+    <span class="swatch" style="background:var(--gray)"></span>legs&nbsp;12 &nbsp;
+    <span class="swatch" style="background:#000"></span>outline&nbsp;15 (overlap)</p>
+</section>
+
+<!-- 9 — RECAP -->
+<section class="slide center">
+  <h2>Summary of storage savings</h2>
+  <p class="lead">Beginning from a full-color 16×16 sprite = <span class="num">128 bytes</span>:</p>
+  <div class="cols" style="justify-content:center;margin-top:6px">
+    <div class="card">1 <b>1-bit pattern</b><br>128 → <span class="num">32</span> B</div>
+    <div class="card">2 <b>8×8 tiles</b><br>reuse, mirroring</div>
+    <div class="card">3 <b>separate color</b><br>1 byte, pattern reused</div>
+    <div class="card">4 <b>OR overlay</b><br>3 colors, <span class="num">64</span> B</div>
+    <div class="card">5 <b>RLE</b><br>removes repetition</div>
+  </div>
+  <div class="cols" style="justify-content:center;margin-top:22px;max-width:66ch">
+    <div class="card grow" style="border-color:#33507a">
+      <h3 style="color:var(--blue)">Fixed reduction</h3>
+      <p>The structural techniques reduce storage by a fixed ratio, independent of image content.
+      One-bit encoding quarters a single pattern (128 → 32 B); the OR-overlay then adds a second
+      pattern to obtain three colors, so a color character occupies <b>64 B — half</b> the
+      full-color size.</p>
+    </div>
+    <div class="card grow" style="border-color:#356b3a">
+      <h3 style="color:var(--accent)">Variable reduction</h3>
+      <p>RLE removes a <b>content-dependent</b> amount from the remainder — significant for uniform
+      regions, minimal for high-detail patterns. Snake's four patterns total <span class="num">128 B</span>
+      but store in <span class="num">118 B</span> (~8% here); graphics with large flat areas compress
+      considerably more.</p>
+    </div>
+  </div>
+  <p class="lead" style="margin-top:22px">Together these techniques are pure <b>compression and reuse</b>,
+    allowing a fully animated character to fit within the constraints of a 1987 cartridge.</p>
+</section>
+
+<div class="footer">
+  Metal Gear · MSX2 sprite compression &nbsp;—&nbsp; all sprites decoded directly from the original ROM data.
+</div>
+
+<script>
+(function(){
+  /* ===================== REAL ROM SPRITE DATA ===================== *
+   * These are the exact bytes from the game's sprite data, RLE-      *
+   * compressed. Each label decodes to 128 bytes = four 8x8-built     *
+   * 16x16 stencils = two vertically-stacked OR-pairs (Snake=16x32).  */
+  const HEX = s => s.trim().split(/[\s,]+/).filter(Boolean).map(h=>parseInt(h,16));
+  const SNAKE = {
+    Down: HEX(`C2 03 07 07 1D 3C 6E 5F F6 F6 FF BF F8 9F FB 77
+      37 80 C0 F0 D8 EC EC FC FC F8 F4 FC BA FC B0 D8
+      F0 03 07 04 1F 37 57 33 8B DB B1 DC BF FE 95 79
+      2B 80 C0 F0 E8 F4 F4 9C 94 98 1C 34 FE 5C 50 A8
+      00 3F 3F 04 1F 86 0F 17 13 1B 17 0E 04 00 81 F0
+      04 E0 85 B0 D0 E0 E0 C0 06 00 02 21 85 11 13 19
+      13 0B 04 1F 81 0E 04 00 8A 90 A0 00 A0 E0 F0 F0
+      E0 E0 C0 06 00 00`),
+    Down1: HEX(`95 03 07 07 3D 74 36 FF CE FE BF 37 78 3F 37 37
+      3F 80 C0 E0 D8 FC 03 E8 03 F0 AF A0 E0 F0 B0 B0
+      03 07 04 3F 5F 4F 3B 7B CB 79 58 7F 24 29 2A 23
+      80 C0 E0 F8 D4 D0 98 98 90 10 30 E0 60 B0 50 50
+      3F 3D 3C 19 01 1D 3F 1F 0F 03 06 00 03 F0 02 E0
+      86 C0 E0 A0 E0 E0 C0 05 00 8A 37 2D 24 19 01 1D
+      3F 1F 0F 03 06 00 8B 30 10 90 20 20 40 A0 60 60
+      A0 C0 05 00 00`),
+    Down2: HEX(`CC 00 03 3F 7F 5D 74 76 3F 2E 2E 1F 1F 1A 3F 2F
+      27 00 80 C0 C0 F8 DA DE FF F3 FF FD FE 3C F0 F0
+      B0 00 03 3F 4C 2F 0F 5F 3B 33 33 11 18 1F 24 37
+      3B 00 80 C0 C0 F8 F6 E0 8D 9F D3 CF F8 FC 50 10
+      50 6F 7D 78 7C 3C 3C 3F 3F 2F 6F 5C 78 04 00 8A
+      B0 F0 F0 E0 00 C0 E0 E0 C0 80 06 00 86 47 45 58
+      44 24 2C 03 3F 83 7F 7C 78 04 00 8A 10 B0 D0 A0
+      00 C0 E0 E0 C0 80 06 00 00`),
+    Left: HEX(`91 07 0F 0F 09 1B 1E 1D 1D 1F 2F 2F 5D 3F 17 2F
+      3F 00 03 80 9D F0 AC 74 7E 7B 79 7D F9 26 E4 B8
+      78 07 0F 09 0F 1D 1F 17 17 1C 38 3C 7F 3B 19 33
+      26 00 03 80 98 F0 F4 C8 C6 ED D7 BA DF FA 7C 58
+      88 7F 7F 7D 39 38 28 6C 5F 7F 3F 07 01 04 00 82
+      F0 E0 04 F0 87 50 68 E8 EC DC FC 70 03 00 8C 4E
+      46 4D 29 38 38 74 6F 7F 3F 07 01 04 00 89 30 60
+      10 10 90 F0 70 58 D8 03 FC 81 70 03 00 00`),
+    Up: HEX(`C1 03 07 07 1F 7B 5D 5C 7F DD 9D B8 6F 1F 1D 3B
+      3B 80 C0 C0 F0 D8 DC 5C FC D8 F8 1C E0 B0 30 F0
+      F0 03 04 07 1F 44 26 27 6F F7 F2 DF 6F 10 12 24
+      25 80 C0 C0 F0 F8 74 A4 F4 7C 2C FC E0 50 C0 C0
+      10 3F 03 3E 03 1C 85 0F 1B 37 3B 1E 04 00 04 F0
+      87 70 50 58 F8 F8 E0 80 05 00 8C 23 26 32 22 14
+      14 1C 0F 1F 3B 3F 1E 04 00 8B 90 B0 D0 90 70 70
+      78 F8 F8 E0 80 05 00 00`),
+    Right: HEX(`81 00 03 01 9D 1F 35 6E 7E DE 9E BE 9F 64 27 1D
+      1E E0 F0 F0 90 D8 78 B8 B8 F8 F4 F4 BA FC E8 F4
+      FC 00 03 01 9F 1F 2F 53 63 B7 EB 5D FB 5F 3E 1A
+      11 E0 F0 90 F0 B8 F8 E8 E8 38 1C 3C FE DC 98 CC
+      64 0F 0F 07 03 0F 87 0E 1F 1B 37 3B 3F 0C 03 00
+      02 FE 89 BE 9C 98 28 6C F6 FE FC E0 05 00 89 08
+      0C 06 08 09 09 0E 1B 17 03 3F 81 0C 03 00 8B 7A
+      62 A6 94 98 38 5C EE FE FC E0 05 00 00`)
+  };
+
+  /* The four palette colors Snake resolves to (RGB), and what each means. */
+  const TEAL=[36,71,72], TAN=[218,145,109], GRAY=[109,109,109], BLACK=[0,0,0];
+
+  /* ---- RLE: decode every concatenated segment (matches the game's unpacker) ---- */
+  function decompress(data){
+    const out=[]; let i=0;
+    while(i<data.length){
+      const start=i;
+      while(i<data.length){
+        const B=data[i], count=B&0x7F;
+        if(count===0){i++;break;}
+        i++;
+        if(B<0x80){ const v=data[i++]; for(let j=0;j<count;j++)out.push(v); }
+        else { for(let j=0;j<count && i<data.length;j++)out.push(data[i++]); }
+      }
+      if(i===start)break;
+    }
+    return out;
+  }
+  const cache={};
+  function decoded(name){ return cache[name] || (cache[name]=decompress(SNAKE[name])); }
+
+  /* ---- read one bit from a 32-byte 16x16 stencil (quadrants TL,BL,TR,BR) ---- */
+  function bit(spr, off, x, y){
+    let qi,bx,by;
+    if(y<8 && x<8){qi=0;bx=x;by=y;}
+    else if(y>=8 && x<8){qi=8;bx=x;by=y-8;}
+    else if(y<8 && x>=8){qi=16;bx=x-8;by=y;}
+    else {qi=24;bx=x-8;by=y-8;}
+    return (spr[off+qi+by] >> (7-bx)) & 1;
+  }
+
+  /* ---- checkerboard transparency backdrop ---- */
+  function checker(g,w,h,sz){
+    for(let y=0;y<h;y+=sz)for(let x=0;x<w;x+=sz){
+      g.fillStyle=(((x/sz)+(y/sz))&1)?'#c2c6cd':'#aeb3bc';
+      g.fillRect(x,y,sz,sz);
+    }
+  }
+  function put(g,x,y,s,rgb){ g.fillStyle=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; g.fillRect(x*s,y*s,s,s); }
+
+  /* ---- draw full 16x32 Snake from a decoded frame ---- */
+  function drawSnake(cv, dec, s, mode){
+    const g=cv.getContext('2d'); const w=16*s,h=32*s;
+    checker(g,w,h,Math.max(4,s));
+    // top pair: stencil0 (color7) OR stencil4 (color10); bottom pair: stencil8 (7) OR stencilC (12)
+    for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+      const a=bit(dec,0,x,y), b=bit(dec,32,x,y);
+      if(mode==='A'){ if(a)put(g,x,y,s,TEAL); continue; }
+      if(mode==='B'){ if(b)put(g,x,y,s,TAN); continue; }
+      if(a&&b)put(g,x,y,s,BLACK); else if(a)put(g,x,y,s,TEAL); else if(b)put(g,x,y,s,TAN);
+    }
+    if(mode==='A'||mode==='B')return;
+    for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+      const a=bit(dec,64,x,y), b=bit(dec,96,x,y);
+      const yy=y+16;
+      if(a&&b)put(g,x,yy,s,BLACK); else if(a)put(g,x,yy,s,TEAL); else if(b)put(g,x,yy,s,GRAY);
+    }
+  }
+
+  /* ---- draw a single 16x16 stencil (one color, on checkerboard) ---- */
+  function drawStencil(cv, dec, off, s, rgb){
+    const g=cv.getContext('2d'); checker(g,16*s,16*s,Math.max(4,s));
+    for(let y=0;y<16;y++)for(let x=0;x<16;x++) if(bit(dec,off,x,y)) put(g,x,y,s,rgb);
+  }
+  /* ---- draw one 8x8 quadrant tile ---- */
+  function drawQuad(cv, dec, byteOff, s, rgb){
+    const g=cv.getContext('2d'); checker(g,8*s,8*s,Math.max(4,s));
+    for(let r=0;r<8;r++){ const bv=dec[byteOff+r];
+      for(let c=0;c<8;c++) if((bv>>(7-c))&1) put(g,c,r,s,rgb); }
+  }
+
+  /* ===================== STATIC RENDERS (all on load) ===================== */
+  function renderMono(){
+    const cv=document.getElementById('cMono'); const g=cv.getContext('2d'); const s=10;
+    const dec=decoded('Down');
+    for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+      g.fillStyle = bit(dec,0,x,y) ? '#56d364' : '#14201a';
+      g.fillRect(x*s,y*s,s-1,s-1);
+    }
+  }
+  function renderQuads(){
+    const dec=decoded('Down'); const T=TEAL, s=8;
+    drawQuad(document.getElementById('qTL'),dec,0,s,T);
+    drawQuad(document.getElementById('qBL'),dec,8,s,T);
+    drawQuad(document.getElementById('qTR'),dec,16,s,T);
+    drawQuad(document.getElementById('qBR'),dec,24,s,T);
+    drawStencil(document.getElementById('qFull'),dec,0,8,T);
+  }
+  let orMode=null,orTimer=null;
+  function renderOR(){ drawSnake(document.getElementById('cOR'), decoded('Down'), 8, orMode||undefined); }
+  function renderResult(){
+    drawSnake(document.getElementById('sUp'),    decoded('Up'),    5);
+    drawSnake(document.getElementById('sLeft'),  decoded('Left'),  5);
+    drawSnake(document.getElementById('sDown'),  decoded('Down'),  5);
+    drawSnake(document.getElementById('sRight'), decoded('Right'), 5);
+  }
+
+  /* ---- pipeline: same Down frame at four stages ---- */
+  function drawStencilMono(cv, dec, off, s){
+    const g=cv.getContext('2d');
+    for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+      g.fillStyle = bit(dec,off,x,y) ? '#56d364' : '#14201a';
+      g.fillRect(x*s,y*s,s,s);
+    }
+  }
+  function drawOverlapMarkers(cv, dec, s){
+    const g=cv.getContext('2d'); checker(g,16*s,32*s,Math.max(4,s));
+    const A=[127,191,134], B=[201,162,90], BOTH=[42,42,42];
+    for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+      const a=bit(dec,0,x,y), b=bit(dec,32,x,y);
+      if(a&&b)put(g,x,y,s,BOTH); else if(a)put(g,x,y,s,A); else if(b)put(g,x,y,s,B);
+    }
+    for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+      const a=bit(dec,64,x,y), b=bit(dec,96,x,y), yy=y+16;
+      if(a&&b)put(g,x,yy,s,BOTH); else if(a)put(g,x,yy,s,A); else if(b)put(g,x,yy,s,B);
+    }
+  }
+  function renderPipeline(){
+    const raw=SNAKE.Down, dec=decoded('Down');
+    const hx=n=>n.toString(16).toUpperCase().padStart(2,'0');
+    const shown=raw.slice(0,36).map(hx).join(' ');
+    document.getElementById('pipeBytes').textContent = shown + ' …';
+    drawStencilMono(document.getElementById('pp0'),dec,0,4);
+    drawStencilMono(document.getElementById('pp4'),dec,32,4);
+    drawStencilMono(document.getElementById('pp8'),dec,64,4);
+    drawStencilMono(document.getElementById('ppC'),dec,96,4);
+    drawOverlapMarkers(document.getElementById('ppOver'),dec,5);
+    drawSnake(document.getElementById('ppColor'),dec,5);
+  }
+
+  renderMono(); renderQuads(); renderOR(); renderResult(); renderPipeline();
+
+  /* ---- walk animation: run only while the result section is on screen ---- */
+  let walkTimer=null, walkFrames=['Down','Down1','Down','Down2'], wi=0;
+  function drawWalk(){ drawSnake(document.getElementById('sWalk'), decoded(walkFrames[wi]), 5); }
+  drawWalk();
+  const walkSection=document.getElementById('sWalk').closest('section');
+  new IntersectionObserver(es=>es.forEach(e=>{
+    if(e.isIntersecting){ if(!walkTimer) walkTimer=setInterval(()=>{wi=(wi+1)%walkFrames.length;drawWalk();},180); }
+    else if(walkTimer){ clearInterval(walkTimer); walkTimer=null; }
+  }),{threshold:.25}).observe(walkSection);
+
+  /* ---- OR demo (button) ---- */
+  document.getElementById('orBtn').onclick=function(){
+    const seq=[['A','stencil A only → color 7 (teal)'],
+               ['B','stencil B only → color 10 (tan)'],
+               [null,'overlap → 7 OR 10 = 15 (dark outline)']];
+    const lbl=document.getElementById('orLabel');
+    if(orTimer){clearInterval(orTimer);orTimer=null;orMode=null;renderOR();
+      lbl.textContent='A + B (overlap) — Snake’s upper half';
+      this.textContent='▶ step through the combination';return;}
+    this.textContent='⏸ pause'; let k=0;
+    const step=()=>{ orMode=seq[k][0]; renderOR(); lbl.textContent=seq[k][1]; k=(k+1)%seq.length; };
+    step(); orTimer=setInterval(step,1100);
+  };
+
+  /* ---- RLE live demo (real bytes: 04 1F  86 0F 17 13 1B 17 0E) ---- */
+  const rleStream=[0x04,0x1F, 0x86,0x0F,0x17,0x13,0x1B,0x17,0x0E];
+  const rleOut=document.getElementById('rleOut'), rleNote=document.getElementById('rleNote');
+  const hx=n=>n.toString(16).toUpperCase().padStart(2,'0');
+  document.getElementById('rleGo').onclick=function(){
+    rleOut.innerHTML='';
+    const res=decompress(rleStream); // -> 1F 1F 1F 1F 0F 17 13 1B 17 0E (10 bytes)
+    rleNote.textContent='RUN yields four 1F bytes; COPY passes 6 bytes through → '+res.length+' output bytes.';
+    res.forEach((b,k)=>setTimeout(()=>{
+      const sp=document.createElement('span');
+      sp.className='byte '+(k<4?'b-run':'b-lit'); sp.textContent=hx(b); rleOut.appendChild(sp);
+    },k*110));
+  };
+  document.getElementById('rleReset').onclick=function(){
+    rleOut.innerHTML=''; rleNote.textContent='9 stored bytes → 10 output bytes. Press Decode.';
+  };
+
+  /* ---- reveal-on-scroll for each section ---- */
+  const revealer=new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting) e.target.classList.add('in'); }),{threshold:.15});
+  document.querySelectorAll('section.slide').forEach(s=>revealer.observe(s));
+
+  /* ---- scroll progress bar ---- */
+  const bar=document.getElementById('progbar');
+  function onScroll(){
+    const h=document.documentElement, max=h.scrollHeight-h.clientHeight;
+    bar.style.width=(max>0?(h.scrollTop/max*100):0)+'%';
+  }
+  document.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "1": {"openOffX":4,"openOffY":32,"openNX":16,"openNY":8,"enterOffX":0,"enterOffY":16,"enterNX":32,"enterNY":16},
+  "2": {"openOffX":8,"openOffY":-8,"openNX":16,"openNY":8,"enterOffX":0,"enterOffY":0,"enterNX":32,"enterNY":8},
+  "3": {"openOffX":8,"openOffY":40,"openNX":10,"openNY":16,"enterOffX":0,"enterOffY":28,"enterNX":8,"enterNY":36},
+  "4": {"openOffX":-10,"openOffY":40,"openNX":10,"openNY":16,"enterOffX":0,"enterOffY":28,"enterNX":8,"enterNY":36},
+  "5": {"openOffX":4,"openOffY":32,"openNX":16,"openNY":8,"enterOffX":0,"enterOffY":16,"enterNX":32,"enterNY":16},
+  "6": {"openOffX":-8,"openOffY":24,"openNX":16,"openNY":16,"enterOffX":8,"enterOffY":24,"enterNX":16,"enterNY":16},
+  "7": {"openOffX":0,"openOffY":-10,"openNX":32,"openNY":32,"enterOffX":0,"enterOffY":0,"enterNX":32,"enterNY":8},
+  "8": {"openOffX":0,"openOffY":-10,"openNX":32,"openNY":18,"enterOffX":0,"enterOffY":0,"enterNX":32,"enterNY":8},
+  "9": {"openOffX":0,"openOffY":16,"openNX":26,"openNY":64,"enterOffX":8,"enterOffY":32,"enterNX":8,"enterNY":32},
+  "10": {"openOffX":-10,"openOffY":16,"openNX":42,"openNY":64,"enterOffX":0,"enterOffY":32,"enterNX":8,"enterNY":32},
+  "11": {"openOffX":0,"openOffY":16,"openNX":42,"openNY":48,"enterOffX":24,"enterOffY":32,"enterNX":8,"enterNY":32},
+  "12": {"openOffX":8,"openOffY":32,"openNX":16,"openNY":8,"enterOffX":0,"enterOffY":16,"enterNX":32,"enterNY":16},
+  "13": {"openOffX":8,"openOffY":-10,"openNX":16,"openNY":18,"enterOffX":0,"enterOffY":0,"enterNX":32,"enterNY":8},
+  "14": {"openOffX":0,"openOffY":32,"openNX":26,"openNY":16,"enterOffX":8,"enterOffY":32,"enterNX":8,"enterNY":32},
+  "15": {"openOffX":-10,"openOffY":32,"openNX":26,"openNY":16,"enterOffX":0,"enterOffY":32,"enterNX":8,"enterNY":32},
+  "16": {"openOffX":16,"openOffY":48,"openNX":32,"openNY":42,"enterOffX":16,"enterOffY":56,"enterNX":32,"enterNY":16},
+  "17": {"openOffX":-10,"openOffY":16,"openNX":26,"openNY":48,"enterOffX":0,"enterOffY":32,"enterNX":8,"enterNY":32},
+  "18": {"openOffX":-10,"openOffY":16,"openNX":42,"openNY":48,"enterOffX":0,"enterOffY":32,"enterNX":8,"enterNY":32},
+  "19": {"openOffX":0,"openOffY":16,"openNX":42,"openNY":24,"enterOffX":0,"enterOffY":-48,"enterNX":32,"enterNY":16},
+  "20": {"openOffX":8,"openOffY":40,"openNX":8,"openNY":16,"enterOffX":0,"enterOffY":-16,"enterNX":8,"enterNY":64}
+}

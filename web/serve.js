@@ -18,6 +18,26 @@ const types = { '.html':'text/html', '.js':'text/javascript', '.json':'applicati
 const REPO = () => process.env.GITHUB_REPO || 'southernsun/MetalGearJS';
 const RELEASE_TAG = 'bug-clips';
 
+// --- Per-IP rate limit for POST /report. On the public site this is the only abuse-exposed
+// endpoint (it files GitHub issues + uploads release assets with our PAT). It's reachable ONLY
+// via the web server's localhost reverse proxy, which APPENDS the real client to X-Forwarded-For
+// — so the LAST entry is the trustworthy client IP (a client-spoofed value lands earlier in the
+// list and is ignored). Caps each IP to REPORT_MAX reports per REPORT_WINDOW_MS; override via env.
+const REPORT_MAX = Number(process.env.REPORT_MAX || 5);
+const REPORT_WINDOW_MS = Number(process.env.REPORT_WINDOW_MS || 60 * 1000);
+const reportHits = new Map();   // ip -> [timestamps within the window]
+function rateLimited(req) {
+  const xff = (req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const ip = xff[xff.length - 1] || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const hits = (reportHits.get(ip) || []).filter((t) => now - t < REPORT_WINDOW_MS);
+  hits.push(now);
+  reportHits.set(ip, hits);
+  if (reportHits.size > 5000)   // bound the map: drop IPs whose hits have all aged out
+    for (const [k, v] of reportHits) if (!v.some((t) => now - t < REPORT_WINDOW_MS)) reportHits.delete(k);
+  return hits.length > REPORT_MAX;
+}
+
 // web/.env: simple KEY=VALUE lines; a value already in the real environment wins.
 (function loadEnv() {
   try {
@@ -136,6 +156,11 @@ async function handleReport(req, res, buf) {
 
 http.createServer((req, res) => {
   if (req.method === 'POST' && req.url.split('?')[0] === '/report') {
+    if (rateLimited(req)) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'rate limited — wait a minute and try again' }));
+      return;
+    }
     const chunks = []; let size = 0;
     req.on('data', (d) => { chunks.push(d); size += d.length; if (size > 64 * 1024 * 1024) req.destroy(); });
     req.on('end', () => handleReport(req, res, Buffer.concat(chunks)));

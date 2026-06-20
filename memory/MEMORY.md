@@ -1,0 +1,1 @@
+- [Deploy server](deploy-server.md) — metal-gear.nl CentOS Stream 8 setup, paths, deploy model

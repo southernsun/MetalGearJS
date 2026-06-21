@@ -177,3 +177,169 @@ room; guards keep moving at constant speed and keep detecting Snake.
   harness/web-port concerns (pause UX, browser perf) with no direct ROM equivalent — note that
   explicitly where relevant.
 - The user commits; do not run `git commit`/`git push`.
+
+---
+---
+
+# Second batch (#5, #6, #7)
+
+| # | Title | Type | ROM equivalent? | Effort |
+| --- | --- | --- | --- | --- |
+| 7 | Binoculars don't work as per original (room 8) | ROM-faithfulness gap (feature missing) | Yes — full `BinocularMode` | Medium-large |
+| 6 | Replace start screen with a metallic look (keep Konami scroll) | Web-port UX | No (gate is a browser-audio concern; the Konami/MG boot IS ROM-faithful and is preserved) | Small-medium |
+| 5 | Phone / mobile support | Web-port feature | No (MSX had no touch input) | Large |
+
+Recommended order: **#7 → #6 → #5** (faithfulness gap first; the two web-port features after).
+
+---
+
+## Issue #7 — Binoculars (the telescope/recon mode)
+
+### Behaviour (ROM)
+Selecting the **binoculars** item and exiting the equipment menu enters a dedicated **game mode**
+that lets the player peek into **adjacent rooms** for reconnaissance, then returns. Fully ported
+from the disassembly:
+
+- **Entry — `ExitEquipMenu` (`logic/menuequipment.asm:299-349`):** on closing the equip menu, if
+  `IsolatedRoom != 0` → no binoculars (return to play). Else if `SelectedItem == SELECTED_BINOCULARS`
+  (9) → `GameMode = GAME_MODE_BINOCULARS` (8); init `BinoculStatus = 0`, `BinocularDir = 1`; back up
+  `EnemyList`, `PowerSwitchOn`, `RadioCallFlag`, `AlertMode`; show the target-crosshair sprites.
+- **Loop dispatch — `Banks0123.asm:12085` (`dw BinocularMode`).**
+- **`BinocularMode` (`Banks0123.asm:12256`):** while *watching* an adjacent room you can't exit;
+  while *idle* (status 1) `F3` exits to the equipment menu (`ExitBinocularMode`).
+- **`BinocularLogic` (`Banks0123.asm:12456`):** a status jump-table.
+  - status 1 = **idle** showing the player's room: poll the d-pad; a direction press sets
+    `TimerBinocular = 0x80` (128 ticks) and starts a peek in that direction (Up/Down/Left/Right →
+    `NextRoomDirect` 1/2/3/4).
+  - status 2..5 = **showing** an adjacent room: decrement `TimerBinocular`; when it hits 0, move
+    back (the opposite direction) to the player's room.
+  - `MoveBinoculars2` → `GetNextRoomNum`: `FF` = no room that way → abort the move (stay).
+- **`DrawBinocRoom` (`Banks0123.asm:12543`):** renders the shown room — tiles, items, doors, and
+  **enemies** (`SetupEnemyRoom`) — then prints **"TELESCOPE MODE"** (`txtTelescope`) and a
+  **direction arrow** (`ArrowsChars`: up `0x9A`, down `0x9B`, left `0x99`, right `0x3C`). When
+  showing the player's own room it erases the enemy sprites first.
+- **`ExitBinocularMode` (`Banks0123.asm:12402`):** restores the backed-up `EnemyList`/power/radio/
+  alert, hides the crosshair sprites, and returns to `GAME_MODE_EQUIPMENT`.
+
+### Current state of the port
+Entirely missing. `binocular` appears only in comments ("returns silently", "out of scope"). No
+`SELECTED_BINOCULARS` constant, no `'binoculars'` `gameState`, no logic/draw. `chkUseItem`
+(`game.js:7035`) silently ignores it; `closeMenu` (`game.js:6951`) just returns to play.
+
+### Fix — a self-contained `'binoculars'` game mode
+The port is immediate-mode (no VRAM; `ctx` is `const`, so no offscreen render via the existing
+helpers). Plan:
+
+1. **Constant:** `const SELECTED_BINOCULARS = 0x09;` near the other `SELECTED_*` (≈`game.js:3234`),
+   cited to `Enums.asm`.
+2. **Entry from `closeMenu()`:** when closing the **item** menu with `selectedItem ===
+   SELECTED_BINOCULARS` and the room is **not isolated**, enter binoculars instead of play. (Reuse
+   the existing isolated-room test used by the alarm logic; cite `ChkIsolatedRoom`.)
+3. **State machine** (`gameState = 'binoculars'`, a `binoc` object) faithful to `BinocularLogic`:
+   - `home` = the player's real `currentRoom` (never call `setRoom` — play state stays intact).
+   - **idle**: showing `home`; a fresh d-pad press toward a valid `neighbor(dir)` starts a peek
+     (`timer = 0x80`); a press toward a dead end does nothing (the `FF` abort).
+   - **show**: `timer--`; at 0 → back to idle showing `home`.
+   - Input via an edge-triggered latch (mirror `menuDirTrigger`), not held state, to match
+     `ControlsTrigger`.
+4. **Rendering — `drawBinoculars()`** built once-per-peek **snapshot** (`{img, doors, roomItems,
+   guards}`) from data via pure helpers (`makeGuard` is a pure factory; adjacency via the existing
+   `neighbor(dir)` = `GetNextRoomNum`). Each frame, temporarily swap the relevant globals
+   (`currentRoom/assets.room/doors/roomItems/guards`) to the snapshot, call the existing
+   `drawImage`/`drawRoomItems`/`drawDoors`/`drawGuard`, then restore — safe because `draw()` is
+   synchronous. Overlay: a centred **target crosshair**, **"TELESCOPE MODE"** text, and the
+   **direction arrow** while peeking.
+5. **Exit:** `Esc` / a menu key while idle → back to play.
+
+### Deliberate divergences (cite in comments, per CLAUDE.md)
+- **Exit returns to play, not the equipment menu.** The ROM's `ExitBinocularMode` returns to
+  `GAME_MODE_EQUIPMENT`; the port's menu model ("moving is selecting", close = back to play) would
+  make returning to the menu re-enter binoculars immediately. Returning to play is the clean
+  equivalent.
+- **No `EnemyList`/power/radio/alert backup-restore needed.** The ROM saves them only because
+  `DrawBinocRoom` overwrites the shared room/enemy RAM. The port never mutates play state (it
+  renders from a transient snapshot), so there's nothing to restore.
+- The crosshair art (`BinocularSprAtt`/`LoadSprTarget`) isn't an exported asset; draw a simple
+  reticle with primitives (note it as a stand-in).
+
+### Acceptance
+Select binoculars, close the item menu (in a non-isolated room) → telescope view of the current
+room with a crosshair + "TELESCOPE MODE". D-pad peeks the adjacent room in that direction (its
+layout/items/doors/guards) for ~2s with a direction arrow, then returns. A dead-end direction does
+nothing. Esc returns to play. Play state (Snake, guards, alarm) is unchanged afterwards.
+
+---
+
+## Issue #6 — Replace the start screen (metallic look, keep the Konami scroll)
+
+### Behaviour
+Replace the green "press any key to start" gate with a metallic Metal Gear title look, while still
+playing the Konami logo scroll on boot.
+
+### Current state
+- The green gate is the `#gate` **DOM overlay** (`index.html:36-43, 85`), shown at boot
+  (`game.js` boot: `titlePhase = 'gate'`, gate `innerHTML = '<b>METAL GEAR</b><span>press any key
+  to start</span>'`). It exists to capture the **first user gesture for the audio unlock** (browser
+  autoplay policy) — `begin()` calls `unlockAudio()` then transitions `titlePhase` to
+  `'konami-reveal'`.
+- The boot sequence after the gate (`titleTick`/`drawTitle`: `konami-reveal` → `konami-hold` →
+  `swoop` → `wipe` → `text-wait` → `ready`) is **ROM-faithful** (Konami logo line-reveal, then the
+  Metal Gear logo swoop) and must be **preserved untouched**.
+- Art already loaded (`game.js:355-358`): `metal.png` + `gear.png` (metallic wordmark),
+  `konami-logo.png`; plus `metalgear.png` / `metalgear-bg.png`.
+
+### Fix (recommended)
+Restyle the gate to a metallic Metal Gear look while keeping the gate → `konami-reveal` flow and the
+`begin()` audio-unlock gesture intact:
+- Replace the gate's green text with the metallic wordmark (`metal.png` + `gear.png`, or
+  `metalgear.png`) on a dark metal field, with a subtle "press any key / tap to start" prompt.
+- Keep it a **DOM overlay** (simplest, no boot-flow change) — or, optionally, draw it on-canvas in
+  the `'gate'` phase of `drawTitle()` for a unified look. Either way the first gesture must still
+  call `unlockAudio()` before `konami-reveal`.
+- This is a **web-port-only** concern (no ROM equivalent — the ROM has no audio-gate). Note it.
+
+### Acceptance
+Boot shows a metallic Metal Gear start screen; first key/tap unlocks audio and plays the Konami
+scroll and the rest of the existing boot unchanged. Works on desktop and touch.
+
+---
+
+## Issue #5 — Phone / mobile support
+
+### Behaviour
+Add mobile/phone support so the game is playable on touch devices.
+
+### Current state
+- Input is **keyboard-only**: `window` keydown/keyup feed a `held` Set + edge latches
+  (`DIR_KEYS`, fire/punch/weapon/item/menu/radio/pause). No touch handling.
+- Layout: fixed 256×192 canvas in a centred panel (`index.html`), no responsive scaling; viewport
+  meta present.
+
+### Fix (scope — needs UX decisions)
+A web-port-only feature (no ROM equivalent). Components:
+1. **Responsive canvas scaling** — scale the 256×192 canvas to the viewport (integer/`max` scale,
+   `image-rendering: pixelated` already set), handle orientation.
+2. **On-screen touch controls** — a d-pad + action buttons (Fire, Punch, Weapon, Item, Radio,
+   Pause, and now binoculars/menu) that feed the **same** `held` Set and edge latches the keyboard
+   path uses, so no game-logic changes are needed. Touch handlers must `preventDefault` to stop
+   scroll/zoom; multi-touch for move+fire.
+3. **Menus/radio/binoculars on touch** — ensure the d-pad-driven menus and the new binoculars mode
+   are reachable via the touch controls.
+4. **Polish** — hide touch UI on desktop (pointer/hover media query), fullscreen prompt.
+
+### Open decisions (ask before building)
+- Control layout (floating d-pad + buttons vs. fixed bars), button set, and whether to use a
+  library or hand-roll. Recommend hand-rolled touch → `held` for zero logic divergence.
+
+### Acceptance
+On a phone, the canvas fills the screen and the game is fully playable (move, fire, punch, weapons,
+items, menus, radio, pause) via on-screen controls; desktop is unchanged.
+
+---
+
+## Cross-cutting (batch 2)
+- #7 is a faithfulness port (cite `BinocularMode`/`BinocularLogic`/`DrawBinocRoom`/`ExitEquipMenu`);
+  its divergences are listed above and must be called out in comments.
+- #6 and #5 are deliberate web-port additions with **no ROM equivalent** — note that in code, per
+  CLAUDE.md.
+- The user commits; do not run `git commit`/`git push`.

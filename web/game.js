@@ -2831,7 +2831,12 @@ window.addEventListener('keydown', (e) => {
     // ChkUseItem triggers on Fire (ControlsTrigger bit 4, menuequipment.asm:52-54); Enter is
     // accepted too as this port's confirm key (input-binding divergence, like R for radio).
     else if (FIRE_KEYS.has(e.key) || e.key === 'Enter') { if (!e.repeat) menuFireTrigger = true; }
-    else if (e.key === 'Escape' || e.key === 'q' || e.key === 'Q' || e.key === 'e' || e.key === 'E') closeMenu();
+    else if (e.key === 'Escape' || e.key === 'q' || e.key === 'Q' || e.key === 'e' || e.key === 'E') {
+      closeMenu();
+      // If this close just entered binoculars, stop the SAME keypress from reaching the binoculars
+      // input listener below (it shares Esc/Q/E as its exit keys) and bouncing straight back out.
+      if (gameState === 'binoculars') e.stopImmediatePropagation();
+    }
     return;
   }
   if (e.repeat) return;
@@ -2877,6 +2882,15 @@ window.addEventListener('keydown', (e) => {
         else if (d === 'left' || d === 'right') radioDirTrigger = d;
       }
     }
+    return;
+  }
+  if (gameState === 'binoculars') {                  // BinocularLogic input (F3 exits, d-pad peeks)
+    e.preventDefault();
+    if (e.repeat) return;
+    const d = DIR_KEYS[e.key];
+    if (d) { if (binoc && binoc.mode === 'idle') binocDirTrigger = d; }   // ControlsTrigger, idle only
+    else if (e.key === 'Escape' || e.key === 'e' || e.key === 'E' || e.key === 'q' || e.key === 'Q')
+      exitBinoculars();                              // ExitBinocularMode (the ROM's F3)
     return;
   }
   if (PUNCH_KEYS.has(e.key)) { e.preventDefault(); if (!e.repeat) punchQueued = true; }
@@ -3232,6 +3246,7 @@ const snake = {
 const HAND_GUN = 1, SUB_MACHINE_GUN = 2, GRENADE_LAUNCHER = 3, ROCKET_LAUNCHER = 4, SUPRESSOR = 8;
 const SELECTED_BOX = 0x19, SELECTED_OXYGEN = 0x0A, SELECTED_RATION = 0x16;   // constants/Enums.asm
 const SELECTED_GOGGLES = 4;   // the infrared goggles (Enums.asm:87) — reveal the laser beams
+const SELECTED_BINOCULARS = 0x09;   // Enums.asm:92 — the recon telescope (BinocularMode)
 // Keycards (constants/Enums.asm): SELECTED_CARDn = 0x0D + n (CARD1=0x0E .. CARD8=0x15). A door's lock
 // value L (2..9, from IdDoorsLogic & 0x1F) requires card (L-1), i.e. item id 0x0C + L (ChkCard1..8).
 const cardItemForLock = (lock) => 0x0C + lock;            // lock 5 -> 0x11 (CARD4), lock 6 -> 0x12 (CARD5)
@@ -4744,14 +4759,15 @@ function makeGuard(g) {
 // Build the room's guards: a DEMO entry (room 0) stays a single guard; otherwise EVERY
 // guard in the ROM's room actor list spawns (data/actorsinrooms.asm via actors.json) with
 // his real patrol path — the EnemyList holds them all, like the ROM.
-function buildGuardRaw(n) {
-  const defs = [];
+// The room's guard DEFINITIONS — pure (no globals touched, no enterAlert side effect). Shared by
+// buildGuardRaw (play) and the binoculars peek (binocSnapshot). Returns null for room 3 (its
+// elevator-ceremony pair are owned by elevRelief and are not normal patrols).
+function guardDefsFor(n) {
   const demo = guardsData[String(n)];
-  if (demo) defs.push(demo);
-  // Room 3's guards are the elevator-ceremony pair, owned by elevRelief (they enter guards[] only
-  // when the alarm transforms the first one into a chaser) — don't build them as normal patrols.
-  else if (n === 3) { guards.length = 0; guard = null; return; }
-  else if (actorsData && actorsData[n]) {
+  if (demo) return [demo];
+  if (n === 3) return null;
+  const defs = [];
+  if (actorsData && actorsData[n]) {
     for (const r of actorsData[n].guards) {
       const path = r.path ? r.path.map(([y, x]) => [x, y]) : null;   // ROM points are (Y, X)
       let dir = 'left';
@@ -4771,6 +4787,11 @@ function buildGuardRaw(n) {
       });
     }
   }
+  return defs;
+}
+function buildGuardRaw(n) {
+  const defs = guardDefsFor(n);
+  if (defs === null) { guards.length = 0; guard = null; return; }   // room 3: no normal patrols
   guards = defs.map(makeGuard);
   for (const g of guards) if (g.alertSpawn) enterAlert(g);   // ID_GUARD_ALERT/REDALERT
   guard = guards[0] || null;
@@ -6495,6 +6516,7 @@ function update() {
   if (gameState === 'menu') { menuTick(); return; }   // equipment menu open (GameMode 2/3): play paused
   if (gameState === 'text') { updateTextBox(); return; }   // GAME_MODE_TEXT_BOX: play is paused
   if (gameState === 'radio') { radioTick(); return; } // GameMode 4: the transceiver runs instead of play
+  if (gameState === 'binoculars') { binocularsTick(); return; }  // GameMode 8: the recon telescope
   if (gameState === 'elevator') { elevatorTick(); return; }  // GameMode 6: the moving elevator
   if (gameState === 'capture') { captureTick(); return; }    // GameMode 0xB: the capture scene
   if (gameState === 'lorry') { lorryTick(); return; }        // GameMode 5: the moving lorry
@@ -6948,7 +6970,15 @@ function openMenu(mode) {
   menuDirTrigger = null; menuFireTrigger = false;
 }
 // Closing keeps the highlighted entry — it was already selected on the last cursor move.
-function closeMenu() { if (gameState === 'menu') { gameState = 'play'; menuMode = null; } }
+function closeMenu() {
+  if (gameState !== 'menu') return;
+  const wasItem = menuMode === 'item';
+  menuMode = null;
+  // ExitEquipMenu (menuequipment.asm:299): closing the EQUIPMENT (item) menu with the binoculars
+  // selected enters binoculars mode — unless this is an isolated room (ChkIsolatedRoom: disabled).
+  if (wasItem && selectedItem === SELECTED_BINOCULARS && !roomIsolated(currentRoom)) { enterBinoculars(); return; }
+  gameState = 'play';
+}
 // Faithful menu slot geometry (DrawWeaponMenu Banks0123.asm:1968 / DrawEquipMenu :2165, plus the cursor
 // tables data/weaponcursorxy.asm + data/itemcursorxy.asm). Native SCREEN-5 pixels; the owned entries are
 // compacted (CompactWeapons/CompactEquipment) so entry i fills slot i in iteration order.
@@ -7065,6 +7095,103 @@ function chkUseItem() {
   // Every other selected item: the ROM's silent return.
 }
 
+// ---- Binoculars (BinocularMode / BinocularLogic / DrawBinocRoom, Banks0123.asm:12256-12604) ----
+// The recon telescope. Selecting the binoculars and closing the equipment menu (ExitEquipMenu,
+// menuequipment.asm:299) enters a mode that peeks into ADJACENT rooms: the d-pad shows the room in
+// that direction for TIMER_BINOC iterations, then returns to the player's room. Disabled in
+// isolated rooms (ChkIsolatedRoom). Deliberate divergences (no faithful equivalent in this port):
+//   - Exit returns to PLAY, not the equipment menu — the port's "moving is selecting / close = play"
+//     menu model would otherwise re-enter binoculars immediately on the menu close.
+//   - The ROM saves/restores EnemyList/power/radio/alert because DrawBinocRoom overwrites the shared
+//     room RAM; this port renders from a transient snapshot and never mutates play state, so there
+//     is nothing to back up.
+//   - The crosshair sprite art (LoadSprTarget) isn't an exported asset — drawn here with primitives.
+const TIMER_BINOC = 0x80;          // TimerBinocular: iterations an adjacent room is shown (128)
+let binoc = null;                  // null = not active; else { home, mode:'idle'|'show', timer, lookDir, snap }
+let binocDirTrigger = null;        // ControlsTrigger edge: a direction pressed this frame (idle only)
+
+// Snapshot a room's drawable contents WITHOUT touching play state: build helpers assign globals, so
+// capture-and-restore around them; guards come from the pure guardDefsFor + makeGuard.
+function binocSnapshot(n) {
+  const r = rooms.get(n);
+  const saveDoors = activeDoors;
+  buildDoors(n);                   // assigns activeDoors
+  const doors = activeDoors;
+  activeDoors = saveDoors;
+  const itemSlots = [null, null, null];   // buildRoomItems inline (avoid its spawnedItemLatch side effect)
+  const src = [...(itemsData[String(n)] || [])].filter((it) => !isItemTaken(it.id));
+  for (let i = 0; i < Math.min(3, src.length); i++) itemSlots[i] = { id: src[i].id, y: src[i].y, x: src[i].x };
+  const gs = (guardDefsFor(n) || []).map(makeGuard);
+  return { room: n, img: r ? r.img : null, doors, items: itemSlots, guards: gs };
+}
+function enterBinoculars() {        // ExitEquipMenu -> GAME_MODE_BINOCULARS (BinoculStatus 0, BinocularDir 1)
+  gameState = 'binoculars';
+  held.clear();
+  binocDirTrigger = null;
+  binoc = { home: currentRoom, mode: 'idle', timer: 0, lookDir: null, snap: binocSnapshot(currentRoom) };
+}
+function exitBinoculars() { gameState = 'play'; binoc = null; binocDirTrigger = null; }   // ExitBinocularMode -> play
+
+// BinocularLogic: idle shows the player's room and polls the d-pad; a press toward a valid neighbour
+// shows it for TIMER_BINOC, then returns. A dead-end direction does nothing (GetNextRoomNum FF).
+function binocularsTick() {
+  if (!binoc) { gameState = 'play'; return; }
+  if (binoc.mode === 'idle') {
+    const d = binocDirTrigger; binocDirTrigger = null;
+    if (!d) return;
+    const nb = neighbor(d);        // GetNextRoomNum — relative to the player's room (currentRoom == home)
+    if (nb == null) return;        // no room that way: abort the move (stay)
+    binoc.mode = 'show'; binoc.lookDir = d; binoc.timer = TIMER_BINOC;
+    binoc.snap = binocSnapshot(nb);
+  } else if (--binoc.timer <= 0) {   // BinocularShowRoom: timer elapsed -> back to the player's room
+    binoc.mode = 'idle'; binoc.lookDir = null;
+    binoc.snap = binocSnapshot(binoc.home);
+  }
+}
+
+// DrawBinocRoom: render the shown room (image + items + doors + enemies) through the existing draw
+// helpers (globals swapped to the snapshot for the duration — draw() is synchronous), then overlay
+// the crosshair, "TELESCOPE MODE", and the direction arrow.
+function drawBinoculars() {
+  if (!binoc) return;
+  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+  const s = binoc.snap;
+  if (s.img) ctx.drawImage(s.img, 0, 0, VIEW_W, VIEW_H);
+  const sd = activeDoors, si = roomItems, sg = guards;
+  activeDoors = s.doors; roomItems = s.items; guards = s.guards;
+  drawRoomItems(); drawDoors(); drawGuard();
+  activeDoors = sd; roomItems = si; guards = sg;
+  drawBinocReticle(VIEW_W >> 1, VIEW_H >> 1);
+  drawText('TELESCOPE MODE', 8, 8);                                  // txtTelescope (PrintTextXY)
+  if (binoc.mode === 'show' && binoc.lookDir) drawBinocArrow(binoc.lookDir);   // ArrowsChars
+}
+// Centre target reticle — a stand-in for the ROM's LoadSprTarget crosshair sprites.
+function drawBinocReticle(cx, cy) {
+  ctx.save();
+  ctx.strokeStyle = '#9ef0a0'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx + 0.5, cy + 0.5, 10, 0, Math.PI * 2);
+  ctx.moveTo(cx - 16, cy + 0.5); ctx.lineTo(cx - 4, cy + 0.5);
+  ctx.moveTo(cx + 4, cy + 0.5);  ctx.lineTo(cx + 16, cy + 0.5);
+  ctx.moveTo(cx + 0.5, cy - 16); ctx.lineTo(cx + 0.5, cy - 4);
+  ctx.moveTo(cx + 0.5, cy + 4);  ctx.lineTo(cx + 0.5, cy + 16);
+  ctx.stroke();
+  ctx.restore();
+}
+function drawBinocArrow(dir) {
+  const cx = VIEW_W >> 1, cy = (VIEW_H >> 1) + 30, s = 5;
+  ctx.save();
+  ctx.fillStyle = '#9ef0a0';
+  ctx.translate(cx, cy);
+  ctx.beginPath();
+  if (dir === 'up')        { ctx.moveTo(0, -s); ctx.lineTo(s, s);  ctx.lineTo(-s, s); }
+  else if (dir === 'down') { ctx.moveTo(0, s);  ctx.lineTo(s, -s); ctx.lineTo(-s, -s); }
+  else if (dir === 'left') { ctx.moveTo(-s, 0); ctx.lineTo(s, s);  ctx.lineTo(s, -s); }
+  else                     { ctx.moveTo(s, 0);  ctx.lineTo(-s, s); ctx.lineTo(-s, -s); }
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
 // The equipment-screen consume path of DecItemUnits (Banks0123.asm:1824, type C=2): count -1;
 // at zero the item is removed from the inventory (RemoveItem), its menu slot is erased WITHOUT
 // recompacting (CompactEquipment only runs on the next open), and SelectedItem is cleared.
@@ -7172,6 +7299,7 @@ function drawRadioScreen() {
 function draw() {
   if (gameState === 'title') { drawTitle(); return; }
   if (gameState === 'menu') { drawMenu(); return; }
+  if (gameState === 'binoculars') { drawBinoculars(); return; }   // DrawBinocRoom (the telescope view)
   if (gameState === 'intro' && introStatus < 0) {   // GS_StartGame's ClearScreen: black,
     ctx.fillStyle = '#000';                         // no HUD, the music already playing
     ctx.fillRect(0, 0, VIEW_W, VIEW_H + HUD_H);
@@ -7619,18 +7747,28 @@ async function main() {
     // the Konami reveal starts, so the whole boot plays with sound ready.
     gameState = 'title'; titlePhase = 'gate'; titleCnt = 0;
     if (gate) {
-      gate.innerHTML = '<b>METAL GEAR</b><span>press any key to start</span>';
+      // The game's own metallic logo (gfxMetalGearLogo blocks: metal.png + gear.png) instead of the
+      // plain green prompt — more inviting. Cosmetic only; the gesture still unlocks audio and the
+      // ROM Konami scroll plays next.
+      gate.innerHTML =
+        '<div class="mg-logo">' +
+          '<img class="mg-metal" src="assets/metal.png" alt="METAL">' +
+          '<img class="mg-gear" src="assets/gear.png" alt="GEAR">' +
+        '</div>' +
+        '<div class="mg-start">Press any key &middot; Tap to start</div>';
       gate.classList.remove('hidden');
     }
     const begin = async () => {
       window.removeEventListener('keydown', begin);
       canvas.removeEventListener('click', begin);
+      if (gate) gate.removeEventListener('click', begin);
       await unlockAudio();
       if (gate) gate.classList.add('hidden');
       titlePhase = 'konami-reveal'; titleCnt = 0;
     };
     window.addEventListener('keydown', begin);
     canvas.addEventListener('click', begin);
+    if (gate) gate.addEventListener('click', begin);   // the overlay sits over the canvas — catch taps/clicks on it too
   } else {
     if (gate) gate.classList.add('hidden');
     // Dev flows start instantly; audio joins in from the first gesture as before.
@@ -7666,6 +7804,7 @@ async function main() {
     items.set(SELECTED_BOMB_SUIT, 1);    // the roof air-flow gate (room 53)
     items.set(SELECTED_PARACHUTE, 1);    // the roof fall (room 117 -> 204)
     items.set(SELECTED_CIGARETTES, 2);   // dev boots bypass the intro grant — needed for the countdown test
+    items.set(SELECTED_BINOCULARS, 1);   // owned, NOT selected — for testing binoculars/telescope mode
   }
   // ?mgko: destroy Metal Gear on spawn into room 118 (door 99 open + the self-destruct countdown
   // running) — a dev shortcut to test Big Boss / countdown / escape / ending WITHOUT the 16-bomb leg

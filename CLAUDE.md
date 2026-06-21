@@ -26,6 +26,13 @@ mean those files in `../MetalGear`.
   deliberate divergence in the change's tasks/notes.
 - If unsure how the original behaves, **investigate the disassembly rather than guessing** — an
   approximation that "feels right" but doesn't match the ROM is a bug, not a shortcut.
+- **When porting/changing a behaviour, read the surrounding code on BOTH sides — don't fix in
+  isolation.** In the `.asm`, read the whole routine and what it calls/sets, not just the one line
+  you're matching: adjacent setup, side effects (flags/timers/text), and callers/callees often
+  carry behaviour that belongs with the change. In the JS port, check the surrounding code path
+  (callers, the state machine around the edit, related helpers) so the change integrates correctly
+  and nothing implied by the ROM is missed. A faithful one-liner that ignores the context around it
+  is how bugs slip in.
 
 ## Git
 

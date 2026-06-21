@@ -2929,6 +2929,7 @@ const BUG_CLIP_MS = 20000;              // we want at least this many ms of foot
 const BUG_WINDOW_MS = 2 * BUG_CLIP_MS;  // each recorder fills a full window, then restarts
 let bugSlots = null, bugBusy = false, bugToastTimer = 0, bugVideoStream = null;
 let bugFormOpen = false, bugPending = null;   // { blob, meta } frozen at B-press, awaiting submit
+let bugPrevPaused = false;                     // the pause state to restore when the form closes
 
 function bugReporterAvailable() {
   return typeof MediaRecorder !== 'undefined' && typeof canvas.captureStream === 'function';
@@ -3029,12 +3030,20 @@ function showBugForm(blob, meta) {
   form.classList.remove('hidden');
   bugFormOpen = true;
   held.clear();                                     // stop Snake walking while the form is up
+  // Freeze the sim while the modal form is up (guards/bullets/damage keep running otherwise — the
+  // form is a DOM overlay that doesn't gate the loop). Reuse the existing `paused` flag (loop()
+  // returns early on it); remember the prior value so closing restores a manual pause instead of
+  // clobbering it. No redrawStatic()/PAUSED overlay here — the form covers the canvas.
+  bugPrevPaused = paused;
+  paused = true;
   if (ta) setTimeout(() => ta.focus(), 0);
 }
 function closeBugForm() {
   const form = document.getElementById('report-form');
   if (form) form.classList.add('hidden');
   bugFormOpen = false;
+  paused = bugPrevPaused;                            // restore the pre-form pause state
+  if (!paused) { last = 0; acc = 0; requestAnimationFrame(loop); }   // restart the stopped loop (as togglePause does)
 }
 function cancelBugReport() {
   if (!bugFormOpen && !bugPending) return;
@@ -4999,10 +5008,11 @@ function updateGuardOne(guard) {
         // shot wakes the guard and raises the alarm. Plain gun-fire noise still comes via
         // chkAlertTrigger (which sets the alarm, waking him through the AlertMode branch above).
         guardWake(guard); raiseAlarm(currentRoom);
-      } else if (--guard.sleepTimer <= 0) guardWake(guard);                 // GuardSleeping: SleepingTime elapsed
+      } else if (--guard.sleepTimer <= 0) { guardWake(guard); setText(34, 2); }  // GuardSleeping: SleepingTime elapsed -> GuardWakeUp: TEXT 34 "OVERSLEPT" (only the natural wake says it; alarm/noise/touch wakes don't)
       if (guard.asleep) { guard.dir = 'down'; return; }                     // still asleep: no patrol/LOS
     } else if (--guard.awakeTimer <= 0) {                                   // ChkSleepyGuard: AwakeTime elapsed -> doze off
       guard.asleep = true; guard.sleepTimer = SLEEPY_SLEEP_TICKS; guard.zzzFrame = 0; guard.zzzTimer = 0;
+      setText(33, 2);                                                       // ChkSleepyGuard: TEXT 33 "I'M SLEEPY" via SetTextUnskippable
       guard.dir = 'down'; return;
     }
   }
@@ -5095,7 +5105,10 @@ function updateGuardOne(guard) {
 // (GuardAvoidObstacle). Normal guards chase right onto Snake — the stand-off/walk-away is a
 // red-alert-only behaviour (ChkNearPlayer), out of scope here.
 
-// GuardWakeUp: leave the sleep state and reset the awake span (the "Overslept" text is omitted).
+// GuardWakeUp: leave the sleep state and reset the awake span. The "OVERSLEPT" text (TEXT 34) is
+// part of the ROM's GuardWakeUp status, which is only reached on the natural SleepingTime-elapsed
+// wake — so it's emitted at that call site, not here (alarm/noise/touch wakes share this helper but
+// must stay silent).
 function guardWake(g) { g.asleep = false; g.awakeTimer = SLEEPY_AWAKE_TICKS; }
 // AnimZzzSign: advance the floating "Zzz" frame on the ROM cadence.
 function animateZzz(g) {
@@ -7441,6 +7454,46 @@ function drawDoors() {
   if (infrared) ctx.restore();
 }
 
+// ---- Dev perf HUD (?perf) --------------------------------------------------
+// Diagnostic for issue #2 (long-session slowdown that resets on a room change). Opt-in via ?perf,
+// like the other dev hooks. Reads the four signals that tell the hypotheses apart:
+//   - fps drops but upd/drw stay low + ticks/frame rises  -> the loop is compensating (browser
+//     RAF throttling / real-time still correct), not a per-frame-cost leak.
+//   - upd or drw ms climbs over a long stay in one room    -> per-frame work is growing; the
+//     g/b/s counts below say whether it's guards/bullets/shots.
+//   - heap climbs steadily                                 -> a memory leak (GC pressure slowdown).
+let devPerf = false;
+const perf = { frames: 0, fps: 0, updMs: 0, drwMs: 0, ticks: 0, lastSample: 0 };
+function perfSample(now, updMs, drwMs, ticks) {
+  perf.frames++;
+  perf.updMs = perf.updMs * 0.9 + updMs * 0.1;   // EWMA so the readout doesn't jitter
+  perf.drwMs = perf.drwMs * 0.9 + drwMs * 0.1;
+  perf.ticks = ticks;
+  if (!perf.lastSample) perf.lastSample = now;
+  if (now - perf.lastSample >= 500) {            // recompute fps twice a second
+    perf.fps = perf.frames * 1000 / (now - perf.lastSample);
+    perf.frames = 0; perf.lastSample = now;
+  }
+}
+function drawPerfHud() {
+  const m = (typeof performance !== 'undefined' && performance.memory)
+    ? (performance.memory.usedJSHeapSize / 1048576).toFixed(0) + 'M' : 'n/a';
+  const lines = [
+    'fps ' + perf.fps.toFixed(0) + '  tk/f ' + perf.ticks,
+    'upd ' + perf.updMs.toFixed(2) + ' drw ' + perf.drwMs.toFixed(2),
+    'g' + guards.length + ' b' + bullets.length + ' s' + playerShots.length + ' r' + currentRoom,
+    'heap ' + m,
+  ];
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.65)';
+  ctx.fillRect(0, 0, 92, 4 + lines.length * 9);
+  ctx.fillStyle = '#9ef0a0';
+  ctx.font = '8px monospace';
+  ctx.textBaseline = 'top';
+  lines.forEach((l, i) => ctx.fillText(l, 2, 2 + i * 9));
+  ctx.restore();
+}
+
 // ---- Fixed-timestep loop ---------------------------------------------------
 let running = false, paused = false, last = 0, acc = 0;
 function loop(now) {
@@ -7449,14 +7502,19 @@ function loop(now) {
   acc += now - last;
   last = now;
   if (acc > 250) acc = 250;          // clamp after tab-out so we don't spiral
-  while (acc >= TICK_MS) { update(); acc -= TICK_MS; }
+  let ticks = 0;
+  const t0 = devPerf ? performance.now() : 0;
+  while (acc >= TICK_MS) { update(); acc -= TICK_MS; ticks++; }
+  const t1 = devPerf ? performance.now() : 0;
   draw();
+  if (devPerf) { perfSample(now, t1 - t0, performance.now() - t1, ticks); drawPerfHud(); }
   requestAnimationFrame(loop);
 }
 
 // Freeze the sim (keeps the last frame on screen) so the guard can be inspected.
 function togglePause() {
   if (!running) return;              // nothing to pause before the game starts
+  if (bugFormOpen) return;           // the bug-report form owns the pause flag while it's up — don't desync it
   // The ROM's F1 pause shares the Playing F-key gate: no pausing in the ladder/elevator
   // rooms or room 204 (Banks0123.asm:12112-12119). Unpausing always works.
   if (!paused && gameState === 'play' && fkeysBlocked()) return;
@@ -7585,6 +7643,7 @@ async function main() {
   if (new URLSearchParams(location.search).has('alert')) devForceAlert = true;
   if (new URLSearchParams(location.search).has('red')) devForceRed = true;   // force red alert (reinforcements)
   if (new URLSearchParams(location.search).has('collision')) devShowCollision = true;   // tint solid tiles
+  if (new URLSearchParams(location.search).has('perf')) devPerf = true;   // ?perf: perf HUD for the slowdown bug (#2)
   // ?sleep: make the current room's guard start asleep (no cluster room carries the ROM sleeping flag
   // yet, so this dev hook lets the sleep/wake behaviour be exercised).
   if (new URLSearchParams(location.search).has('sleep') && guard) { guard.sleepy = true; guard.asleep = true; }

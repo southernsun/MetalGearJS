@@ -29,7 +29,23 @@ const SPEED        = 1.0;  // pixels per tick
 const WALK_TICKS   = 8;    // ticks between walk-frame swaps
 const PUNCH_TICKS  = 12;   // how long the punch frame holds (~0.2s)
 const SPAWN_X = 128, SPAWN_Y = 157; // Snake's start in room 0 — open floor, free to move all directions
-const ENTER_MARGIN = 12;   // pixels inside the edge Snake spawns at after a room transition
+// Where Snake lands after a non-door room crossing, from the ROM's EntryRoomXY table
+// (logic/nextroom.asm SetRoomEntryXY: dw 0B800h,1200h,0F200h,0C00h indexed by NextRoomDirect
+// 1=Up,2=Down,3=Left,4=Right — high byte = pixel). The entry AXIS snaps to these; the
+// perpendicular axis is preserved from the exit. NB the table is ASYMMETRIC (up 184 / down 18
+// aren't VIEW_H∓margin), so don't derive it from a single margin.
+const ENTRY_UP_Y = 0xB8;    // 184 — entering a room going up (land near the bottom)
+const ENTRY_DOWN_Y = 0x12;  // 18  — entering going down (land near the top)
+const ENTRY_LEFT_X = 0xF2;  // 242 — entering going left (land near the right edge)
+const ENTRY_RIGHT_X = 0x0C; // 12  — entering going right (land near the left edge)
+// Where Snake crosses to the neighbour room, from the ROM's ChkExitRoom (Banks0123.asm:9418):
+// PlayerX < 12 -> left, >= 244 -> right; PlayerY < 16 -> up, >= 186 -> down. The crossing fires at
+// these edges, NOT at the screen border — exiting ~12px sooner leaves the correct amount of travel
+// in the next room (and pairs with the ENTRY_* values so a fresh entry never immediately re-exits).
+const EXIT_LEFT_X = 12, EXIT_RIGHT_X = 244, EXIT_UP_Y = 16, EXIT_DOWN_Y = 186;
+const crossesEdge = (dir, x, y) =>
+  dir === 'left' ? x < EXIT_LEFT_X : dir === 'right' ? x >= EXIT_RIGHT_X :
+  dir === 'up'   ? y < EXIT_UP_Y   : dir === 'down'  ? y >= EXIT_DOWN_Y : false;
 const DOOR_OPEN_TICKS = 18; // how long a door's open animation runs (~0.3s) before it's passable
 
 // ---- Guard tunables (ported from chkdiscover.asm / guard.asm) --------------
@@ -3321,7 +3337,6 @@ function edgeDoorOpen(dir, x, y) {
   return c.solid[ty * c.width + tx] === 0;
 }
 
-const outOfBounds = (x, y) => x < 0 || x >= VIEW_W || y < 0 || y >= VIEW_H;
 
 // ---- Tile classification (room-tile-types) --------------------------------
 // The room collision data carries a per-tile tile-number grid (`tiles`) alongside `solid`, so
@@ -3355,10 +3370,10 @@ function transition(dir, neighborRoom) {
   setRoom(neighborRoom);              // (buildGuard reads enterDir during setRoom)
   enterDir = 0;
   let x = snake.x, y = snake.y;
-  if (dir === 'right') x = ENTER_MARGIN;
-  else if (dir === 'left')  x = VIEW_W - ENTER_MARGIN;
-  else if (dir === 'down')  y = ENTER_MARGIN;
-  else if (dir === 'up')    y = VIEW_H - ENTER_MARGIN;
+  if (dir === 'right') x = ENTRY_RIGHT_X;
+  else if (dir === 'left')  x = ENTRY_LEFT_X;
+  else if (dir === 'down')  y = ENTRY_DOWN_Y;
+  else if (dir === 'up')    y = ENTRY_UP_Y;
 
   // Settle onto open floor: if the mirrored point is solid, scan along the entry
   // edge for the nearest open spot to the preserved coordinate.
@@ -4752,7 +4767,10 @@ function makeGuard(g) {
     shooter: !!g.shooter, shStat: 0, shWait: 1 + ((Math.random() * 64) | 0), shTransform: 3,
     shStartX: g.x, shWalkDir: 'left',
   };
-  m.target = m.path.length > 1 ? 1 : 0;
+  // The ROM's GetPathPoint (Banks0123.asm:6956) sets the guard's FIRST destination to path point
+  // 0 — it heads toward the first listed point, not the second. Starting at index 1 sent guards the
+  // wrong way for one leg (e.g. the demo's room-1 guard doubled back, arriving late at the punch).
+  m.target = 0;
   return m;
 }
 
@@ -5678,7 +5696,12 @@ function lorryShooterLogic(g) {
 // in (clearing the flag) and re-arms. While OUT (patrolling) the alarm transforms it into a chaser
 // (GuardLorryWalk -> TransformAlertGuard). lorryStat: 0 in-lorry, 1 emerging, 2 patrolling, 3 entering.
 function lorryGuardLogic(g) {
-  if ((tickCounter & 1) !== 0) return;                  // ROM iteration rate
+  // Cases 0/1/3 are ROM-iteration timers (the 0x64 wait + the 0x200 = 2px/iteration emerge & enter),
+  // so they run on the 30Hz gate. The PATROL (case 2) is the ROM's normal GuardLogic
+  // (guardlorry.asm GuardLorryWalk -> GuardLogic), so it must run at the same 60Hz rate as every
+  // other guard (updateGuard runs each tick). Gating the patrol too made it walk at HALF a normal
+  // slow guard's speed.
+  if (g.lorryStat !== 2 && (tickCounter & 1) !== 0) return;   // 30Hz for the timers/emerge/enter only
   switch (g.lorryStat) {
     case 0:                                             // in the lorry, waiting (status 0)
       g.lorryHidden = true; g.stepping = false;
@@ -5689,7 +5712,7 @@ function lorryGuardLogic(g) {
     case 1:                                             // GuardExitingLorry: walk down out
       g.stepping = true; g.y += 2;                       // SetActorSpeed Y 0x200 (2px/iteration)
       if (--g.lorryWait > 0) return;
-      g.lorryStat = 2; g.target = g.path.length > 1 ? 1 : 0; g.lorryVisited = 0;
+      g.lorryStat = 2; g.target = 0; g.lorryVisited = 0;   // GetPathPoint_: first destination is point 0
       return;
     case 2:                                             // GuardLorryWalk: patrol the path once
       if (alertMode) { enterAlert(g); return; }          // out + alarm -> TransformAlertGuard
@@ -6701,7 +6724,7 @@ function normalControl() {
       const canCross = exit != null && edgeDoorOpen(dir, snake.x, snake.y);
 
       if (!blocked(nx, ny, dir, canCross)) {
-        if (canCross && outOfBounds(nx, ny)) {
+        if (canCross && crossesEdge(dir, nx, ny)) {   // ChkExitRoom edge reached -> change room
           transition(dir, exit);        // hard cut to the neighbor room
         } else {
           snake.x = Math.max(0, Math.min(VIEW_W - 1, nx));

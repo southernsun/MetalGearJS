@@ -343,3 +343,170 @@ items, menus, radio, pause) via on-screen controls; desktop is unchanged.
 - #6 and #5 are deliberate web-port additions with **no ROM equivalent** — note that in code, per
   CLAUDE.md.
 - The user commits; do not run `git commit`/`git push`.
+
+---
+---
+
+# Third batch (#8, #9, #10) — the attract-demo / "intro"
+
+All three were filed (`State: title`) while watching the **attract demo** (`GS_DemoPlay`,
+`logic/gamedemo.asm`). The ROM cycles 4 demo scenes (`DemoPlayId` 0..3): **gameplay 1** (room 5,
+the lorry yard), radio-tutorial, **gameplay 2** (room 31, with a handgun & cameras), radio-tutorial.
+The user calls the demo "the intro". Demo gameplay 1 starts in room 5 at (0x10,0x70), the lorry
+guard emerges, then Snake walks **left into room 1** and punches a guard (the recorded byte stream
+`DemoGameplay1` / `DEMO_GAMEPLAY1`, `game.js:3695`, matches the disassembly verbatim).
+
+| # | Title | Type | Root cause found? | Risk |
+| --- | --- | --- | --- | --- |
+| 8 | Lorry guard walks really slow in room 5 | Faithfulness bug | **FIXED** (patrol now 60 Hz) | Low |
+| 9 | Snake doesn't walk far enough left to punch the guard (room 1) | Room-transition desync | **FIXED** (EntryRoomXY + ChkExitRoom thresholds) | Med (broad, but suites green) |
+| 10 | "Another intro where it walks through cameras and gets detected is missing" | **Not a bug** — present & working | N/A — left as-is per user | — |
+
+---
+
+## Issue #8 — Lorry guard patrols at half speed (room 5)
+
+### Behaviour
+In the room-5 lorry yard, the guard that emerges from the lorry walks/patrols noticeably slower than
+a normal guard. Reported during the attract demo.
+
+### ROM source (the behaviour to mimic)
+- `../MetalGear/logic/actors/guardlorry.asm`, `GuardLorryLogic`: a guard parked in a lorry that, on
+  the `LORRY_TIMER` (0x64) emerge timer, walks **down** out of the lorry (`SetActorSpeed` Y=`0x200` =
+  2 px/iteration), then **`GuardLorryWalk` calls the normal `GuardLogic`** to patrol its path, then
+  walks **up** (Y=`-0x200`) back in. The lorry guard is `ID_GUARD_SLOW` (room 7's 2nd guard alone
+  gets `IdxGuardSpeed=8`, faster). Crucially, **the patrol uses the same `GuardLogic` (and the same
+  per-iteration actor speed) as any normal slow guard** — it is not deliberately slow.
+
+### Root cause (port)
+`lorryGuardLogic(g)` (`game.js:5680`) gates itself to ~30 Hz at the top:
+`if ((tickCounter & 1) !== 0) return;` (`game.js:5681`). Its **patrol** (case 2, `game.js:5694`)
+moves `g.speed` per call → `g.speed` per **30 Hz** iteration. But **normal** guards run in
+`updateGuardOne()`, called from `updateGuard()` **every 60 Hz tick** (`game.js:6598`, no
+`tickCounter` gate), moving `g.speed` per **60 Hz** tick = `2·g.speed` per iteration. So the lorry
+guard patrols at **half** the speed of an identical normal guard (its `speed` is `0.5` —
+`actors.json["5"]`, so 0.5 px/iteration ≈ 15 px/s vs a normal slow guard's ≈ 30 px/s). That halving
+is the "really slow".
+
+The **emerge** (case 1, `g.y += 2`) and **enter** (case 3, `g.y -= 2`) are 2 px per *gated* 30 Hz
+iteration = the ROM's `0x200` — those are **correct and must stay 30 Hz**. Only the patrol is wrong.
+
+### Fix
+Run only the patrol case at 60 Hz (like every other guard); keep the timer/emerge/enter cases on the
+30 Hz iteration gate. Minimal change at `game.js:5681`:
+
+```js
+function lorryGuardLogic(g) {
+  // Cases 0/1/3 are ROM-iteration timers (0x64 wait, 0x200 emerge/enter); the patrol (case 2)
+  // is the normal GuardLogic and must run at the normal-guard 60Hz rate (guardlorry.asm
+  // GuardLorryWalk -> GuardLogic). Gating the patrol too made it walk at half a normal guard's speed.
+  if (g.lorryStat !== 2 && (tickCounter & 1) !== 0) return;   // 30Hz for the timers/emerge/enter only
+  ...
+```
+
+(Case 2 already mirrors the normal patrol — waypoint homing at `g.speed`, the `alertMode →
+enterAlert` transform — so running it every tick makes it identical to a normal slow guard.)
+
+### Acceptance
+In room 5 (or the attract demo), the emerged lorry guard patrols at the **same** speed as a normal
+slow guard; the emerge/return into the lorry are unchanged (still 2 px/iteration). No alarm/punch
+regressions.
+
+---
+
+## Issue #9 — Snake stops short of the punch in the demo (room 1) — FIXED
+
+### Behaviour
+In demo gameplay 1, Snake walks **5 → (into a parked lorry) 127 → 5 → 1**, then in room 1 punches
+**downward** three times to take out a patrolling guard. In the port he stopped too far right/high
+and the punches whiffed.
+
+### What was NOT the cause (verified by an instrumented trace)
+- Replay **cadence/walk speed are faithful**: `demoControlTick()` gated to 30 Hz (`game.js:6533`);
+  Snake moves 2 px/iteration = the ROM's `0x200` (`NormalCtrl`). Each segment travels the ROM
+  distance.
+- **Door placement is faithful**: `PLAYER_IN_DOOR_DAT` matches the ROM `PlayerInDoorDat`
+  (`nextroom.asm:463`) byte-for-byte; the lorry-127 entry/exit land on the right pixels.
+- **Guard data is faithful**: room-1 actors + paths match `ActorsRoom001` / `Paths_000`
+  (`actorsinrooms.asm`, `paths.asm`); `HideGuardRoom1` removes the right guard (Y=0x18) on a
+  west entry.
+
+### Root cause (two real ROM-faithfulness bugs in room transitions)
+The trace showed Snake landing the final Left walk at **x=211** when he needs **x≤~200** to clear
+room 1's right-side wall (his right probe hits the x≥216 solid) and walk **down** onto the guard's
+y=176 band. Two transition bugs, both now fixed:
+
+1. **Wrong room-entry coordinates.** `transition()` derived entry coords symmetrically from
+   `ENTER_MARGIN=12`; the ROM's `EntryRoomXY` table (`nextroom.asm:362`) is **asymmetric**:
+   Left→**242** (was 244), Right→12, Up→**184** (was 180), Down→**18** (was 12). Replaced with the
+   exact ROM values (`ENTRY_LEFT_X/RIGHT_X/UP_Y/DOWN_Y`).
+2. **Wrong room-exit trigger (the dominant bug).** The port only changed rooms at the **screen
+   border** (`outOfBounds`: x<0 / ≥256 / y<0 / ≥192). The ROM's `ChkExitRoom` (`Banks0123.asm:9418`)
+   crosses at **x<12 / x≥244 / y<16 / y≥186** — ~12 px sooner. Walking ~12 px too far into room 5's
+   left edge before crossing ate ~11 px of the next room's walk budget, leaving Snake too far right.
+   Added `crossesEdge(dir,x,y)` with the ROM thresholds and use it in the walk dispatch
+   (`game.js`, normalControl). Pairs with the ENTRY_* values so a fresh entry never re-exits.
+
+Both are **general** fixes (every room crossing in the game now exits/enters at the ROM pixels), not
+demo-only hacks.
+
+3. **Guard headed the wrong way first.** `makeGuard` set the initial patrol target to `path[1]`,
+   but the ROM's `GetPathPoint` (`Banks0123.asm:6956`) makes the guard's first destination **path
+   point 0**. With `path[1]`, room 1's bottom guard doubled back left before coming right, arriving
+   ~16 px late at the punch spot — so only the 3rd of the three scripted punches connected. Set the
+   initial target to `0` (both the normal patrol in `makeGuard` and the lorry-guard patrol-start,
+   which uses the same `GetPathPoint_`). The guard's WALK speeds were already correct (medium =
+   `WalkSpeeds` 0x140 = 1.25 px/iter = our 0.625/tick × 2).
+
+### Verified outcome
+Replay of demo gameplay 1 (locked in by `web/demo.headless.mjs`): Snake walks 5 → 127 → 5 → 1,
+punches **down at (200,158)**, and all **three** punches land — the guard is taken out (2 guards → 1)
+with **no false alarm**, then Snake walks off and the demo ends at the 0xFF terminator. Matches the
+original attract demo. All **27** headless suites pass (the exit-threshold and path-point changes are
+high blast-radius — checkpoints/doors/capture/elevator/alarm all green).
+
+### Acceptance
+Demo gameplay 1: Snake crosses into room 1, walks to the lower-right, and his three punches connect
+on the patrolling guard and take him out — no longer whiffing into empty space.
+
+---
+
+## Issue #10 — "camera-detection intro is missing"
+
+### Finding: **not missing — present and working.**
+The camera-walk-and-get-detected scene the user describes **is the ROM's gameplay demo 2** (room 31,
+handgun): `SetDemoPlay2` (`gamedemo.asm:83`) loads room 31; `DemoGameplay2` walks Snake **down** from
+(0x70,0x28) straight through camera #0's sight column; room 31's cameras (`camera.asm`
+`RoomsWithCamera`) `ChkSeePlayer` → `SetAlertMode` raise the alarm.
+
+The port replicates this faithfully: `DEMO_SCENES[2] = {room:31, x:0x70, y:0x28, weapon:HAND_GUN}`
+(`game.js:3710`); `startDemo()` sets `gameState='play'` and `setRoom(31)` (`buildCameras`);
+`cameraTick()` runs unconditionally in the loop (`game.js:6591`) — **no `demoActive` guard suppresses
+cameras or the alarm**. A headless run of the real `update()` loop confirmed: camera #0 spots Snake
+and a **RED alert is raised** mid-demo. The 4-scene cycle (`endDemo` → `demoSceneIdx = (idx+1)%4`,
+`game.js:3774`) reliably reaches scene 2 every 4th demo.
+
+### Why the user may not have seen it
+1. It's the **3rd** demo in the cycle (gameplay1 → tutorial → **gameplay2** → tutorial), ~256 idle
+   iterations apart, and **any keypress resets the title idle and aborts an active demo**
+   (`game.js:2855,2862` — a deliberate divergence noted at `game.js:3693`). Tapping a key means never
+   reaching demo 2.
+2. The detection may be **visually under-sold**: camera alerts have no "!" sign (ROM
+   `AlertSignNotOnScreen`); the cue is the red palette + alarm music. Worth eyeballing that
+   `playAlert()` actually sounds during the demo.
+
+### Recommendation
+No faithfulness fix is warranted (the ROM also buries it as the 3rd demo). **Confirm with the user**
+what they actually observe. Optional, low-risk follow-ups if they want it more discoverable: verify
+the RED-alert audio/palette renders during the demo, and add a regression test that plays gameplay 2
+and asserts the camera raises the alarm (`title.headless.mjs` currently stops at `demoSceneIdx===2`,
+so demo 2 is untested).
+
+---
+
+## Cross-cutting (batch 3)
+- #8 is a faithfulness fix — cite `guardlorry.asm` `GuardLorryWalk -> GuardLogic` in the comment.
+- #9 must be fixed by correcting the underlying geometry/timing, never by editing the verbatim demo
+  byte stream (`DemoGameplay1`).
+- #10 is likely no-op; do not "fix" a working feature without user confirmation.
+- The user commits; do not run `git commit`/`git push`.

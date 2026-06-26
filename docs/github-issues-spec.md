@@ -1059,6 +1059,27 @@ In room 240, the elevator-door SFX (0x1B) fires only when Snake reaches the door
 door opens — not a few px earlier. Verify a normal/keycard door too (SFX exactly when it opens).
 Round-trip 31→240→back on both type-5 (floor) and type-6 (exit) doors.
 
+### Status — ATTEMPTED, REVERTED (still TODO)
+The above fix (gate `canOpenDoor`'s lock-0/1/keycard branches on `touchDoor`) was committed then
+**reverted** — it broke the type-5/6 elevator doors (you couldn't exit room 240) and crashed the
+`metalgear` suite. Root cause: the "open area is reachable" assumption in *Risk* above is **false in
+our collision model**. The ROM's `ChkTouchDoor` compares the player **anchor** (`PlayerX/PlayerY`)
+against the open area, and the ROM anchor sits *at* the wall. Our collision parks Snake's anchor a
+**probe offset back** (~7px for the `right` facing, `PROBES`), so for the type-6 exit (open area
+`x∈[216,232)`, block rect starting at exactly 216) Snake parks at `x≈209` and can **never** enter
+the open area → the door never opens.
+
+Normal NSEW doors survive only because their open area sits *behind* the contact edge (e.g. type 2:
+open `y∈[y-8,y)`, anchor parks at `y-4`), so the held-back anchor still lands inside. Crucially, the
+"SFX a few px early" symptom and this unreachability are **two sides of the same probe offset**:
+because Snake's anchor can't reach as deep as the ROM `PlayerX`, gating on the ROM's exact open area
+can't make a door open *later* than the current block-rect contact — so this approach can't meet the
+goal anyway. **Next attempt:** don't gate `canOpenDoor` on a separate open area; instead tighten the
+per-type **block rect** (`doorCollRect`) so contact (which already drives open+SFX) lines up with the
+ROM open area — i.e. fix the SFX timing at the contact geometry, not via a second gate. `touchDoor`
+remains in use for punch/bomb walls (unchanged). The `#26` switch-damage test stub in
+`hazards.headless.mjs` was also corrected (fire a `MISSILE`-type shot) when this was reverted.
+
 ---
 
 ## Issue #19 — Wrong radio sequence / should report gas mask (room 29)

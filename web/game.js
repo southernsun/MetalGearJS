@@ -3479,16 +3479,11 @@ function canOpenDoor(d) {
   // can't go back the way he came. Keyed on the door ID exactly like the ROM (cp 62h).
   if (destructionOn && d.id === 0x62) return false;
   const lock = d.lock || 0;
-  // Each openable branch of the ROM's ChkOpenDoor ends in `jp ChkTouchDoor` (opendoor.asm:74/134/156):
-  // the door opens — and its open SFX (InitOpenDoor) plays — only once Snake is inside the door's
-  // OPEN AREA, not merely touching its (wider/offset) drawn footprint. Without this gate the SFX
-  // fired a few px early, while Snake was still approaching (issue #17). The open area extends to
-  // where Snake parks against the door footprint, so it's always reachable.
-  if (lock === 0) return touchDoor(d);                           // plain door -> ChkTouchDoor
-  if (lock === 1)                                                // ChkElevatorDoor -> ChkTouchDoor
-    return (d.type === 5 ? snake.dir === 'up' : snake.dir === 'right') && touchDoor(d);
-  if (lock >= 2 && lock <= 9)                                    // keycard ChkCard1..8 -> ChkTouchDoor
-    return selectedItem === cardItemForLock(lock) && d.type === DIR_TO_PD[snake.dir] && touchDoor(d);
+  if (lock === 0) return true;                                   // plain door
+  if (lock === 1)                                                // ChkElevatorDoor
+    return d.type === 5 ? snake.dir === 'up' : snake.dir === 'right';
+  if (lock >= 2 && lock <= 9)                                    // keycard ChkCard1..8
+    return selectedItem === cardItemForLock(lock) && d.type === DIR_TO_PD[snake.dir];
   if (lock === 12) {                          // ChkDesertDoorBuild2 (opendoor.asm:213-236)
     if (currentRoom === 73) return snake.dir === 'down';         // from inside: walk south
     if (doorBuild2Open) { doorBuild2Open = false; return true; } // the guards opened it

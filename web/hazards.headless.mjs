@@ -73,9 +73,14 @@ const test = `
   __check('standing on a live tile zaps 2 life + the 8-frame delay', snake.life===22 && snake.invulnTimer===8);
   chkElectricFloor();
   __check('the delay gates a second zap', snake.life===22);
-  // shooting the switch kills the floor
+  // shooting the switch kills the floor — but ONLY the remote missile damages it (weapondamage.asm
+  // row for ID_POWER_SWITCH is 0xFF for every weapon except the missile; issue #26).
   powerSwitch.x=60; powerSwitch.y=60;
-  playerShots.push({ x:60, y:60, vx:0, vy:0, range:5 });
+  playerShots.push({ x:60, y:60, vx:0, vy:0, range:5, type: HAND_GUN });   // a normal shot does nothing
+  updatePlayerShots(); powerSwitchTick();
+  __check('a non-missile shot leaves the switch (and floor) LIVE', powerSwitch!==null && powerSwitchOn===true);
+  playerShots.length=0;
+  playerShots.push({ x:60, y:60, vx:0, vy:0, range:5, type: MISSILE });    // the remote missile blows the fuse
   updatePlayerShots();
   powerSwitchTick();
   __check('shooting the switch turns the floor OFF', powerSwitch===null && powerSwitchOn===false);
@@ -91,7 +96,7 @@ const test = `
   assets.collision.tiles[(100>>3)*32 + (100>>3)]=0x40;   // a room-116 electrified tile under (100,100)
   snake.x=100; snake.y=100; chkElectricFloor();
   __check('the floor before Metal Gear zaps on the 0x40/0x41 tiles', snake.life===22 && snake.invulnTimer===8);
-  playerShots.push({ x:0x20, y:0x10, vx:0, vy:0, range:5 });   // shoot the switch
+  playerShots.push({ x:0x20, y:0x10, vx:0, vy:0, range:5, type: MISSILE });   // shoot the switch (missile, #26)
   updatePlayerShots(); powerSwitchTick();
   __check('shooting the Metal Gear floor switch kills the floor (clears the path)',
     powerSwitch===null && powerSwitchOn===false);

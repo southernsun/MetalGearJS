@@ -23,6 +23,16 @@ public partial class App : Application
             bool isPickup = string.Equals(args[i], "--export-pickup", StringComparison.OrdinalIgnoreCase);
             bool isSpawn = string.Equals(args[i], "--export-spawn", StringComparison.OrdinalIgnoreCase);
 
+            // `--export-music-loops [outPath]`: analyse every looping music track and write
+            // web/assets/music-loops.json (per-track loopStart/loopEnd seconds, issue #16).
+            if (string.Equals(args[i], "--export-music-loops", StringComparison.OrdinalIgnoreCase))
+            {
+                AttachConsole(ATTACH_PARENT_PROCESS);
+                string? mlOut = (i + 1 < args.Length && !args[i + 1].StartsWith("--")) ? args[i + 1] : null;
+                Shutdown(PunchExporter.ExportMusicLoops(mlOut));
+                return;
+            }
+
             // `--export-sfx-rel "<name>" "<refName>" [outPath]`: render an SFX scaled
             // relative to a reference SFX (preserves the ROM's PSG loudness balance).
             if (string.Equals(args[i], "--export-sfx-rel", StringComparison.OrdinalIgnoreCase) && i + 2 < args.Length)

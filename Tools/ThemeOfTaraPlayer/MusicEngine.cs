@@ -24,6 +24,28 @@ public class MusicEngine
 
     // Debug tracking
     private int _frameCount;
+    // Loop-point instrumentation (issue #16): the frame index of each channel's GOTO (0xFE 0xFE)
+    // executions. The melody channel's first two GOTOs bracket one loop body, so the WAV can be
+    // looped from the body start (intro plays once) instead of from the file start.
+    public readonly List<int>[] GotoFrames = new List<int>[3] { new(), new(), new() };
+    public int FrameCount => _frameCount;
+    // A compact key of the whole driver's command-stream state (issue #16 loop detection): two
+    // frames with the same key are the same musical position. Intro positions are visited once, so
+    // the first key that REPEATS marks the body loop (its first sighting = loopStart, the repeat =
+    // loopEnd). Includes per-channel pointer/note-counter/loop-count/return/instrument state.
+    public string StateKey()
+    {
+        var sb = new System.Text.StringBuilder(96);
+        for (int i = 0; i < 3; i++)
+        {
+            var c = _channels[i];
+            sb.Append(c.Id).Append(':').Append(c.Pointer).Append(':').Append(c.NoteCounter)
+              .Append(':').Append(c.LoopCount).Append(':').Append(c.ReturnAddress)
+              .Append(':').Append(c.NoteMode ? 1 : 0).Append(':').Append(c.Instrument)
+              .Append(':').Append(c.InstrumentPointer).Append(':').Append(c.InstrumentCount).Append('|');
+        }
+        return sb.ToString();
+    }
     private readonly int[] _lastNote = new int[3];
     private readonly byte?[] _lastCommand = new byte?[3];
     private readonly List<string> _debugLog = new();
@@ -237,6 +259,7 @@ public class MusicEngine
                     // GOTO (infinite loop)
                     if (ptr + 3 >= _musicData.Length) { channel.Id = 0; return; }
                     int address = _musicData[ptr + 2] | (_musicData[ptr + 3] << 8);
+                    if (channelIndex >= 0 && channelIndex < 3) GotoFrames[channelIndex].Add(_frameCount);
                     channel.Pointer = address;
                     continue;
                 }
@@ -663,6 +686,7 @@ public class MusicEngine
                 {
                     if (ptr + 3 >= _musicData.Length) { channel.Id = 0; return; }
                     int address = _musicData[ptr + 2] | (_musicData[ptr + 3] << 8);
+                    if (channelIndex >= 0 && channelIndex < 3) GotoFrames[channelIndex].Add(_frameCount);
                     channel.Pointer = address;
                     continue;
                 }

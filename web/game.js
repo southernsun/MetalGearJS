@@ -229,6 +229,7 @@ let elevatorImg = null, elevatorMeta = null;   // the composed SprElevator cabin
 // ---- Laser beams + cameras (laserconfig.asm / camera.asm / lasershot.asm) -------------------
 let lasersData = null;        // lasers.json: room -> beams [{on,y,x,len,axis}] + seq (room 72)
 let camerasData = null;       // cameras.json: room -> [{y,x,dir,laser,path}]
+let musicLoops = null;        // music-loops.json: trackKey -> {start,end} seconds (issue #16)
 let cameraImg = null;         // camera.png: 4 facings x 2 rows (normal blue / flash red)
 let lasers = [];              // the active room's beams
 let laserRoomTimer = 0;       // LaserRoomTimer (room 72 cycle wait, 0xC0)
@@ -348,6 +349,7 @@ async function loadAssets() {
   elevatorsData = await loadJSON('assets/elevatorrooms.json').catch(() => null);
   lasersData = await loadJSON('assets/lasers.json').catch(() => null);    // LasersRoom24/25/72
   camerasData = await loadJSON('assets/cameras.json').catch(() => null);  // RoomsWithCamera + paths
+  musicLoops = await loadJSON('assets/music-loops.json').catch(() => null);  // per-track loop points
   cameraImg = await loadImage('assets/camera.png').catch(() => null);     // SprCamera 4 dirs x 2 colours
   [shotsSheet, shotsMeta] = await Promise.all([
     loadImage('assets/shots.png').catch(() => null),                      // weapon projectiles/explosions
@@ -783,6 +785,11 @@ let textReturnState = 'play';
 // mode = SkipTextMode: 0 keys page/skip (default); 2 = SetTextUnskippable (:7798) — keys are
 // ignored entirely and each page auto-advances on the wait timer (the capture scene texts).
 function setText(id, mode) {
+  // While Snake is dead the ROM's GAME_MODE_DEAD owns the dispatch (DeadLogic) — no text box may
+  // open over it. Letting setText flip gameState to 'text' here would strand the dead countdown
+  // (update() routes to updateTextBox and never reaches the DeadLogic restart) — a softlock that
+  // can't be escaped (issue #13). Defensive: never open text while dead.
+  if (gameState === 'dead') return;
   const t = textsData ? textsData[id] : null;
   if (!t) { console.warn('No text', id); return; }
   textReturnState = gameState;
@@ -1240,10 +1247,17 @@ function drawGasClouds() {
 let gasSheet = null;
 
 // ---- Rolling barrels (RollingBarrelLogic, logic/actors/rollingbarrels.asm) ----------------
-// Rooms 141/153/191/205: a barrel rolls horizontally, accelerating ±8/256 px per iteration,
-// bouncing between X 56 and 200 (SFX 0x1D), starting AWAY from the player's side
-// (InitRollingBarrel: PlayerX < 0x80 -> right, else left). Touch = ALL LIFE
-// (ActorTouchDamage[ID_ROLLING_BARREL-1] = 0xFF). 2-frame animation every 4 iterations.
+// Rooms 141/153/191/205: ONE barrel actor sits at the top-centre (x 128, y 8) and rolls
+// horizontally, accelerating ±8/256 px per iteration, bouncing between X 56 and 200 (SFX 0x1D),
+// starting AWAY from the player's side (InitRollingBarrel: PlayerX < 0x80 -> right, else left).
+// It is NOT a single barrel: the actor's sprite-attribute list RollBarrels1/2 draws a tall
+// 16-wide COLUMN of ~9 stacked barrel segments (D0/D4 cap + D8/DC ×7 + E0/E4 cap) that spans
+// almost the whole room height — a rolling wall you dodge through the bottom corridor. Touching
+// ANY of it = ALL LIFE (ActorTouchDamage[ID_ROLLING_BARREL-1] = 0xFF). 2 roll frames every 4
+// iterations. (Was a single, badly-drawn 16x16 barrel — issue #20.)
+const BARREL_W = 16;                                  // column width (the ROM sprite column is 16 wide)
+const BARREL_SEGS = 9, BARREL_SEG_H = 16;            // RollBarrels1: 9 stacked 16px segments
+const BARREL_H = BARREL_SEGS * BARREL_SEG_H;         // 144px — most of the 192px room height
 let barrels = [];
 function buildBarrels(n) {
   const a = actorsData && actorsData[n];
@@ -1259,17 +1273,36 @@ function barrelTick() {
     else if (b.x <= 56) { b.x = 57; b.vx = 0.5; playBuf(assets.barrelHitBuf); }
     b.vx += b.vx < 0 ? -8 / 256 : 8 / 256;         // RB_IncrementSpeed
     b.x += b.vx;
-    // The crush (touch shape 8 box, damage 0xFF = all life; the normal damage delay applies).
-    if (Math.abs(snake.y - b.y) < 8 && Math.abs(snake.x - b.x) < 12 && snake.invulnTimer === 0)
+    // The crush: touching ANY part of the rolling column is fatal (damage 0xFF = all life; the
+    // normal damage delay applies). The column spans [b.y, b.y + BARREL_H] at the rolling X.
+    if (Math.abs(snake.x - b.x) < 12 && snake.y > b.y - 8 && snake.y < b.y + BARREL_H &&
+        snake.invulnTimer === 0)
       damage(0xFF);
   }
 }
 function drawBarrels() {
-  if (!barrelSheet) return;
-  for (const b of barrels) {
-    const f = (b.anim & 4) ? 1 : 0;                // 2 frames every 4 iterations
-    ctx.drawImage(barrelSheet, f * 16, 0, 16, 16, Math.round(b.x - 8), Math.round(b.y - 8), 16, 16);
-  }
+  for (const b of barrels) drawBarrelColumn(Math.round(b.x), Math.round(b.y), b.anim);
+}
+// One rolling cylinder: a 16-wide column of BARREL_SEGS stacked barrel segments. Round shading
+// across the width + horizontal joint rings + vertical staves that slide between the 2 roll frames
+// so it reads as rotating as it crosses the room.
+function drawBarrelColumn(cx, y0, anim) {
+  const x0 = cx - (BARREL_W >> 1), w = BARREL_W, h = BARREL_H;
+  const grad = ctx.createLinearGradient(x0, 0, x0 + w, 0);   // dark edges -> light centre (round)
+  grad.addColorStop(0, '#4a2f15'); grad.addColorStop(0.35, '#a8702f');
+  grad.addColorStop(0.5, '#e0ad5c'); grad.addColorStop(0.65, '#a8702f');
+  grad.addColorStop(1, '#4a2f15');
+  ctx.fillStyle = grad;
+  ctx.fillRect(x0, y0, w, h);
+  ctx.fillStyle = '#2e1d0c';                                 // segment joint rings (stacked barrels)
+  for (let s = 0; s <= BARREL_SEGS; s++) ctx.fillRect(x0, y0 + Math.min(s * BARREL_SEG_H, h - 1), w, 1);
+  const f = (Math.floor(anim / 4) & 1);                      // 2 roll frames every 4 iterations
+  ctx.fillStyle = 'rgba(46,29,12,0.85)';                     // dark staves slide sideways = rolling
+  for (const sx of (f ? [3, 8, 13] : [1, 6, 11])) ctx.fillRect(x0 + sx, y0, 1, h);
+  ctx.fillStyle = 'rgba(255,235,190,0.45)';                  // highlight staves (opposite phase)
+  for (const sx of (f ? [5, 10, 15] : [3, 8, 13])) ctx.fillRect(x0 + sx, y0, 1, h);
+  ctx.strokeStyle = '#241606'; ctx.lineWidth = 1;
+  ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
 }
 let barrelSheet = null;
 
@@ -1284,13 +1317,18 @@ const ELECTRIC_TILES = { 16: [0x60, 0x61], 37: [0x60, 0x61], 110: [0x60, 0x61],
                          40: [0x45, 0x46], 116: [0x40, 0x41] };
 let powerSwitch = null;        // { x, y, life, jetpack } — the room's destructible switch
 let powerSwitchOn = false;
+let powerFadeBright = 1, powerFadeDelta = 1;   // PowerSwitchLogic palette fade: BRIGHT 1..7 (white at 7)
+// weapondamage.asm row for ID_POWER_SWITCH (index 0x2C-1=43): every weapon is 0xFF (no damage)
+// EXCEPT the remote-control MISSILE (=5). With LIFE 2, only the missile (weapon id 7) can blow the
+// fuse — the whole point of the electric-floor puzzle. (Was destroyable by any weapon — issue #26.)
+const POWER_SWITCH_DMG = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 5 };
 function buildPowerSwitch(n) {
   const a = actorsData && actorsData[n];
   const p = a && a.powerswitch;
   // A JETPACK switch (room 40) does NOT arm the floor at entry — the jetpack guard's
   // descend-and-flip event creates the real power switch mid-scene (JetpackSwitchLogic2).
   if (p && p.jetpack) { powerSwitch = null; powerSwitchOn = false; return; }
-  powerSwitch = p ? { x: p.x, y: p.y, life: 2,
+  powerSwitch = p ? { x: p.x, y: p.y, life: 2, dmgTable: POWER_SWITCH_DMG,
                       shotShape: { offY: 0, distY: 8, offX: 0, distX: 8 } } : null;
   powerSwitchOn = !!p;                             // InitPowerSwitch: on while the switch lives
 }
@@ -1310,26 +1348,38 @@ function chkElectricFloor() {
   }
 }
 function powerSwitchTick() {
-  if (!powerSwitch) return;
-  if (powerSwitch.life <= 0) {                     // shot dead: the floor dies with it
+  if (powerSwitch && powerSwitch.life <= 0) {      // shot dead: the floor dies with it
     powerSwitch = null;
     powerSwitchOn = false;
   }
+  // PowerSwitchLogic (powerswitch.asm:24): every 4 iterations BRIGHT += BRIGHT_DELTA, oscillating
+  // 1<->7 (ChkRevertFade). The tile colour is built R=G=B=BRIGHT, so it ramps grey -> pure WHITE
+  // at 7. 4 iterations ~= 8 of our 60Hz ticks. (Was a fixed yellow sine pulse — issue #24.)
+  if (powerSwitchOn && (tickCounter & 7) === 0) {
+    powerFadeBright += powerFadeDelta;
+    if (powerFadeBright >= 7) { powerFadeBright = 7; powerFadeDelta = -1; }
+    else if (powerFadeBright <= 1) { powerFadeBright = 1; powerFadeDelta = 1; }
+  }
 }
 function drawPowerSwitchFloor() {
-  // The ROM pulses the electric tiles' palette slot (PowerSwitchLogic fade). A translucent
-  // pulse over the live tiles stands in for the palette animation.
+  // The ROM swaps the electric tiles' palette slot to a pulsing grey that peaks at white
+  // (PowerSwitchLogic). We can't swap a palette index over the room PNG, so 'lighten'-blend the
+  // live tiles toward rgb(BRIGHT) — at peak BRIGHT=7 they go white; at the dim end they're left
+  // alone. (Deliberate divergence: tint vs palette swap — matches the visible grey->white pulse.)
   if (!powerSwitchOn) return;
   const pair = ELECTRIC_TILES[currentRoom];
   const c = assets.collision;
   if (!pair || !c || !c.tiles) return;
-  const a = 0.15 + 0.15 * Math.abs(Math.sin(tickCounter / 20));
-  ctx.fillStyle = `rgba(255,255,160,${a.toFixed(2)})`;
+  const v = Math.round((powerFadeBright / 7) * 255);   // BRIGHT 1..7 -> 0..255 grey
+  const prevOp = ctx.globalCompositeOperation;
+  ctx.globalCompositeOperation = 'lighten';
+  ctx.fillStyle = `rgb(${v},${v},${v})`;
   for (let ty = 0; ty < c.height; ty++)
     for (let tx = 0; tx < c.width; tx++) {
       const t = c.tiles[ty * c.width + tx];
       if (t === pair[0] || t === pair[1]) ctx.fillRect(tx * 8, ty * 8, 8, 8);
     }
+  ctx.globalCompositeOperation = prevOp;
 }
 
 // ---- The roof: bridges, the air flow, the parachute, the jetpack event --------------------
@@ -1478,7 +1528,7 @@ function jetpackTick() {
         j.y += 2;
         if (j.y >= 0x86) {
           playBuf(assets.clickBuf);                // SFX 0x15
-          powerSwitch = { x: 0x44, y: 0x70, life: 2,
+          powerSwitch = { x: 0x44, y: 0x70, life: 2, dmgTable: POWER_SWITCH_DMG,
                           shotShape: { offY: 0, distY: 8, offX: 0, distX: 8 } };
           powerSwitchOn = true;                    // the floor goes LIVE
           j.mode = 'takeoff'; j.wait = 0x20;
@@ -3429,11 +3479,16 @@ function canOpenDoor(d) {
   // can't go back the way he came. Keyed on the door ID exactly like the ROM (cp 62h).
   if (destructionOn && d.id === 0x62) return false;
   const lock = d.lock || 0;
-  if (lock === 0) return true;                                   // plain door
-  if (lock === 1)                                                // ChkElevatorDoor
-    return d.type === 5 ? snake.dir === 'up' : snake.dir === 'right';
-  if (lock >= 2 && lock <= 9)                                    // keycard ChkCard1..8
-    return selectedItem === cardItemForLock(lock) && d.type === DIR_TO_PD[snake.dir];
+  // Each openable branch of the ROM's ChkOpenDoor ends in `jp ChkTouchDoor` (opendoor.asm:74/134/156):
+  // the door opens — and its open SFX (InitOpenDoor) plays — only once Snake is inside the door's
+  // OPEN AREA, not merely touching its (wider/offset) drawn footprint. Without this gate the SFX
+  // fired a few px early, while Snake was still approaching (issue #17). The open area extends to
+  // where Snake parks against the door footprint, so it's always reachable.
+  if (lock === 0) return touchDoor(d);                           // plain door -> ChkTouchDoor
+  if (lock === 1)                                                // ChkElevatorDoor -> ChkTouchDoor
+    return (d.type === 5 ? snake.dir === 'up' : snake.dir === 'right') && touchDoor(d);
+  if (lock >= 2 && lock <= 9)                                    // keycard ChkCard1..8 -> ChkTouchDoor
+    return selectedItem === cardItemForLock(lock) && d.type === DIR_TO_PD[snake.dir] && touchDoor(d);
   if (lock === 12) {                          // ChkDesertDoorBuild2 (opendoor.asm:213-236)
     if (currentRoom === 73) return snake.dir === 'down';         // from inside: walk south
     if (doorBuild2Open) { doorBuild2Open = false; return true; } // the guards opened it
@@ -4085,7 +4140,8 @@ function cameraTick() {
 }
 
 // The shared patrol step (GetPathPoint/SetDirToPoint/ChkReachPoint): 1px toward the current
-// path point; on arrival wait a pseudo-random 0-255 iterations (the ROM reads the R register).
+// path point; on arrival wait a pseudo-random 0-127 iterations (SetCamRndWait halves the R
+// register for cameras: ld a,r / srl a / inc a if zero).
 function camPatrol(c) {
   if (!c.moving) {
     if (--c.wait > 0) return;
@@ -4100,7 +4156,7 @@ function camPatrol(c) {
     // stop — ChkReachPoint -> UpdateActorPath just turns them around).
     if (c.laser) { c.pt = (c.pt + 1) % c.path.length; return; }
     c.moving = false;
-    c.wait = (Math.random() * 256) | 0;               // ld a,r — the ROM's refresh register
+    c.wait = ((Math.random() * 128) | 0) || 1;        // SetCamRndWait: (ld a,r / srl a) = R>>1, min 1 (inc a if zero)
   }
 }
 
@@ -4699,7 +4755,14 @@ function chkAlarmEnd() {
     return;
   }
   if (currentRoom !== roomAlert) { stopAlarm(); return; }      // left the trigger room (ChkAlarmEnd2)
-  if (guards.length === 0) { stopAlarm(); return; }            // alert room cleared of its guards
+  // ChkAlarmEnd2 ends the alarm when CountEnemyType of the room's RespawnInfo id reaches 0 — i.e.
+  // when no reinforcement-type enemies remain, NOT when every actor is dead. A room with no respawn
+  // entry has no respawn type, so fall back to "all guards cleared". (Was: any guard alive kept a
+  // red-alert room's alarm up forever, since reinforcements re-spawned faster than guards.length
+  // could reach 0 — issue #22.)
+  const info = respawnData && respawnData[roomAlert];
+  const remaining = info ? guards.filter((g) => g.respawnKill).length : guards.length;
+  if (remaining === 0) { stopAlarm(); return; }                // alert room cleared of its alert enemies
 }
 
 // RoomsNoAlert (Banks0123.asm:1756): rooms where the transmitter doesn't re-raise the alert.
@@ -4749,6 +4812,11 @@ function makeGuard(g) {
     awakeTimer: SLEEPY_AWAKE_TICKS, sleepTimer: SLEEPY_SLEEP_TICKS, zzzFrame: 0, zzzTimer: 0,
     alertSpawn: !!g.alert,                     // ID_GUARD_ALERT/REDALERT: born chasing
     redalert: !!g.redalert,                    // ID_GUARD_REDALERT: keeps its distance + double-shoots
+    // DecRespawnGuards (Banks0123.asm:13214) spends a reinforcement from the kill budget ONLY when
+    // the killed actor is a reinforcement type — ID_GUARD_ALERT/REDALERT, ID_SHOOTER, ID_JETPACK —
+    // NOT a plain patrol guard. Tag those (+ respawnTick's reinforcements) so the budget tracks the
+    // ROM and the alarm becomes clearable (issue #22).
+    respawnKill: !!g.alert || !!g.shooter || !!g.reinforcement,
     silencer: !!g.silencer,                    // the room-150 suppressor counter
     // Sentinel (SentinelLogic): a STATIONARY guard cycling its look direction through a
     // per-actor list every SENTINEL_WAIT iterations; the alarm transforms it into a
@@ -4789,9 +4857,16 @@ function guardDefsFor(n) {
     for (const r of actorsData[n].guards) {
       const path = r.path ? r.path.map(([y, x]) => [x, y]) : null;   // ROM points are (Y, X)
       let dir = 'left';
-      if (path && path.length > 1) {
-        const dx = path[1][0] - path[0][0], dy = path[1][1] - path[0][1];
-        dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+      if (path && path.length > 0) {
+        // GetPathPoint -> SetDirToPoint (Banks0123.asm:6956): the guard's INITIAL facing is set
+        // from its spawn position toward path point 0 (the first destination) — NOT from p0->p1.
+        // (A guard facing the wrong way on entry caused instant false alerts — issue #18.)
+        let dx = path[0][0] - r.x, dy = path[0][1] - r.y;
+        if (dx === 0 && dy === 0 && path.length > 1) {                // spawn == p0: use the next leg
+          dx = path[1][0] - path[0][0]; dy = path[1][1] - path[0][1];
+        }
+        if (dx !== 0 || dy !== 0)
+          dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
       }
       defs.push({
         x: r.x, y: r.y, dir,
@@ -4843,7 +4918,8 @@ function respawnTick() {
   // guard / jetpack, 4 otherwise (the budget that ends the alarm is NumRespawnGuards, on kills).
   if (guards.length >= (redAlertFlag ? 3 : 4)) return;
   const [x, y] = info.locs[tickCounter & 2 ? 1 : 0];
-  const g = makeGuard({ x, y, dir: 'down', speed: SPEED, path: [[x, y]], redalert: redAlertFlag });
+  const g = makeGuard({ x, y, dir: 'down', speed: SPEED, path: [[x, y]], redalert: redAlertFlag,
+                        reinforcement: true });   // ID_GUARD_ALERT/REDALERT: spends the kill budget
   guards.push(g);
   enterAlert(g);                                   // reinforcements arrive chasing (red = stand-off)
   guard = guards[0] || null;
@@ -5280,12 +5356,19 @@ function guardWaitChkAlert(g) {
 // One alert tick: run the current status, then apply movement/animation (the generic actor
 // mover moves by the fast speed while Moving=1, as the ROM does outside the status routine).
 function guardAlertLogic(g) {
-  chkGuardWater(g);                          // ChkGuardWater: turn away from door/lorry/chasm exits
-  if (g.status === 'waitshot') guardWaitShot(g);
-  else if (g.status === 'avoid') guardAvoidObstacle(g);
-  else if (g.status === 'walkaway') guardWalkAwayShot(g);
-  else if (g.status === 'waitalert') guardWaitChkAlert(g);
-  else guardWalk(g);
+  // The ROM's GuardAlertLogic runs once per game ITERATION (~30Hz), and its shot/wait/walk counters
+  // (0x0F..0x16, 0x14, ...) are iteration counts. updateGuard() runs every 60Hz frame, so gate the
+  // DECISION/SHOOT state machine to the iteration boundary — otherwise the counters tick twice as
+  // fast and guards re-aim and fire ~2x too quick (issue #21). MOVEMENT stays at 60Hz below so chase
+  // speed still equals Snake (GUARD_CHASE_SPEED is the per-frame step, like the player's).
+  if ((tickCounter & 1) === 0) {
+    chkGuardWater(g);                        // ChkGuardWater: turn away from door/lorry/chasm exits
+    if (g.status === 'waitshot') guardWaitShot(g);
+    else if (g.status === 'avoid') guardAvoidObstacle(g);
+    else if (g.status === 'walkaway') guardWalkAwayShot(g);
+    else if (g.status === 'waitalert') guardWaitChkAlert(g);
+    else guardWalk(g);
+  }
 
   if (g.moving && guardCanGo(g, g.dir)) {
     g.x += DELTA[g.dir].dx * GUARD_CHASE_SPEED;
@@ -5405,7 +5488,7 @@ function startBossMusic() {
   if (!audioCtx || !assets.mercenaryBuf || bossMusicSrc) return;
   bossMusicSrc = audioCtx.createBufferSource();
   bossMusicSrc.buffer = assets.mercenaryBuf;
-  bossMusicSrc.loop = true;
+  applyMusicLoop(bossMusicSrc, assets.mercenaryBuf);   // intro once, then loop the body — issue #16
   bossMusicSrc.connect(audioOut());
   bossMusicSrc.start();
 }
@@ -5596,7 +5679,7 @@ function switchGuardLogic(g) {
       if (g.x < 0x25) {
         g.x = 0x25; g.swStatus = 3; g.swWait = 0x0A; g.dir = 'up';
         playBuf(assets.clickBuf);                        // SFX 0x15
-        powerSwitch = { x: 0x24, y: 0x70, life: 2, shotShape: { offY: 0, distY: 8, offX: 0, distX: 8 } };
+        powerSwitch = { x: 0x24, y: 0x70, life: 2, dmgTable: POWER_SWITCH_DMG, shotShape: { offY: 0, distY: 8, offX: 0, distX: 8 } };
         powerSwitchOn = true;                            // AddEnemy ID_POWER_SWITCH: the floor goes LIVE
       }
       return;
@@ -5786,7 +5869,9 @@ function shooterLogic(g) {
 
 function killGuard(g = guard) {
   playBuf(assets.guardDeadBuf);
-  if (numRespawnGuards > 0) numRespawnGuards--;     // DecRespawnGuards: spend a reinforcement from the budget
+  // DecRespawnGuards spends from the budget ONLY for reinforcement-type kills (not a plain patrol
+  // guard punched/shot dead) — see makeGuard's respawnKill. (Was: EVERY kill spent — issue #22.)
+  if (g.respawnKill && numRespawnGuards > 0) numRespawnGuards--;
   const i = guards.indexOf(g);
   if (i >= 0) guards.splice(i, 1);
   guard = guards[0] || null;
@@ -5829,7 +5914,7 @@ function playAlert() {
   if (buf) {
     alertSource = audioCtx.createBufferSource();
     alertSource.buffer = buf;
-    alertSource.loop = true;
+    applyMusicLoop(alertSource, buf);   // intro once, then loop the body — issue #16
     alertSource.connect(audioOut());
     alertSource.start();
     return;
@@ -5882,6 +5967,32 @@ const ROOMS_MUSIC = [
 // not trigger the alarm (and binoculars are disabled). Used by chkAlertTrigger alongside RoomShotSecure.
 const roomIsolated = (n) => ((ROOMS_MUSIC[n] || 0) & 7) === 1;
 let areaMusicSrc = null, areaMusicBuf = null;
+// The ROM plays each theme's one-time intro once, then loops an internal body marker — it never
+// replays the intro (issue #16). Web Audio's whole-buffer loop replayed the intro every cycle ("the
+// song restarts"). music-loops.json gives the body [start,end] per track; loop just that span so the
+// intro plays once. Tracks with no entry fall back to looping the whole buffer (unchanged).
+const MUSIC_LOOP_KEYS = new Map();   // buffer -> music-loops.json key, populated lazily once assets load
+function musicLoopKeyFor(buf) {
+  if (!MUSIC_LOOP_KEYS.size) {
+    MUSIC_LOOP_KEYS.set(assets.taraBuf, 'tara');
+    MUSIC_LOOP_KEYS.set(assets.sneakingBuf, 'sneaking');
+    MUSIC_LOOP_KEYS.set(assets.tx55Buf, 'tx55');
+    MUSIC_LOOP_KEYS.set(assets.escapeBuf, 'escape');
+    MUSIC_LOOP_KEYS.set(assets.mercenaryBuf, 'mercenary');
+    MUSIC_LOOP_KEYS.set(assets.foxhunterBuf, 'foxhunter');
+    MUSIC_LOOP_KEYS.set(assets.alertBuf, 'alert');
+    MUSIC_LOOP_KEYS.set(assets.redAlertBuf, 'red-alert');
+  }
+  return MUSIC_LOOP_KEYS.get(buf) || null;
+}
+function applyMusicLoop(src, buf) {
+  src.loop = true;
+  const L = musicLoops && musicLoops[musicLoopKeyFor(buf)];
+  if (L && L.end > L.start && L.end <= src.buffer.duration + 0.05) {
+    src.loopStart = L.start;
+    src.loopEnd = Math.min(L.end, src.buffer.duration);
+  }
+}
 function areaTrackFor(n) {
   if (destructionOn) return assets.escapeBuf || assets.taraBuf;   // the countdown override
   // InitLorryShooter forces the Alert track (0x32) in the lorry-ambush room without raising AlertMode.
@@ -5897,7 +6008,7 @@ function startAreaMusic() {
   if (!areaMusicBuf) return;
   areaMusicSrc = audioCtx.createBufferSource();
   areaMusicSrc.buffer = areaMusicBuf;
-  areaMusicSrc.loop = true;
+  applyMusicLoop(areaMusicSrc, areaMusicBuf);     // loop the body span (intro plays once) — issue #16
   areaMusicSrc.connect(audioOut());
   areaMusicSrc.start();
 }
@@ -6126,14 +6237,14 @@ function drawGuardOne(g) {
 
   ctx.drawImage(sheet, f.x, f.y, fw, fh,
                 Math.round(g.x - a.anchorX), Math.round(g.y - a.anchorY), fw, fh);
-  // Animated "Zzz" sign just above the sleeping guard's head, horizontally centred on him
-  // (ChkSleepyGuard's sign actor; SprZzz frames cycled by AnimZzzSign — frame 0 fills the cell,
-  // 1/2 shrink as it drifts off). The 16x16 cell sits directly atop the head (bottom edge at the
-  // sprite top), centred on the guard's x.
+  // Animated "Zzz" sign above the sleeping guard's head (ChkSleepyGuard's sign actor; SprZzz frames
+  // cycled by AnimZzzSign — frame 0 fills the cell, 1/2 shrink as they drift up-and-right). The ROM
+  // places the sign actor at d=guard.X (same column), e=guard.Y - 0x23 — i.e. its top sits 0x23 (35)
+  // px above the guard sprite top, centred on the guard's x. (Was drawn ~19px too low — issue #15.)
   if (g.asleep && zzzImg && zzzMeta) {
     const zf = ZZZ_FRAMES[g.zzzFrame] % zzzMeta.frames, zw = zzzMeta.frameWidth, zh = zzzMeta.frameHeight;
     ctx.drawImage(zzzImg, zf * zw, 0, zw, zh,
-                  Math.round(g.x) - (zw >> 1), Math.round(g.y) - a.anchorY - zh, zw, zh);
+                  Math.round(g.x) - (zw >> 1), Math.round(g.y) - a.anchorY - 0x23, zw, zh);
   }
   if (g.state === 'alert' && g.alertIconTimer > 0 && gameState !== 'dead') drawAlertIcon(g);
 }
@@ -6426,10 +6537,14 @@ function updatePlayerShots() {
       case ROCKET_LAUNCHER:
       case MISSILE: {                                  // RocketMove / ControlMissile
         b.x += b.vx; b.y += b.vy; b.yAlt += b.vy;
+        // ChkEneHitByShot is an INDEPENDENT pass from the wall-collision move, so a missile steered
+        // into a wall-embedded target (the room-37/110 power switch, set in the wall tiles) hits it
+        // BEFORE detonating on the surrounding wall. Check the target first. (The switch was
+        // unreachable — the missile always blew up on the wall around it — issue #26.)
+        const t = shotTarget(b, false);          // kills by contact -> damage + explode
+        if (t) { t.life = Math.max(0, t.life - weaponDamage(t, type)); t.hitBy = type; explodeShot(b, true); break; }
         if (shotHits(b, b.y) && shotHits(b, b.yAlt)) { explodeShot(b, true); break; }
         if (offscreen(b)) { playerShots.splice(i, 1); break; }
-        const t = shotTarget(b, false);          // kills by contact -> damage + explode
-        if (t) { t.life = Math.max(0, t.life - weaponDamage(t, type)); t.hitBy = type; explodeShot(b, true); }
         break;
       }
       case PLASTIC_BOMB: {                             // PBombTimer -> PBombExplode
@@ -6865,7 +6980,7 @@ function playEndingMusic() {                            // SetSoundEntry 0x41 (R
   stopAreaMusic();
   if (!audioCtx || !assets.foxhunterBuf) return;
   areaMusicSrc = audioCtx.createBufferSource();
-  areaMusicSrc.buffer = assets.foxhunterBuf; areaMusicSrc.loop = true;
+  areaMusicSrc.buffer = assets.foxhunterBuf; applyMusicLoop(areaMusicSrc, assets.foxhunterBuf);
   areaMusicSrc.connect(audioOut()); areaMusicSrc.start();
   areaMusicBuf = assets.foxhunterBuf;
 }
@@ -7188,17 +7303,22 @@ function drawBinoculars() {
   drawText('TELESCOPE MODE', 8, 8);                                  // txtTelescope (PrintTextXY)
   if (binoc.mode === 'show' && binoc.lookDir) drawBinocArrow(binoc.lookDir);   // ArrowsChars
 }
-// Centre target reticle — a stand-in for the ROM's LoadSprTarget crosshair sprites.
+// Centre target reticle — the ROM's LoadSprTarget crosshair (SprTarget, BinocularSprAtt): a 32x32
+// WHITE (BinocularSprCol = colour 0x0E) target laid out 2x2 — four L-shaped corner brackets plus a
+// centred cross, no filled centre dot. (Was a green circle — issue #14.)
 function drawBinocReticle(cx, cy) {
   ctx.save();
-  ctx.strokeStyle = '#9ef0a0'; ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(cx + 0.5, cy + 0.5, 10, 0, Math.PI * 2);
-  ctx.moveTo(cx - 16, cy + 0.5); ctx.lineTo(cx - 4, cy + 0.5);
-  ctx.moveTo(cx + 4, cy + 0.5);  ctx.lineTo(cx + 16, cy + 0.5);
-  ctx.moveTo(cx + 0.5, cy - 16); ctx.lineTo(cx + 0.5, cy - 4);
-  ctx.moveTo(cx + 0.5, cy + 4);  ctx.lineTo(cx + 0.5, cy + 16);
-  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  const px = (x, y, w, h) => ctx.fillRect(Math.round(cx) + x, Math.round(cy) + y, w, h);
+  const H = 16, ARM = 8, T = 1;            // 32x32 cell, 8px corner arms, 1px strokes
+  // Four corner brackets (L-shapes pointing inward).
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    px(sx < 0 ? -H : H - ARM, sy < 0 ? -H : H - T, ARM, T);   // horizontal arm along the top/bottom edge
+    px(sx < 0 ? -H : H - T, sy < 0 ? -H : H - ARM, T, ARM);   // vertical arm along the left/right edge
+  }
+  // Centred cross with a small gap at the middle.
+  px(-ARM, 0, ARM - 2, T); px(2, 0, ARM - 2, T);   // horizontal arms
+  px(0, -ARM, T, ARM - 2); px(0, 2, T, ARM - 2);   // vertical arms
   ctx.restore();
 }
 function drawBinocArrow(dir) {

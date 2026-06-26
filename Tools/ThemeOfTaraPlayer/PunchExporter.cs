@@ -130,6 +130,85 @@ public static class PunchExporter
     }
 
     /// <summary>
+    /// Analyse every looping music track and write web/assets/music-loops.json:
+    /// { "<wavBaseName>": { "start": <sec>, "end": <sec> }, ... } (issue #16).
+    /// The browser loops [start,end] (one melody body) so the one-time intro plays once instead of
+    /// the whole file restarting from the top each loop. We DON'T re-render the WAVs — the existing
+    /// ones already contain the intro + several body loops; this just records where the body repeats
+    /// (the melody channel's first two GOTO/0xFE-0xFE frames).
+    /// </summary>
+    public static int ExportMusicLoops(string? outPath)
+    {
+        try
+        {
+            string repoRoot = FindRepoRoot();
+            outPath ??= Path.Combine(repoRoot, "web", "assets", "music-loops.json");
+            // wavBaseName -> catalog track name (must match how each *.wav was rendered)
+            var tracks = new (string file, string name)[]
+            {
+                ("tara", "Theme of Tara (intro)"),
+                ("sneaking", "Sneaking Mission"),
+                ("tx55", "Metal Gear TX-55"),
+                ("escape", "Beyond Big Boss"),
+                ("mercenary", "Mercenary (Boss)"),
+                ("foxhunter", "Return of Fox Hunter"),
+                ("alert", "Alert"),
+                ("red-alert", "Red Alert"),
+            };
+            // WAV durations (seconds) so we never emit a loopEnd past the rendered buffer.
+            var wavSeconds = new Dictionary<string, double>();
+            foreach (var (file, _) in tracks)
+            {
+                var wp = Path.Combine(repoRoot, "web", "assets", file + ".wav");
+                if (File.Exists(wp)) wavSeconds[file] = (new FileInfo(wp).Length - 44) / (double)(SampleRate * 2);
+            }
+            var entries = new List<string>();
+            var diag = new System.Text.StringBuilder();
+            foreach (var (file, name) in tracks)
+            {
+                var song = Array.Find(MusicCatalog.Songs, s => s.Name == name);
+                if (song == null) { diag.AppendLine($"{file}: track \"{name}\" not found"); continue; }
+                var psg = new PsgEmulator(SampleRate);
+                var engine = new MusicEngine(psg);
+                engine.LoadMusic(MusicCatalog.Data, song.Channel1, song.Channel2, song.Channel3);
+                int maxFrames = 240 * FrameRate;   // 4-minute safety cap
+                var seen = new Dictionary<string, int>();
+                int loopStartFrame = -1, loopEndFrame = -1;
+                for (int i = 0; i < maxFrames; i++)
+                {
+                    engine.ProcessFrame();
+                    string k = engine.StateKey();
+                    if (seen.TryGetValue(k, out int prev)) { loopStartFrame = prev; loopEndFrame = i; break; }
+                    seen[k] = i;
+                }
+                double wav = wavSeconds.TryGetValue(file, out double w) ? w : 0;
+                if (loopStartFrame < 0)
+                {
+                    diag.AppendLine($"{file}: no state recurrence within {maxFrames} frames (wav {wav:F1}s) — whole-file loop");
+                    continue;
+                }
+                double start = loopStartFrame / (double)FrameRate;
+                double end = loopEndFrame / (double)FrameRate;
+                double period = end - start;
+                diag.AppendLine($"{file}: loop {start:F3}s..{end:F3}s (period {period:F3}s) wav {wav:F1}s");
+                if (wav > 0 && end > wav + 0.05)
+                {
+                    diag.AppendLine($"  -> loopEnd {end:F3}s exceeds wav {wav:F1}s; SKIP (re-render this track longer to use a loop point)");
+                    continue;
+                }
+                entries.Add($"\"{file}\":{{\"start\":{start.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)},\"end\":{end.ToString("F4", System.Globalization.CultureInfo.InvariantCulture)}}}");
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
+            File.WriteAllText(outPath, "{" + string.Join(",", entries) + "}\n");
+            File.WriteAllText(Path.ChangeExtension(outPath, ".log"), diag.ToString());
+            Console.WriteLine($"Wrote {outPath} ({entries.Count} tracks)");
+            Console.WriteLine(diag.ToString());
+            return 0;
+        }
+        catch (Exception ex) { Console.Error.WriteLine($"Export failed: {ex}"); return 1; }
+    }
+
+    /// <summary>
     /// Render the death tune ("Just Another Dead Soldier", MUSIC 0x44 — played by SetDead)
     /// to dead.wav. The on-death pause is ~128 frames (DeadTimer 0x80 ≈ 2.1s); 4s captures
     /// the full jingle, and the browser plays it once (no loop) on game-over.

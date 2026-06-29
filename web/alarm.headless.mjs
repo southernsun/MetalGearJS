@@ -190,6 +190,39 @@ const test = `
   tickCounter=0; updateGuard();                            // the other guard joins via the alertMode branch
   __check('#110 the second guard joins the alert the next iteration', farG.state==='alert');
 
+  // ==== #110 (regression): a normal sighting in a room that merely HAS a RespawnInfo entry must NOT
+  //      end the alarm the instant it is raised. ChkAlarmEnd2 counts CountEnemyType(RespawnInfo.id) —
+  //      the ALERTED guards (TransformAlertGuard re-IDs a patrolling guard to that type the moment it
+  //      alerts), not only the spawned reinforcements. Counting only reinforcements ended the alarm the
+  //      same tick it was raised in EVERY room with a respawn entry (room 1 has one, id 0x0A); stopAlarm
+  //      then teleported the seer back to its patrol start every frame — the "alerts, runs at me, then
+  //      jumps back to a previous spot" of #110. ====
+  reset(0); assets.collision=C(); currentRoom=0; snake.anim=ANIM_NORMAL; snake.state='idle';
+  respawnData = { '0': { id: 0x0A, locs: [[64,16],[240,144]] } };  // room 0 now HAS a respawn entry (like room 1)
+  snake.x=60; snake.y=100; snake.dir='left';
+  const seer = makeGuard({ x:120, y:100, dir:'left', path:[[40,100],[200,100]] });  // patrols (path[0]=[40,100]) and sees Snake
+  guards=[seer]; guard=guards[0];
+  tickCounter=0; updateGuard();                            // sees Snake -> raiseAlarm + enterAlert(seer)
+  __check('#110 a patrol guard in a respawn-entry room alerts on sighting', seer.state==='alert' && alertMode===true);
+  const seerX=seer.x, seerY=seer.y;                        // its chase position the moment before the alarm check
+  chkAlarmEnd();                                           // the next-frame alarm check must NOT end it
+  __check('#110 the alarm does NOT end the instant a normal sighting raises it (respawn-entry room)', alertMode===true);
+  __check('#110 the alerted seer is NOT snapped back to its patrol start (path[0]=[40,100])',
+    seer.state==='alert' && seer.x===seerX && seer.y===seerY, 'pos='+seer.x+','+seer.y);
+  guards.length=0; guard=null; chkAlarmEnd();              // ends only once the room is cleared of alerted enemies
+  __check('#110 the alarm ends once the respawn-entry room is cleared of alerted enemies', alertMode===false);
+
+  // ==== #110 (regression): stopAlarm reverts EVERY alerted guard to patrol, not just guards[0] ====
+  reset(0); assets.collision=C(); currentRoom=0; respawnData=null;
+  const g0 = makeGuard({ x:120, y:100, dir:'left', path:[[120,100],[40,100]] });
+  const g1 = makeGuard({ x:200, y:60,  dir:'left', path:[[200,60],[120,60]] });
+  guards=[g0, g1]; guard=guards[0];
+  raiseAlarm(0); enterAlert(g0); enterAlert(g1);
+  currentRoom=2; chkAlarmEnd();                            // leaving the trigger room ends the (low) alarm
+  __check('#110 stopAlarm reverts the SECOND alerted guard to patrol too (not only guards[0])',
+    g0.state==='patrol' && g1.state==='patrol', 'g0='+g0.state+' g1='+g1.state);
+  respawnData = null;
+
   // ==== Exact LOS / sight bands (chkdiscover.asm ChkView*) ================================
   reset(0); assets.collision=C(); currentRoom=0; snake.anim=ANIM_NORMAL; snake.state='idle';
   guardsData={'0':{x:120,y:100,dir:'up'}}; buildGuardRaw(0); const lg=guards[0]; lg.touched=false;

@@ -4885,12 +4885,20 @@ function chkAlarmEnd() {
   }
   if (currentRoom !== roomAlert) { stopAlarm(); return; }      // left the trigger room (ChkAlarmEnd2)
   // ChkAlarmEnd2 ends the alarm when CountEnemyType of the room's RespawnInfo id reaches 0 — i.e.
-  // when no reinforcement-type enemies remain, NOT when every actor is dead. A room with no respawn
-  // entry has no respawn type, so fall back to "all guards cleared". (Was: any guard alive kept a
-  // red-alert room's alarm up forever, since reinforcements re-spawned faster than guards.length
-  // could reach 0 — issue #22.)
+  // when no enemy of the room's alert/reinforcement type remains, NOT when every actor is dead.
+  // TransformAlertGuard (Banks0123.asm:6726) re-IDs a patrolling guard to that respawn type the
+  // INSTANT it alerts, so CountEnemyType then includes every alerted guard — not only the spawned
+  // reinforcements. The port's equivalent of "transformed to the alert type" is state 'alert', so
+  // the count is the alerted guards PLUS the reinforcements (respawnKill). A room with no respawn
+  // entry has no respawn type, so fall back to "all guards cleared".
+  //   - Counting ONLY respawnKill ended a normal-sighting alarm the SAME tick it was raised in any
+  //     room that merely HAS a RespawnInfo entry (e.g. room 1, id 0x0A): stopAlarm then teleported
+  //     the guard back to its patrol start every frame — the "alerts, runs at me, then jumps back to
+  //     a previous spot" of #110.
+  //   - Counting ALL guards (guards.length) kept red-alert rooms armed forever — #22.
   const info = respawnData && respawnData[roomAlert];
-  const remaining = info ? guards.filter((g) => g.respawnKill).length : guards.length;
+  const remaining = info ? guards.filter((g) => g.state === 'alert' || g.respawnKill).length
+                         : guards.length;
   if (remaining === 0) { stopAlarm(); return; }                // alert room cleared of its alert enemies
 }
 
@@ -4903,13 +4911,17 @@ function stopAlarm() {
   alertRespawnTimer = 0; numRespawnGuards = 0;                 // disarm the reinforcements + budget
   stopAlert();                                                 // stop the alert music
   startAreaMusic();                                            // the area music returns
-  if (guard && guard.state === 'alert') {                      // revert the guard to its patrol
-    guard.state = 'patrol'; guard.waitTimer = 0; guard.lookPhase = 0; guard.animTimer = 0; guard.walkPhase = 0;
+  // Revert EVERY alerted guard to its patrol — not just the global `guard` (guards[0]). In a room
+  // with 2+ guards, only re-homing guards[0] left the other chasers stuck in the alert state after
+  // the alarm cleared (and the global alias is whichever guard happens to be first, not the seer).
+  for (const g of guards) {
+    if (g.state !== 'alert') continue;
+    g.state = 'patrol'; g.waitTimer = 0; g.lookPhase = 0; g.animTimer = 0; g.walkPhase = 0;
     // Re-home onto the patrol path so it doesn't try to walk back from an off-path chase position
     // (and can't cut through walls getting there).
-    if (guard.path && guard.path.length) {
-      guard.x = guard.path[0][0]; guard.y = guard.path[0][1];
-      guard.target = guard.path.length > 1 ? 1 : 0;
+    if (g.path && g.path.length) {
+      g.x = g.path[0][0]; g.y = g.path[0][1];
+      g.target = g.path.length > 1 ? 1 : 0;
     }
   }
 }

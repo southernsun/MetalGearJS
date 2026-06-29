@@ -104,6 +104,12 @@ const test = `
   __check('downgrade: regular flag cleared, special kept',
           !rescuedRooms.has(5) && rescuedRooms.has(167));
 
+  // #37: DowngradeRank restores RescuedArray[0Dh]=room 193 but DOES reset index 17 = room 202
+  reset(); rescuedRooms.add(193); rescuedRooms.add(202); rescuedRooms.add(189);
+  downgradeRank();
+  __check('#37 downgrade keeps room 193 (idx 13 restored) and resets room 202 (idx 17)',
+          rescuedRooms.has(193) && !rescuedRooms.has(202) && rescuedRooms.has(189));
+
   // --- class floor 0 (flags/counter still reset) ---
   reset(); rescuedCnt=3; rescuedRooms.add(9);
   currentRoom=8; placePrisoner(100,100);
@@ -152,9 +158,9 @@ const test = `
 
   // ==== Passwords (cheat codes typed while paused, ChkPasswords) ====
   reset(); passwordBuffer='XXDS4'; chkPasswords();
-  __check('password DS 4: class +2 (IncClassLv x2)', snake.class===2);
+  __check('password DS 4: class +1 (SetMaxClass c=0 -> IncClassLv x1)', snake.class===1);
   reset(); passwordBuffer='ANTAWAERAI'; chkPasswords();
-  __check('password ANTA WA ERAI: class +1', snake.class===1);
+  __check('password ANTA WA ERAI: class +3 = max (SetMaxClass c=1 -> IncClassLv x3)', snake.class===3);
   reset(); weapons.set(1,5); maxAmmoCheat=false; passwordBuffer='INTRUDER'; chkPasswords();
   __check('password INTRUDER: max ammo (weapons -> 0x999, cheat latched)',
     maxAmmoCheat===true && weapons.get(1)===0x999);

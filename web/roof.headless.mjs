@@ -109,6 +109,10 @@ const test = `
     powerSwitchOn===true && powerSwitch && powerSwitch.x===0x44);
   iter2(jetpackTick, 0x20 + 4);
   __check('the guard takes off into the hover', jetpacks[0] && jetpacks[0].mode==='fly');
+  // #42: the jetpack guard's BODY deals NO contact damage (COLLISION_CFG=2, shots only)
+  snake.life=24; snake.invulnTimer=0; snake.x=jetpacks[0].x; snake.y=jetpacks[0].y;
+  iter2(jetpackTick, 2);
+  __check('jetpack body contact does NOT damage Snake (#42)', snake.life===24, 'life='+snake.life);
   jetpacks[0].life=0; iter2(jetpackTick, 1);
   __check('shot dead, the jetpack leaves', jetpacks.length===0);
 

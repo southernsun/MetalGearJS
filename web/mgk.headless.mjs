@@ -52,6 +52,12 @@ const test = `
   __check('MGK spawns at (0xE0, 0x34) with 20 life', boss && boss.x === 0xE0 && boss.y === 0x34
     && boss.life === 0x14, boss && ('x='+boss.x));
 
+  // #42: MGK body contact = ActorTouchDamage[ID_MACH_GUN_KID] = 4 (InitMachGunKid keeps COLLISION_CFG=3)
+  snake.life = 24; snake.invulnTimer = 0; snake.x = boss.x; snake.y = boss.y;   // stand on the Kid
+  bossTick();
+  __check('MGK body contact damages Snake (4, #42)', snake.life === 20, 'life=' + snake.life);
+  setRoom(20); snake.invulnTimer = 0;             // fresh MGK + clear i-frames for the intro test below
+
   // --- intro: 2 iterations, then text 79 (unskippable) ONCE + the fight starts ---
   snake.x = 0x80; snake.y = 0x98;
   bossTick(); bossTick();

@@ -123,6 +123,15 @@ const test = `
   buildRoomItems(5);                                             // re-enter the room
   __check('gun gone, ration respawned', live().length===1 && live()[0].id===0x1E);
 
+  // #34: the rocket launcher (room 185) is withheld until Jennifer's rocket-promise text (117) sets JeniRocketF
+  reset(); itemsData={'185':[{id:ROCKET_LAUNCHER,y:32,x:64}]}; jeniRocket=false;
+  buildRoomItems(185);
+  __check('rocket launcher withheld before Schneider (JeniRocketF=0)', live().length===0);
+  jeniRocket=true; buildRoomItems(185);
+  __check('rocket launcher appears once JeniRocketF is set',
+    live().length===1 && live()[0].id===ROCKET_LAUNCHER);
+  jeniRocket=false;
+
   // --- punch-kill drops (ChkDropItem 50%: ration/crate at guard-8,-4); shot kills never drop ---
   let drops=0, badDrop=false, sawCrate=false, sawRation=false;
   for (let t=0; t<200 && !(sawCrate && sawRation); t++) {
@@ -199,13 +208,16 @@ const test = `
   __check('text 62 passes the gate (ready for the capture flow)',
           gameState==='text' && textBox && textBox.id===62, 'id='+(textBox&&textBox.id));
 
-  // ChkUsingArmor (touchenemy.asm): the bullet-proof vest (item 1) selected halves incoming damage.
+  // ChkUsingArmor (touchenemy.asm:181-187): the vest (item 1) halves ONLY enemy-bullet damage (#27).
   reset(); snake.maxLife=24; snake.life=24; snake.invulnTimer=0; selectedItem=0;
-  damage(8);
-  __check('no armor: full damage', snake.life===16, 'life='+snake.life);
+  damage(8, ID_GUARD_BULLET);
+  __check('no armor: full bullet damage', snake.life===16, 'life='+snake.life);
   snake.life=24; snake.invulnTimer=0; selectedItem=SELECTED_ARMOR;
+  damage(8, ID_GUARD_BULLET);
+  __check('armor: enemy-bullet damage halved (>>1)', snake.life===20, 'life='+snake.life);
+  snake.life=24; snake.invulnTimer=0;   // armor does NOT cover body contact / explosions / boomerang
   damage(8);
-  __check('armor selected: damage halved (>>1)', snake.life===20, 'life='+snake.life);
+  __check('armor: body-contact damage is NOT halved', snake.life===16, 'life='+snake.life);
 })();
 `;
 

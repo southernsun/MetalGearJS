@@ -48,6 +48,43 @@ const crossesEdge = (dir, x, y) =>
   dir === 'up'   ? y < EXIT_UP_Y   : dir === 'down'  ? y >= EXIT_DOWN_Y : false;
 const DOOR_OPEN_TICKS = 18; // how long a door's open animation runs (~0.3s) before it's passable
 
+// ---- Per-actor attribute tables (issue #48) --------------------------------
+// The ROM keys an actor's HP and contact damage off its actor ID (constants/Enums.asm), via
+// flat tables indexed by (ID-1). The port previously flattened these into shared scalars
+// (GUARD_LIFE/TOUCH_DAMAGE/BULLET_DAMAGE), which silently gave non-guard actors the guard
+// defaults. These are the real ROM tables — read HP/touch-damage through them so per-actor
+// values are data, not code. (Touch-SHAPE and the AlertRespawnTimer seeds are handled at their
+// own sites; the touch-shape table is a deliberate follow-up — see issue #48.)
+const ID_GUARD_SLOW = 0x04, ID_LAND_MINE = 0x07, ID_GUARD_SILENCER = 0x39, ID_PRISONER1 = 0x31;
+const ID_BIG_BOSS = 0x20, ID_MACH_GUN_KID = 0x22, ID_COWARD_DUCK = 0x29;
+const ID_SGUNNER_SHOT = 0x2B, ID_GUARD_BULLET = 0x2F, ID_BULLET_HORIZ = 0x3A, ID_BULLET_VERT = 0x3B;
+const ID_SHOT_M_GUN_KID = 0x3C, ID_BULLET = 0x3D, ID_TANK_BULLET = 0x3E, ID_BOOMERANG = 0x3F;
+
+// idxActorLife (data/actorspriteattr.asm:127) — default LIFE seeded by SetupActor, indexed (ID-1).
+const ACTOR_LIFE = [
+  0xFF,0xFF,0xFF,0x02,0x02,0x05,0xFF,0x1E,0x37,0x02,0x04,0x02,0x04,0x04,0x02,0xFF, // ID 0x01-0x10
+  0x02,0x28,0x02,0x02,0x02,0x02,0xFF,0x02,0x02,0x28,0x02,0x02,0x80,0x02,0x02,0x28, // ID 0x11-0x20
+  0x14,0x14,0xFF,0x1E,0xFF,0x64,0xFF,0xFF,0x14,0xF0,0x14,0x02,0x02,0x02,0x02,0x02, // ID 0x21-0x30
+  0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x04,0x02,0x02,0x02,0x02,0x02,0x02,0x02, // ID 0x31-0x40
+];
+// ActorTouchDamage (data/shapes.asm:36) — damage dealt to Snake on contact, indexed (ID-1).
+// 0xFF here is a crush/instakill (tank, bulldozer, pitfall). All enemy bullets (0x2B/0x2F/0x3A-0x3E)
+// are 8; the boomerang (0x3F) is 0x10.
+const ACTOR_TOUCH_DMG = [
+  0x00,0x00,0x00,0x02,0x02,0x00,0x10,0x00,0xFF,0x02,0x02,0x20,0x02,0x02,0xFF,0xFF, // ID 0x01-0x10
+  0x00,0xFF,0x02,0x02,0x02,0x02,0x20,0x02,0x02,0x08,0x02,0x02,0x00,0x02,0x02,0x08, // ID 0x11-0x20
+  0x04,0x04,0x00,0x04,0x08,0x00,0x00,0x00,0x04,0x00,0x08,0x00,0x00,0x00,0x08,0x02, // ID 0x21-0x30
+  0x00,0x00,0x00,0x00,0x00,0x10,0x00,0x00,0x04,0x08,0x08,0x08,0x08,0x08,0x10,0x00, // ID 0x31-0x40
+  0x10,                                                                            // ID 0x41
+];
+const actorLife = (id) => ACTOR_LIFE[id - 1];
+const actorTouchDmg = (id) => ACTOR_TOUCH_DMG[id - 1];
+// Armor (the bullet-proof vest) halves damage ONLY for these shot IDs — ChkUsingArmor
+// (logic/touchenemy.asm:169-187): ID_SGUNNER_SHOT, ID_GUARD_BULLET, and ID_BULLET_HORIZ..ID_TANK_BULLET.
+// It explicitly does NOT cover body contact, mines, explosions, or the boomerang (0x3F). (Issue #27.)
+const ARMOR_HALVES = new Set([
+  ID_SGUNNER_SHOT, ID_GUARD_BULLET, ID_BULLET_HORIZ, ID_BULLET_VERT, ID_SHOT_M_GUN_KID, ID_BULLET, ID_TANK_BULLET]);
+
 // ---- Guard tunables (ported from chkdiscover.asm / guard.asm) --------------
 const GUARD_WALK_TICKS = 10;  // ticks between guard walk-frame swaps (GuardWalk1<->GuardWalk2, per Anim2FramesActor)
 // ChkViewVertical/Horizontal: Snake is in the sight band when |perp| < HALF (strict). ChkViewVertical
@@ -88,12 +125,13 @@ const ALERT_ICON_TICKS  = 48;         // the "!" is a brief discovery flash (~0.
 const GUARD_MAX_BULLETS = 6;          // ROM caps active guard bullets at 6
 const GUARD_BULLET_SPEED = 2.5;       // px/tick; derived from the 0x90 shot-speed param (exact
                                       //   8.8 fixed-point scaling approximated — tuned for feel)
-const TOUCH_DAMAGE  = 2;              // ActorTouchDamage for the guard body
+const TOUCH_DAMAGE  = actorTouchDmg(ID_GUARD_SLOW);   // ActorTouchDamage[ID_GUARD_SLOW] = 2 (guard body)
 // Guard TOUCH box (ChkTouchEnemy2: ActorsShapeTouch[ID_GUARD-1] = 8 → ImpactAreasInfo row 8,
 // data/shapes.asm: 0, 8, 0, 0Ch). ChkArea (logic/punchenemy.asm): touch iff
 // |guardY+offY − snakeY| < distY AND |guardX+offX − snakeX| < distX, strict <, Y then X.
 const GUARD_TOUCH_SHAPE = { offY: 0, distY: 8, offX: 0, distX: 12 };
-const BULLET_DAMAGE = 2;              // ActorTouchDamage for ID_GUARD_BULLET
+const BULLET_DAMAGE = actorTouchDmg(ID_GUARD_BULLET); // ActorTouchDamage[ID_GUARD_BULLET] = 8 (was a flat
+                                      //   2 — the ROM value is 8; #48 corrects every enemy bullet to 8)
 const INVULN_TICKS  = 0x20;           // DamageDelayTimer: i-frames after any enemy hit (32 @ 60Hz)
 const SNAKE_MAX_LIFE = 0x18;          // InitPlayerVars starting life (24); MaxLife also 24 this slice
 const DEAD_TICKS = 0x80;              // DeadTimer: dead-state countdown before restart (128 @ 60Hz)
@@ -116,7 +154,7 @@ const playerShots = [];               // active player shots: { x, y, vx, vy, ra
 // A shot hits iff |guardY−16−shotY| < 16 AND |guardX−shotX| < 8 (strict <, Y checked first).
 const GUARD_SHAPE = { offY: -16, distY: 16, offX: 0, distX: 8 };  // ImpactAreasInfo shape 0
 const GUARD_BULLET_DAMAGE = 2;  // BulletDamage[ID_GUARD-1] (data/weapondamage.asm:18): handgun does 2
-const GUARD_LIFE = 2;           // idxActorLife[ID_GUARD_SLOW-1] (data/actorspriteattr.asm:127);
+const GUARD_LIFE = actorLife(ID_GUARD_SLOW);   // idxActorLife[ID_GUARD_SLOW] = 2 (data/actorspriteattr.asm);
                                 //   TransformAlertGuard never resets LIFE, so alert keeps the spawn 2
 
 // ---- Collision box, ported from logic/collisions.asm (BoxColliderDat shape 0)
@@ -512,11 +550,17 @@ const PLASTIC_BOMB = 5, ARMOR_ID = 9;                    // Enums.asm (PLASTIC_B
 // (ItemsInTheRoom holds 3 structures). Resets the one-drop-per-room latch (SpawnedItems).
 function buildRoomItems(n) {
   spawnedItemLatch = false;
-  const src = [...(itemsData[String(n)] || [])]
-    .filter((it) => !isItemTaken(it.id));
   roomItems = [null, null, null];
-  for (let i = 0; i < Math.min(3, src.length); i++)
-    roomItems[i] = { id: src[i].id, y: src[i].y, x: src[i].x };
+  let slot = 0;
+  for (const it of (itemsData[String(n)] || [])) {
+    // AddRoomItems2 (addroomitems.asm:44-49): the rocket launcher is withheld until Jennifer's
+    // rocket-promise radio text (117) sets JeniRocketF; reaching it before then STOPS adding the
+    // rest of the list too. (#34)
+    if (it.id === ROCKET_LAUNCHER && !jeniRocket) break;
+    if (isItemTaken(it.id)) continue;            // AddRoomItems5: an already-taken item is skipped
+    if (slot >= 3) break;                        // ItemsInTheRoom holds 3 structures
+    roomItems[slot++] = { id: it.id, y: it.y, x: it.x };
+  }
 }
 
 // ---- Pickup (ChkTakeItems / ChkTakeItem, logic/items.asm) ------------------------------------
@@ -608,8 +652,10 @@ function clampInventory() {
 // faithful analog serialises the same progress to localStorage — a documented medium divergence.
 let passwordBuffer = '';
 const PASSWORDS = [
-  { code: 'DS4',        apply: () => { incClassLv(); incClassLv(); } },                       // class +2
-  { code: 'ANTAWAERAI', apply: () => incClassLv() },                                          // class +1
+  // SetMaxClass djnz cascade (passwords.asm:156-164): DS 4 (c=0) → +1 class; ANTA WA ERAI (c=1)
+  // → IncClassLv ×3 = max class (the header literally reads "ANTA WA ERAI: Max. class level"). (#38)
+  { code: 'DS4',        apply: () => incClassLv() },                                          // class +1
+  { code: 'ANTAWAERAI', apply: () => { incClassLv(); incClassLv(); incClassLv(); } },         // class +3 (max)
   { code: 'INTRUDER',   apply: () => { maxAmmoCheat = true; for (const w of weapons.keys()) weapons.set(w, 0x999); } },
   { code: 'ISOLATION',  apply: () => { maxRationsCheat = true; if (items.has(SELECTED_RATION)) items.set(SELECTED_RATION, 0x999); } },
   { code: 'HIRAKEGOMA', apply: () => { for (let c = 0; c < 8; c++) if (!items.has(SELECTED_CARD1 + c)) items.set(SELECTED_CARD1 + c, 1); openedDoorIds.add(0x0B); } },
@@ -709,10 +755,13 @@ function spawnItem(id, x, y) {
 // :9654 / DowngradeRank :9581) ------------------------------------------------------------
 let rescuedCnt = 0;              // RescuedCnt: rescues toward the next rank (0-4)
 const rescuedRooms = new Set();  // RescuedArray analog, keyed by room number
-// RoomsPrisoner (logic/actors/prisoner.asm:43): the first 6 entries are "special" prisoners
-// (fake Madnar, Madnar, Ellen, Grey Fox, and the two message prisoners) whose rescued flags
-// are NEVER reset by a downgrade; the regular 17 (and our demo rooms) can be re-rescued.
-const SPECIAL_PRISONER_ROOMS = new Set([189, 182, 167, 164, 203, 202]);
+// DowngradeRank (Banks0123.asm:9581-9590): RescuedArray is indexed in REVERSE of RoomsPrisoner
+// (InitPrisoner's `cpir` leaves c = 22 - position). The downgrade zeroes RescuedArray[0..17] but
+// SAVES/RESTORES index 0Dh (=13 → RoomsPrisoner[9] = room 193, Jennifer's brother). So the
+// preserved set is indices 18-22 (rooms 203/164/167/182/189) PLUS index 13 (room 193) — NOT room
+// 202 (index 17, which IS reset). The prisoner.asm:40 "first 6 not restored" comment is imprecise:
+// it's the first FIVE of RoomsPrisoner plus the explicitly-restored 193. (#37)
+const SPECIAL_PRISONER_ROOMS = new Set([189, 182, 167, 164, 203, 193]);
 
 // IncRescued: every 5th rescued prisoner raises the rank.
 function incRescued() {
@@ -878,7 +927,7 @@ function drawTextWindow() {
 // room's blue sprite palette (greyfox.png). (The old DEMO_PRISONERS overlay in cluster rooms
 // 3/5-9 was removed now that the connected world ships the real prisoners.)
 let actorsData = null;        // actors.json: room -> { guards: [...], prisoners: [...] }
-const PRISONER_LIFE = 2;          // idxActorLife[ID_PRISONER1-1] (one handgun bullet kills)
+const PRISONER_LIFE = actorLife(ID_PRISONER1);   // idxActorLife[ID_PRISONER1] = 2 (one handgun bullet kills)
 // Touch shape (ActorsShapeTouch[ID-1] = 0x17 -> ImpactAreasInfo row 0x17, data/shapes.asm:70:
 // 0F8h, 10h, 0, 10h): touch iff |prisonerY - 8 - snakeY| < 16 AND |prisonerX - snakeX| < 16.
 const PRISONER_TOUCH_SHAPE = { offY: -8, distY: 16, offX: 0, distX: 16 };
@@ -1049,7 +1098,7 @@ function drawScorpions() {
 // touchenemy.asm:110-113) and deals ActorTouchDamage[ID_LAND_MINE-1] = 0x10 (TouchPlayer);
 // SFX = the bomb blast 0x1C. Rooms 9 (12), 64 (9), 114 (8), 120 (9).
 const SELECTED_MINE_DETECTOR = 7;            // Enums.asm SELECTED_MINE_DETECTOR (ItemMineDetect)
-const MINE_DAMAGE = 0x10;                     // ActorTouchDamage[ID_LAND_MINE-1] (shapes.asm)
+const MINE_DAMAGE = actorTouchDmg(ID_LAND_MINE);   // ActorTouchDamage[ID_LAND_MINE] = 0x10 (shapes.asm)
 let mines = [];
 function buildMines(n) {
   const a = actorsData && actorsData[n];
@@ -1087,6 +1136,7 @@ function drawMines() {
 // building-2 door opens ("Come in", text 127); without it, the alarm triggers. A warning (text 35)
 // prints once on entry. Dismissed if Snake came from building 2 (room 73) or while the alarm is up.
 const SELECTED_UNIFORM = 0x18;               // Enums.asm SELECTED_UNIFORM
+const SELECTED_COMPASS = 0x0B;               // Enums.asm SELECTED_COMPASS (navigates the desert, room 103)
 let desertSecurity = null, desertGuardTextShown = false;
 function buildDesertSecurity(n) {
   desertSecurity = (n === 69 && previousRoom !== 73) ? { status: 0, timer: 0x10, doorStep: 0 } : null;
@@ -1104,7 +1154,7 @@ function desertSecurityTick() {
     return;
   }
   if (selectedItem !== SELECTED_UNIFORM) {                   // DesertSecurity2: no uniform -> alarm
-    raiseAlarm(currentRoom); desertSecurity = null; return;
+    raiseAlarm(currentRoom, false, 0x1E); desertSecurity = null; return;   // DesertSecurity2: `ld a,1Eh`
   }
   if (ds.doorStep === 0) { ds.doorStep = 1; setText(127, 2); return; }   // DesertSecurity3: "Come in"
   doorBuild2Open = true;                                     // DesertSecurity4: DoorBuild2LockedF
@@ -1165,7 +1215,7 @@ function elevTransform(g) {                                 // TransformAlertGua
 // second flees. Done in one beat (the 0xF-iteration look-at-player delay is collapsed — cosmetic),
 // so the alarm always has a live guard (chkAlarmEnd's empty-room check can't cancel it).
 function elevDetect() {
-  if (!alertMode) raiseAlarm(currentRoom);                 // SetAlertModeRespawn (0x3C)
+  if (!alertMode) raiseAlarm(currentRoom, false, 0x3C);    // GuardElevSetAlert: `ld a,3Ch` (elevatorguardspawner.asm:205)
   let chaser = false;
   for (const g of elevGuards) {
     if (g.status === ELEV_FLEE || g.remove) continue;
@@ -1524,7 +1574,7 @@ function jetpackTick() {
     j.anim = (j.anim + 1) & 0xff;
     switch (j.mode) {
       case 'descend':                              // JetpackSwitchLogic: down to the switch
-        if (!alertMode) { raiseAlarm(currentRoom); alertRespawnTimer = 0x5A; }
+        if (!alertMode) raiseAlarm(currentRoom, false, 0x5A);
         j.y += 2;
         if (j.y >= 0x86) {
           playBuf(assets.clickBuf);                // SFX 0x15
@@ -1538,7 +1588,7 @@ function jetpackTick() {
         j.y -= 1;
         if (--j.wait <= 0) {
           j.mode = 'fly'; j.wait = 0x2D;
-          if (!alertMode) { raiseAlarm(currentRoom); alertRespawnTimer = 0x1E; }
+          if (!alertMode) raiseAlarm(currentRoom, false, 0x1E);
         }
         break;
       case 'fly': {                                // JetPackMove: the hover oscillation
@@ -1553,9 +1603,9 @@ function jetpackTick() {
         break;
       }
     }
-    // Touch (shape 8-ish, damage 2 like a guard).
-    if (Math.abs(snake.y - j.y) < 8 && Math.abs(snake.x - j.x) < 12 && snake.invulnTimer === 0)
-      damage(2);
+    // No body-contact damage: InitJetpack/InitJetpackTakeoff/InitJetpackSwitch all set
+    // COLLISION_CFG=2 (player SHOTS only, bit0 clear), so only the jetpack's bullets hurt
+    // Snake — touching the guard is harmless. (jetpack.asm:20/84/145; issue #42)
   }
 }
 function drawJetpacks() {
@@ -1736,6 +1786,10 @@ function buildDuck(n) {
            vx: 0, anim: 0, life: 0x14, shotShape: GUARD_SHAPE };
   startBossMusic();                                // SetBossMusic
 }
+// Coward Duck body contact: InitCowardDuck leaves COLLISION_CFG=3 (default), so his body deals
+// ActorTouchDamage[ID_COWARD_DUCK]=4 on top of the boomerang. Touch shape 8 = (0,8,0,0x0C). (#42)
+const DUCK_TOUCH_DMG = actorTouchDmg(ID_COWARD_DUCK);
+const DUCK_TOUCH_SHAPE = { offY: 0, distY: 8, offX: 0, distX: 0x0C };
 function duckTick() {
   if ((tickCounter & 1) !== 0 || !duck) return;
   const d = duck;
@@ -1748,6 +1802,9 @@ function duckTick() {
     return;
   }
   d.anim = (d.anim + 1) & 0xff;
+  if (Math.abs(d.y + DUCK_TOUCH_SHAPE.offY - snake.y) < DUCK_TOUCH_SHAPE.distY &&
+      Math.abs(d.x + DUCK_TOUCH_SHAPE.offX - snake.x) < DUCK_TOUCH_SHAPE.distX)
+    damage(DUCK_TOUCH_DMG);                        // ChkTouchEnemy: body contact (no armor)
   switch (d.status) {
     case 0:                                        // the intro speech (text 139, once)
       if (--d.timer > 0) return;
@@ -1922,12 +1979,12 @@ function midBossTick() {
       else if (--b.mgTimer <= 0) { b.mgOn = false; b.mgTimer = 0x1E; b.mgSide = -b.mgSide; }
       else if ((b.anim & 7) === 0) {                        // the machine-gun fan
         b.mgShot = (b.mgShot + 1) & 7;
-        const sp = b.mgShot < 5 ? b.mgShot : 8 - b.mgShot;
-        // TankShotLogic: SpeedY 6/iteration (3/tick), the X fan 0..4 (sp/2 per tick).
-        // The fast fall is what keeps the fan cone narrow — the bottom corners are
-        // outside it (the room's classic safe spots).
+        const sp = b.mgShot < 5 ? b.mgShot : 8 - b.mgShot;   // SpeedXUnsigned: 0,1,2,3,4,3,2,1
+        // TankShotLogic (tankshot.asm:48-50): SpeedX = SpeedXUnsigned − 2 → a SYMMETRIC −2..+2 fan,
+        // IDENTICAL for both guns (the firing side only shifts the spawn X by ±16, NOT the spread).
+        // SpeedY 6/iteration (3/tick); the fast fall keeps the cone narrow (the classic safe spots). (#31)
         bullets.push({ x: b.x + 16 * b.mgSide, y: b.y - 0x0E,
-                       vx: (b.mgSide > 0 ? sp : -sp) / 2, vy: 3, dmg: 8 });
+                       vx: (sp - 2) / 2, vy: 3, dmg: 8, srcId: ID_TANK_BULLET });
         playShot();
       }
       if (--b.moveTime <= 0) { b.moveTime = 0x32 + ((Math.random() * 2) | 0) * 0x68; b.vy = -b.vy; }
@@ -2422,12 +2479,13 @@ function fireAxisBullet(a, dir) {
   const SP = (0x500 / 256) / 2;                                  // 5.0 px/iteration -> 2.5 px/frame
   const drift = ((((Math.random() * 0x80) | 0) - 0x40) / 256) / 2;   // -0x40..+0x3F in 8.8, /2
   let vx, vy;
+  let srcId;
   if (dir === 'left' || dir === 'right') {                       // InitBulletHor: X by bit7 of X
-    vx = (a.x & 0x80) ? -SP : SP; vy = drift;
+    vx = (a.x & 0x80) ? -SP : SP; vy = drift; srcId = ID_BULLET_HORIZ;
   } else {                                                       // InitBulletVert: Y by bit7 of Y
-    vy = (a.y & 0x80) ? -SP : SP; vx = drift;
+    vy = (a.y & 0x80) ? -SP : SP; vx = drift; srcId = ID_BULLET_VERT;
   }
-  bullets.push({ x: a.x, y: a.y - 16, vx, vy, tiles: true });
+  bullets.push({ x: a.x, y: a.y - 16, vx, vy, tiles: true, srcId });
   playShot();
 }
 function buildBigBoss(n) {
@@ -2436,6 +2494,11 @@ function buildBigBoss(n) {
     : null;
   if (bigBoss) startBossMusic();
 }
+// Big Boss body contact: InitBigBoss leaves COLLISION_CFG=3, so his body deals
+// ActorTouchDamage[ID_BIG_BOSS]=8. Touch shape 8 = (0,8,0,0x0C). He flees within ~72px
+// (BBChkPlayerNear), so contact is rare but real. (#42)
+const BIGBOSS_TOUCH_DMG = actorTouchDmg(ID_BIG_BOSS);
+const BIGBOSS_TOUCH_SHAPE = { offY: 0, distY: 8, offX: 0, distX: 0x0C };
 function bigBossTick() {
   if ((tickCounter & 1) !== 0 || !bigBoss) return;       // ROM iteration cadence (~30Hz)
   const b = bigBoss;
@@ -2452,6 +2515,9 @@ function bigBossTick() {
     else if (b.dir === 'up') b.y -= BB_SPEED; else if (b.dir === 'down') b.y += BB_SPEED;
     b.x = Math.max(24, Math.min(200, b.x)); b.y = Math.max(56, Math.min(168, b.y));
   }
+  if (Math.abs(b.y + BIGBOSS_TOUCH_SHAPE.offY - snake.y) < BIGBOSS_TOUCH_SHAPE.distY &&
+      Math.abs(b.x + BIGBOSS_TOUCH_SHAPE.offX - snake.x) < BIGBOSS_TOUCH_SHAPE.distX)
+    damage(BIGBOSS_TOUCH_DMG);                            // ChkTouchEnemy: body contact (no armor)
   switch (b.status) {
     case 0:                                               // BigBossSpeech
       if (--b.wait > 0) return;
@@ -3416,6 +3482,10 @@ function isDeepWater(tx, ty) {
 
 // Hard cut to the neighbor room and place Snake at the matching (mirrored) entry edge.
 function transition(dir, neighborRoom) {
+  // SetNextRoom (nextroom.asm:34-47): leaving the desert (room 103) WITHOUT the compass selected
+  // and NOT heading south (DIR_DOWN) sends Snake straight back to 103 — "get lost in the desert".
+  // (Room 103's left/right already self-loop to 103; this gates the up→208 exit to building 2.) (#32)
+  if (currentRoom === 103 && selectedItem !== SELECTED_COMPASS && dir !== 'down') neighborRoom = 103;
   enterDir = DIR_TO_PD[dir] || 0;     // NextRoomDirect — for HideGuards (which guard to remove)
   setRoom(neighborRoom);              // (buildGuard reads enterDir during setRoom)
   enterDir = 0;
@@ -4039,7 +4109,7 @@ function chkTouchLasers() {
       ? Math.abs(snake.x - b.x) < 4 && Math.abs(b.y + 8 + half - snake.y) < half
       : Math.abs(snake.y - b.y) < 4 && Math.abs(b.x + half - snake.x) < half;
     if (!hit) continue;
-    raiseAlarm(currentRoom, true);     // SetAlertModeRespawn (0x5A) -> the RED alert music
+    raiseAlarm(currentRoom, true, 0x5A);   // TouchLaserAlarm: `ld a,5Ah` -> RED alert music + reinforcements
     lasers = [];                       // RemoveLaserBeans: every beam in the room dismissed
     return;
   }
@@ -4119,16 +4189,14 @@ function cameraTick() {
     if (Math.abs(snake.y - c.y) < 8 && Math.abs(snake.x - c.x) < 12) {
       if (snake.invulnTimer === 0) damage(0x10);
       c.status = 1; c.flashCnt = 0x20; c.moving = false;
-      raiseAlarm(currentRoom, true);
-      alertRespawnTimer = 0x28;                            // the surveillance centre calls guards
+      raiseAlarm(currentRoom, true, 0x28);                 // camera: 0x28 — the surveillance centre calls guards
       continue;
     }
     const eye = CAMERA_EYE[c.dir];
     const seer = { x: c.x + eye[1], y: c.y + eye[0], dir: CAMERA_DIRS[c.dir], touched: false };
     if (camSees(seer)) {
       c.status = 1; c.flashCnt = 0x20; c.moving = false;   // stop + colour animation
-      raiseAlarm(currentRoom, true);                       // cameras force the RED alert
-      alertRespawnTimer = 0x28;                            // ChkViewObstacles: reinforcements
+      raiseAlarm(currentRoom, true, 0x28);                 // camera forces RED + 0x28 reinforcements (ChkViewObstacles)
     }
   }
   laserShotsTick();
@@ -4712,15 +4780,18 @@ let roomAlert = -1;           // RoomAlert — the room where the alarm was trig
 // current room's guard into the chase. (Reinforcements — the ROM's NumRespawnGuards spawning NEW
 // guards from room exits — need the multi-actor system and are deferred; red alert here = the red
 // alert sign, not in-place respawns.)
-function raiseAlarm(room, forceRed) {
+function raiseAlarm(room, forceRed, respawnSeed) {
   if (alertMode) return;
   alertMode = true;
   // Cameras and laser beams force the RED alert (SetAlertMode5, logic/setalert.asm:52-64).
   redAlertFlag = !!forceRed || devForceRed || redAlertBit(room);
   roomAlert = room;
   numRespawnGuards = (room === 216) ? 0 : highestCardOwned() + 3;   // SetAlertMode2/3/4 (card-based)
-  alertRespawnTimer = 0;                               // a low alert has no reinforcement timer
-  if (redAlertFlag) alertRespawnTimer = 0x28;         // SetAlertMode5 arms the reinforcements (red/camera)
+  // AlertRespawnTimer seed (SetAlertModeRespawn). Each trigger SOURCE supplies its own ROM seed:
+  // gunfire noise / laser = 0x5A, camera = 0x28, desert = 0x1E, elevator ceremony = 0x3C. A plain
+  // guard SIGHTING passes none and uses GuardSetAlarm6: 0x1E in a red-alert room, else 0 (no
+  // reinforcements). Previously every red alert was flattened to 0x28 and noise to 0 — issue #28.
+  alertRespawnTimer = (respawnSeed != null) ? respawnSeed : (redAlertFlag ? 0x1E : 0);
   playAlert();                                        // SetAlertMode: alert music (0x32)
   if (guard && guard.state !== 'alert') enterAlert(guard);
 }
@@ -4731,7 +4802,7 @@ function chkAlertTrigger() {
   // ChkAlertTrigger (checkweaponalert.asm): no alarm if IsolatedRoom==1 OR the room is in the
   // RoomShotSecure table (or the alarm is already up).
   if (alertMode || roomIsolated(currentRoom) || ROOM_SHOT_SECURE.has(currentRoom)) return;
-  raiseAlarm(currentRoom);
+  raiseAlarm(currentRoom, false, 0x5A);   // ChkAlertTrigger: `ld a,5Ah` -> reinforcements even in a normal room
 }
 
 // ChkAlarmEnd / StopAlert: clear the alarm when the alert room is cleared/left, or on entering an
@@ -4797,7 +4868,12 @@ function makeGuard(g) {
     waitMax: g.wait || 40, waitTimer: 0,
     path: (g.path && g.path.length ? g.path : [[g.x, g.y]]),
     target: 1, state: 'patrol', animTimer: 0, walkPhase: 0, stepping: false,
-    life: GUARD_LIFE,                          // ACTOR.LIFE seeded from idxActorLife (SetupActor)
+    // ACTOR.LIFE / ActorTouchDamage seeded per actor ID from the ROM tables (SetupActor; issue #48).
+    // Most guards are ID_GUARD_SLOW (life 2, touch 2); the room-150 suppressor guard is
+    // ID_GUARD_SILENCER (life 4, touch 4) — issue #33.
+    id: g.id || ID_GUARD_SLOW,
+    life: actorLife(g.id || ID_GUARD_SLOW),
+    touchDmg: actorTouchDmg(g.id || ID_GUARD_SLOW),
     touched: false,                            // TOUCH_INFO bit 7 (set by chkTouchGuard each frame)
     stunnedCnt: 0, punchesCnt: 0, alertIconTimer: 0,
     status: 'walk', counter: 0, moving: false, walkAwayDir: 'left',   // alert AI (guardalert.asm)
@@ -4865,6 +4941,7 @@ function guardDefsFor(n) {
       }
       defs.push({
         x: r.x, y: r.y, dir,
+        id: r.silencer ? ID_GUARD_SILENCER : ID_GUARD_SLOW,   // ROM actor ID -> life/touch (#48/#33)
         // Guard variants: slow/silencer 0.5, medium 0.75, fast/alert 1.0 (per type);
         // ALERT/REDALERT types spawn already chasing; SILENCER guards feed the room-150
         // suppressor drop (DismissActor8); SENTINELS stand still cycling look dirs.
@@ -5422,7 +5499,7 @@ function fireGuardBullet(g, tiles = true) {
   if (bullets.length >= GUARD_MAX_BULLETS) return;
   const ox = g.x, oy = g.y - 16;                         // from the torso
   const v = calcShot(ox, oy, 0x90);
-  bullets.push({ x: ox, y: oy, vx: v.vx / 2, vy: v.vy / 2, tiles });
+  bullets.push({ x: ox, y: oy, vx: v.vx / 2, vy: v.vy / 2, tiles, srcId: tiles ? ID_GUARD_BULLET : ID_BULLET });
   playShot();
 }
 
@@ -5449,7 +5526,7 @@ function updateBullets() {
         }
       }
     }
-    if (hitsSnake(b.x, b.y)) { damage(b.dmg || BULLET_DAMAGE); bullets.splice(i, 1); }
+    if (hitsSnake(b.x, b.y)) { damage(b.dmg || BULLET_DAMAGE, b.srcId); bullets.splice(i, 1); }
   }
 }
 
@@ -5466,6 +5543,10 @@ let bossMusicSrc = null;
 const MGK_LIFE = 0x14;                        // idxActorLife[ID_MACH_GUN_KID-1] = 20
 const MGK_BULLET_DMG = 8;                     // ActorTouchDamage[ID_SHOT_M_GUN_KID-1]
 const MGK_EXPL_SHAPE = { offY: 0, distY: 0x14, offX: 0, distX: 0x10 };  // ActorShapeExpl 0x1B
+// MGK body contact: InitMachGunKid leaves COLLISION_CFG=3, so his body deals
+// ActorTouchDamage[ID_MACH_GUN_KID]=4. Touch shape 0x1A = (-4,8,0,0x0C). (#42)
+const MGK_TOUCH_DMG = actorTouchDmg(ID_MACH_GUN_KID);
+const MGK_TOUCH_SHAPE = { offY: -4, distY: 8, offX: 0, distX: 0x0C };
 
 function buildBoss(n) {
   stopBossMusic();
@@ -5507,6 +5588,9 @@ function bossTick() {
   }
   if (b.kind === 'sg') { sgTick(b); return; }
   b.anim++;
+  if (Math.abs(b.y + MGK_TOUCH_SHAPE.offY - snake.y) < MGK_TOUCH_SHAPE.distY &&
+      Math.abs(b.x + MGK_TOUCH_SHAPE.offX - snake.x) < MGK_TOUCH_SHAPE.distX)
+    damage(MGK_TOUCH_DMG);                       // ChkTouchEnemy: MGK body contact (no armor)
   switch (b.status) {
     case 0:                                   // MachGunKidIntro
       if (--b.timer > 0) return;
@@ -5541,7 +5625,7 @@ function bossTick() {
       if (d >= 5) d = 8 - d;                  // the 0..4..0 fan cycle
       // ID_SHOT_M_GUN_KID: speedX = (d*0x40 - 0x80)/256 px/iteration, speedY = 5 —
       // halved to our per-tick bullet units (the guard-bullet convention).
-      bullets.push({ x: b.x, y: b.y, vx: (d - 2) * 0.125, vy: 2.5, dmg: MGK_BULLET_DMG });
+      bullets.push({ x: b.x, y: b.y, vx: (d - 2) * 0.125, vy: 2.5, dmg: MGK_BULLET_DMG, srcId: ID_SHOT_M_GUN_KID });
       playBuf(assets.bulletShotBuf);          // SFX 5 "Bullet shot"
       return;
     }
@@ -5596,7 +5680,7 @@ function sgTick(b) {
       const dx = snake.x - b.x, dy = (snake.y - 12) - (b.y - 16);
       const len = Math.hypot(dx, dy) || 1;                          // CalcShot2: aimed, speed 0x90
       bullets.push({ x: b.x, y: b.y - 16, vx: dx / len * GUARD_BULLET_SPEED,
-                     vy: dy / len * GUARD_BULLET_SPEED, dmg: SG_SHOT_DMG, sgAge: 0 });
+                     vy: dy / len * GUARD_BULLET_SPEED, dmg: SG_SHOT_DMG, sgAge: 0, srcId: ID_SGUNNER_SHOT });
       playBuf(assets.shotgunBuf);                                   // SFX 0x0F
       return;
     }
@@ -6026,9 +6110,12 @@ function hitsSnake(px, py) {
 // Apply n damage unless Snake is in his post-hit i-frames (DamageDelayTimer). Life clamps at 0
 // (DecrementLife_B); reaching 0 triggers the dead state (SetDead), else a hit blip + the i-frame
 // blink (drawn in draw()) give feedback (the ROM has no blink — added here for legibility).
-function damage(n) {
+function damage(n, srcId) {
   if (snake.invulnTimer > 0) return;
-  if (selectedItem === SELECTED_ARMOR) n >>= 1;       // ChkUsingArmor (touchenemy.asm): the vest halves damage
+  // ChkUsingArmor (logic/touchenemy.asm:181-187): the vest halves damage ONLY for enemy bullets
+  // (ARMOR_HALVES: ID_SGUNNER_SHOT, ID_GUARD_BULLET, ID_BULLET_HORIZ..ID_TANK_BULLET). Body contact,
+  // mines, explosions, and the boomerang (0x3F) are full damage even with armor on. (Issue #27.)
+  if (selectedItem === SELECTED_ARMOR && ARMOR_HALVES.has(srcId)) n >>= 1;
   snake.life = Math.max(0, snake.life - n);
   snake.invulnTimer = INVULN_TICKS;
   if (snake.life === 0) { enterDead(); return; }
@@ -6049,7 +6136,7 @@ function chkTouchGuard() {
     if (Math.abs(g.y + GUARD_TOUCH_SHAPE.offY - snake.y) >= GUARD_TOUCH_SHAPE.distY) continue;
     if (Math.abs(g.x + GUARD_TOUCH_SHAPE.offX - snake.x) >= GUARD_TOUCH_SHAPE.distX) continue;
     g.touched = true;                                          // TOUCH_INFO bit 7
-    damage(TOUCH_DAMAGE);                                      // TouchPlayer (i-frames gate repeats)
+    damage(g.touchDmg);                                        // TouchPlayer: ActorTouchDamage (body contact, no armor)
   }
 }
 
@@ -6423,7 +6510,8 @@ function fireMissile() {
 // |actorY+offY−shotY| < distY then the X test, both strict). `explosion` picks the
 // ActorShapeExpl shapes (guards/prisoners shape 1 = ±20; MGK shape 0x1B = ±20/±16) vs the
 // projectile shape 0 box.
-function shotTarget(b, explosion) {
+function shotTargetsAll(b, explosion) {
+  const out = [];
   for (const t of [...guards, prisoner, boss, ...scorpions, powerSwitch,
                    ...jetpacks, ...dogs, duck, ...midBosses, hindD, bigBoss]) {
     if (!t) continue;
@@ -6435,10 +6523,15 @@ function shotTarget(b, explosion) {
                                (t === boss && boss.kind === 'mgk' ? MGK_EXPL_SHAPE : EXPL_SHAPE))
                             : (t.shotShape || GUARD_SHAPE);
     if (Math.abs(t.y + shape.offY - b.y) < shape.distY &&
-        Math.abs(t.x + shape.offX - b.x) < shape.distX) return t;
+        Math.abs(t.x + shape.offX - b.x) < shape.distX) out.push(t);
   }
-  return null;
+  return out;
 }
+// ChkHitEnemies (logic/damagetoenemy.asm:57-77) runs ChkEneHitByShot for EVERY one of the 16
+// EnemyList slots, so a single shot can hit multiple overlapping actors. A bullet is removed
+// after its hit (small ActorShapeProject box → effectively one), but the grenade/plastic-bomb
+// blast box is large and damages ALL enemies inside it — see explodeShot (#30).
+function shotTarget(b, explosion) { return shotTargetsAll(b, explosion)[0] || null; }
 
 // The explode transition. ONLY the grenade and the plastic bomb open the ROM's
 // one-iteration blast window (GrenadeExplode/PBombTimer set KILL_BY_CONTACT=1 around the
@@ -6452,8 +6545,11 @@ function explodeShot(b, medium) {
                                                           : assets.explosionBuf);    // SFX 0x1A
   if (gameState === 'play') chkAlertTrigger();         // explosions are loud
   if (b.type === GRENADE_LAUNCHER || b.type === PLASTIC_BOMB) {
-    const t = shotTarget(b, true);                     // the 1-frame blast window
-    if (t) { t.life = Math.max(0, t.life - weaponDamage(t, b.type)); t.hitBy = b.type; }
+    // ChkHitEnemies: the 1-frame blast window damages EVERY enemy whose body overlaps the box,
+    // not just the first (the grenade/plastic bomb are the game's two real AoE weapons — #30).
+    for (const t of shotTargetsAll(b, true)) {
+      t.life = Math.max(0, t.life - weaponDamage(t, b.type)); t.hitBy = b.type;
+    }
   }
   if (b.type === PLASTIC_BOMB) {
     chkBombWalls(b);                                   // ChkBasementWall

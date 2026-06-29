@@ -64,6 +64,11 @@ const test = `
   __check('the intro speech (text 139, unskippable, once)',
     gameState==='text' && textBox && textBox.id===139 && textBox.mode===2);
   textBox=null; gameState='play';
+  // #42: Coward Duck body contact = ActorTouchDamage[ID_COWARD_DUCK] = 4 (InitCowardDuck COLLISION_CFG=3)
+  snake.life=24; snake.invulnTimer=0; snake.x=duck.x; snake.y=duck.y;
+  iter2(duckTick, 2);                             // 2 raw ticks = 1 effective (preserves tickCounter parity)
+  __check('Coward Duck body contact damages Snake (4, #42)', snake.life===20, 'life='+snake.life);
+  snake.invulnTimer=0;
   duck.status=1; duck.timer=1; snake.x=duck.x+60;
   iter2(duckTick, 1);
   __check('he sidesteps TOWARD the player (2px)', duck.status===2 && duck.vx===2,

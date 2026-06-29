@@ -139,6 +139,16 @@ const test = `
   __check('grenade: the blast window damages a guard within the explosion shape (5)',
     guard.life === Math.max(0, guard0 - 5), 'life='+guard.life+' x='+gg.x);
 
+  // #30: ChkHitEnemies loops ALL enemies -> the blast damages EVERY guard in the +-20 box, not just one
+  reset(); guards.push(makeGuard({ x: 108, y: 100, dir: 'left' }));   // 2nd guard beside guard0 (120,100)
+  arm(GRENADE_LAUNCHER, 2); snake.x = 185; snake.y = 100; snake.dir = 'left';
+  fireQueued = true; chkWeaponShot();
+  let gAoE = playerShots[0];
+  while (gAoE.status !== 2) updatePlayerShots();        // blasts at ~113 -> both guards within +-20
+  __check('grenade: blast damages ALL guards in range, not just the first (AoE, #30)',
+    guards.length === 2 && guards[0].life === 0 && guards[1].life === 0,
+    'lives=' + guards.map(g => g.life).join(','));
+
   // --- rocket (RocketMove): contact kill 0x0A, wall -> medium explosion, one at a time ---
   reset(); arm(ROCKET_LAUNCHER, 3); snake.y = 110;     // rocket Y 94: inside the guard's shape-0 box
   fireQueued = true; chkWeaponShot();

@@ -4,10 +4,10 @@
 //   - idxRoomItemsIdx[room - 122] (rooms 122..217; 0 = no items) -> 1-based index into
 //     idxRoomItems -> a set of (ID, Y, X) triplets terminated by 0xFF (dw YX stores Y in the
 //     low byte, X in the high byte — AddItemToRoom reads Y then X).
-//   - The ROCKET_LAUNCHER entry is gated on the Schneider radio event (JeniRocketF); the ROM
-//     ABORTS the rest of the set (`ret z`) when the flag is clear. Radio events aren't ported,
-//     so the flag is permanently 0 — the export applies the same truncation (documented
-//     divergence: the rocket launcher never appears until radio events exist).
+//   - The ROCKET_LAUNCHER entry is gated on JeniRocketF (Jennifer's rocket-promise radio text 117); the ROM
+//     ABORTS the rest of the set (`ret z`) when the flag is clear. The full set (incl. the rocket
+//     launcher) is exported and the gate is applied at RUNTIME in buildRoomItems — faithful to the
+//     ROM, which re-checks JeniRocketF on every room entry (the radio event is now ported). (#34)
 //
 // Run: node Tools/export-items.mjs
 import fs from 'node:fs';
@@ -64,14 +64,14 @@ for (const t of stream) {
 const idxBytes = byLabel['idxRoomItemsIdx'].filter((t) => 'byte' in t).map((t) => t.byte);
 const setLabels = byLabel['idxRoomItems'].filter((t) => 'word' in t).map((t) => t.word);
 
-// Parse one item set: (ID, Y, X)* until 0xFF; truncate at ROCKET_LAUNCHER (JeniRocketF = 0).
+// Parse one item set: (ID, Y, X)* until 0xFF. The full set is emitted (incl. ROCKET_LAUNCHER and
+// anything after it); buildRoomItems applies the JeniRocketF gate at runtime (AddRoomItems2). (#34)
 function parseSet(label) {
   const bytes = (byLabel[label] || []).filter((t) => 'byte' in t).map((t) => t.byte);
   const out = [];
   for (let i = 0; i + 2 < bytes.length + 1; i += 3) {
     const id = bytes[i];
     if (id === 0xff || id === undefined) break;
-    if (id === enums.ROCKET_LAUNCHER) break;   // AddRoomItems: ret z when JeniRocketF clear
     out.push({ id, y: bytes[i + 1], x: bytes[i + 2] });
   }
   return out;

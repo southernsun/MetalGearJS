@@ -59,6 +59,7 @@ matches the ROM. (Several are auto-generated — regenerate, don't hand-edit.)
 | [room-rendering](room-rendering.md) | The room render pipeline traced ROM → RoomViewer → `web/game.js` (metatiles, tile decode, palettes, water/ladder tile constants). |
 | [room-audit](room-audit.md) + [room-audit-notes](room-audit-notes.md) | Per-room ROM-vs-port actor/item/door coverage (*auto-generated* by `node Tools/audit/audit-rooms.mjs`) plus a curated companion of gaps, ROM sources, and fixes. |
 | [sound-audit](sound-audit.md) + [sound-audit-notes](sound-audit-notes.md) | Per-room music / call-bit / shoot-secure audit (*auto-generated* by `node Tools/audit/audit-sound.mjs`) plus a curated companion. |
+| [faithfulness-divergences](faithfulness-divergences.md) | Curated record of **deliberate** ROM divergences (intentional, do-not-"fix") and comment-only nits. Unintentional gaps are filed as GitHub issues under the `faithfulness` label; behaviours deferred until a prerequisite system exists are tracked in issue #90. |
 
 Two standalone illustrated deep-dives (open in a browser):
 [audio-storage.html](audio-storage.html) (how audio is stored in the ROM) and

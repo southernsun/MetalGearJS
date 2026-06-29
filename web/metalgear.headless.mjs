@@ -65,6 +65,11 @@ const test = `
   __check('the confession (text 147, unskippable, once)',
     gameState==='text' && textBox && textBox.id===147);
   textBox=null; gameState='play';
+  // #42: Big Boss body contact = ActorTouchDamage[ID_BIG_BOSS] = 8 (InitBigBoss keeps COLLISION_CFG=3)
+  snake.life=24; snake.invulnTimer=0; snake.x=bigBoss.x; snake.y=bigBoss.y;   // stand on Big Boss
+  iter2(bigBossTick, 2);
+  __check('Big Boss body contact damages Snake (8, #42)', snake.life===16, 'life='+snake.life);
+  snake.invulnTimer=0;
   snake.x=bigBoss.x-0x10; snake.y=bigBoss.y;       // close (within 0x48 both axes): he must flee
   const bx0=bigBoss.x;
   iter2(bigBossTick, 4);

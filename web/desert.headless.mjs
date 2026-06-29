@@ -118,6 +118,17 @@ const test = `
   jeniOpenDoor=true;
   __check('lock 13: the one-shot flag opens it once', canOpenDoor(door13)===true && jeniOpenDoor===false);
 
+  // --- #32: the desert compass gate (SetNextRoom): leaving room 103 only works heading SOUTH or
+  //     with the compass selected; any other exit re-enters 103 ("get lost in the desert") ---
+  rooms.set(102,{img:null,collision:C()}); rooms.set(103,{img:null,collision:C()}); rooms.set(208,{img:null,collision:C()});
+  doorsData={}; itemsData={}; guardsData={}; actorsData=null;
+  currentRoom=103; selectedItem=0; transition('up', 208);
+  __check('#32 no compass + going UP gets lost back in 103', currentRoom===103, 'room='+currentRoom);
+  currentRoom=103; selectedItem=0; transition('down', 102);
+  __check('#32 no compass but heading SOUTH escapes to 102', currentRoom===102, 'room='+currentRoom);
+  currentRoom=103; selectedItem=SELECTED_COMPASS; transition('up', 208);
+  __check('#32 with the compass selected, UP reaches 208', currentRoom===208, 'room='+currentRoom);
+
   // --- restart clears the poison ---
   poisoned=true; manifest={start:0}; rooms.set(0,{img:null,collision:C()});
   restart();

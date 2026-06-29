@@ -65,9 +65,9 @@ const test = `
   __check('shot in an IsolatedRoom raises no alarm (RoomsMusic&7==1)', alertMode===false);
 
   // --- red alert arms the card-based reinforcement budget (NumRespawnGuards); low alert doesn't ---
-  reset(7); raiseAlarm(7);
-  __check('red alert sets redAlertFlag + arms reinforcements (timer 0x28, budget 3)',
-    redAlertFlag===true && alertRespawnTimer===0x28 && numRespawnGuards===3);
+  reset(7); raiseAlarm(7);   // a plain guard SIGHTING in a red-alert room: GuardSetAlarm6 seeds 0x1E (not 0x28)
+  __check('red alert sets redAlertFlag + arms reinforcements (timer 0x1E, budget 3)',
+    redAlertFlag===true && alertRespawnTimer===0x1E && numRespawnGuards===3);
   reset(0); raiseAlarm(0);
   __check('low alert: redAlertFlag clear, no reinforcement timer', redAlertFlag===false && alertRespawnTimer===0);
   // SetAlertMode2/3/4: the budget is the highest keycard owned + 3, and 0 in room 216.

@@ -43,6 +43,11 @@ const test = `
   bullets.length=0;
   iter2(midBossTick, 0x60);
   __check('the machine-gun burst rains bullets (8 dmg)', bullets.length>0 && bullets[0].dmg===8, 'n='+bullets.length);
+  // #31: SpeedX = SpeedXUnsigned-2 -> a SYMMETRIC -2..+2 fan for a SINGLE gun (not one-directional).
+  bullets.length=0; t.mgOn=true; t.mgSide=1; t.mgTimer=0x2D; t.mgShot=0; snake.x=10;
+  for (let k=0;k<8;k++){ t.anim=7; midBossTick(); }   // 8 shots, mgSide fixed: vx must span - and +
+  __check('the MG fan is symmetric for a single gun (vx spans - and +, #31)',
+    bullets.some(b=>b.vx<0) && bullets.some(b=>b.vx>0), 'vx='+[...new Set(bullets.map(b=>b.vx))].sort().join(','));
   // the cannon: standing in the column
   t.cannon=1; snake.x=t.x; tankShells.length=0;
   iter2(midBossTick, 1);

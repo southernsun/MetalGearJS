@@ -69,6 +69,13 @@ const test = `
   __check('at zero distance it dashes down-right (degree 32), never parking on Snake',
     sz.status===1 && sz.vx===0x80*177/8192 && sz.vy===0x80*181/8192, 'v='+sz.vx+','+sz.vy);
 
+  // #46: GetDistancePlayer is CHEBYSHEV max(|dx|,|dy|), not Manhattan. A diagonal (0x40,0x40) =
+  // Chebyshev 0x40 (<0x51 -> charge), but Manhattan 0x80 (the old code would NOT charge).
+  buildScorpions(208); const sc=scorpions[0]; sc.x=50; sc.y=50; sc.status=0; sc.wait=99;
+  snake.x=50+0x40; snake.y=50+0x40;
+  tickCounter=0; iter(1);
+  __check('#46 charges on a diagonal where Chebyshev<0x51 but Manhattan>=0x51', sc.status===1);
+
   // --- the margins (ChkScorpionLimits): out of bounds flips to the opposite diagonal ---
   buildScorpions(208); const s2=scorpions[0]; s2.x=8; s2.y=96; s2.status=0; s2.wait=99; s2.dir=1;
   snake.x=240; snake.y=10;

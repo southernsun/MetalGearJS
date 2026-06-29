@@ -1041,7 +1041,9 @@ function scorpionTick() {
     const out = s.y < 0x11 || s.y >= 0xB0 || s.x < 0x11 || s.x >= 0xF0;  // ChkScorpionLimits
     switch (s.status) {
       case 0: {                                      // ScorpionWander
-        const dist = Math.abs(snake.x - s.x) + Math.abs(snake.y - s.y);
+        // GetDistancePlayer (guardalert.asm:443-465) returns Chebyshev max(|dx|,|dy|), NOT Manhattan
+        // — on diagonals the old |dx|+|dy| started the charge from up to ~40% too far. (#46)
+        const dist = Math.max(Math.abs(snake.x - s.x), Math.abs(snake.y - s.y));
         if (dist < 0x51) {                           // ScorpionSeePlayer: charge (CalcShot)
           s.status = 1; s.wait = 8;
           // CalcShot with the default ShotSpeed 0x80: the QUANTIZED-angle dash (see
@@ -5771,7 +5773,7 @@ function switchGuardLogic(g) {
       if (--g.swWait <= 0) { g.swStatus = 5; g.swWait = 1; g.dir = 'right'; }
       return;
     case 5:                                             // GuardSwShot
-      if (snake.y <= g.y) return;                       // player in the upper part: no shot
+      if (snake.y < 0x80) return;                       // `ld a,(PlayerY); rla; ret nc`: fire only when PlayerY>=0x80 (#69)
       g.dir = snake.x < g.x ? 'left' : 'right';
       if (--g.swWait <= 0) { g.swWait = 0x10; fireGuardBullet(g, false); }   // ID_BULLET (through walls)
       return;

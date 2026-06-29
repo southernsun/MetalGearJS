@@ -158,6 +158,12 @@ const test = `
   for (let i=0;i<400 && !powerSwitchOn;i++){ tickCounter=(tickCounter+2)&0xff; updateGuardOne(sw); }
   __check('on the alarm it runs to the switch and powers the electric floor',
     powerSwitchOn===true && powerSwitch && powerSwitch.x===0x24, 'sw='+JSON.stringify(powerSwitch));
+  // #69: GuardSwShot fires only when PlayerY >= 0x80 (lower half), NOT relative to the guard's Y
+  sw.swStatus=5; sw.swWait=1; sw.x=0x60; bullets.length=0; snake.x=0x60;
+  snake.y=0x40; tickCounter=0; updateGuardOne(sw);       // upper half: hold fire
+  __check('#69 switch guard holds fire while PlayerY < 0x80', bullets.length===0);
+  sw.swStatus=5; sw.swWait=1; snake.y=0xA0; tickCounter=0; updateGuardOne(sw);   // lower half: fire
+  __check('#69 switch guard fires once PlayerY >= 0x80', bullets.length>0);
 
   // ==== Land mines (InitMines, the buried mine fields) ====
   gameState='play'; assets.collision=C(); currentRoom=9; buildMines(9);

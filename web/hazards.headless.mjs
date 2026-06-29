@@ -173,6 +173,11 @@ const test = `
   snake.x=2; snake.y=2; snake.life=24; snake.invulnTimer=0;
   iter2(mineTick, 1);
   __check('mines away from Snake stay armed (no spurious trigger)', mines.length===11 && snake.life===24);
+  // #65: the trigger box is ±0x0C in X (ImpactAreasInfo row 8), not ±8 — a mine 10px away DOES catch
+  buildMines(9); const mb=mines[0]; snake.life=24; snake.invulnTimer=0;
+  snake.x=mb.x+10; snake.y=mb.y;                 // |dx|=10: inside ±0x0C (the old ±8 would miss)
+  iter2(mineTick, 1);
+  __check('#65 a mine 10px away in X still triggers (box ±0x0C)', mb.exploding>0);
 
   setText = () => {};   // the harness doesn't load texts; the door/spawn logic is what we test
 

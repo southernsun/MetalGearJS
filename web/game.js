@@ -86,7 +86,7 @@ const ARMOR_HALVES = new Set([
   ID_SGUNNER_SHOT, ID_GUARD_BULLET, ID_BULLET_HORIZ, ID_BULLET_VERT, ID_SHOT_M_GUN_KID, ID_BULLET, ID_TANK_BULLET]);
 
 // ---- Guard tunables (ported from chkdiscover.asm / guard.asm) --------------
-const GUARD_WALK_TICKS = 10;  // ticks between guard walk-frame swaps (GuardWalk1<->GuardWalk2, per Anim2FramesActor)
+const GUARD_WALK_TICKS = 8;   // GuardPatrolLogic2 `ld bc,700h` -> Anim2FramesActor masks ANIM_CNT&7: swap every 8 (#58)
 // ChkViewVertical/Horizontal: Snake is in the sight band when |perp| < HALF (strict). ChkViewVertical
 // uses HALF 8 (up/down); ChkViewHorizontal uses HALF 6 for a guard, HALF 4 for a camera.
 const LOS_BAND_UD = 8;        // facing up/down: |dx| < 8 (ChkViewVertical, H=0x08)
@@ -120,8 +120,8 @@ const GUARD_PUNCHES_TO_KILL = 3;      // ChkKillPunching: the 3rd punch kills th
 // i.e. +2 px/frame in 8.8 fixed-point). Patrol is half that (DirectionSpeeds = ±1). So we scale
 // to our Snake: alert = SPEED, patrol = SPEED/2.
 const GUARD_CHASE_SPEED = SPEED;      // alert == Snake (ROM DirectionSpeeds2 == PlayerMovSpeed)
-const ALERT_ICON_TICKS  = 48;         // the "!" is a brief discovery flash (~0.8s), not a persistent
-                                      //   badge — it disappears while the guard goes on chasing
+const ALERT_ICON_TICKS  = 0x10;       // SetAlertRoom (chkdiscover.asm:313-314): AlertIconTimer = 0x10
+                                      //   (16 iters, ~0.27s) — the "!" flash, NOT a persistent badge (#57)
 const GUARD_MAX_BULLETS = 6;          // ROM caps active guard bullets at 6
 const GUARD_BULLET_SPEED = 2.5;       // px/tick; derived from the 0x90 shot-speed param (exact
                                       //   8.8 fixed-point scaling approximated — tuned for feel)
@@ -1109,8 +1109,9 @@ function mineTick() {
   for (let i = mines.length - 1; i >= 0; i--) {
     const m = mines[i];
     if (m.exploding > 0) { if (--m.exploding <= 0) mines.splice(i, 1); continue; }
-    // ChkArea touch box (~16x16 over the buried mine, Snake's feet on it); contact destroys it.
-    if (Math.abs(snake.x - m.x) <= 8 && snake.y >= m.y - 8 && snake.y <= m.y + 8) {
+    // ChkArea touch box: ActorsShapeTouch[ID_LAND_MINE]=8 -> ImpactAreasInfo row 8 (0,8,0,0x0C):
+    // |mineX-snakeX| < 0x0C AND |mineY-snakeY| < 8, strict < (was ±8 in X). Contact destroys it. (#65)
+    if (Math.abs(m.x - snake.x) < 0x0C && Math.abs(m.y - snake.y) < 8) {
       m.exploding = 0x0F;                     // ActorShapeExpl blast frames
       playBuf(assets.bombExplosionBuf);       // SFX 0x1C
       damage(MINE_DAMAGE);                    // honours the i-frames like any contact hit

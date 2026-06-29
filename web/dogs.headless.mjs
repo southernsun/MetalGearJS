@@ -57,7 +57,7 @@ const test = `
 
   // ==== Coward Duck (room 193) ====
   stopAlarm(); gameState='play';
-  card8Taken=false; duckSpeechDone=false;
+  items.delete(SELECTED_CARD1+7); duckSpeechDone=false;   // CARD8 not yet owned (card8Taken derives from items)
   currentRoom=193; roomItems=[null,null,null]; buildDuck(193);
   __check('Coward Duck guards room 193 (life 0x14, boss music)', duck!==null && duck.life===0x14);
   iter2(duckTick, 3);
@@ -89,8 +89,10 @@ const test = `
   duck.life=0; iter2(duckTick, 1);
   __check('his death drops CARD8 at (0x38,0x70)',
     duck===null && roomItems[0] && roomItems[0].id===0x1D && roomItems[0].x===0x38);
-  card8Taken=true; buildDuck(193);
+  takeItem(0x1D); buildDuck(193);                  // pick up the dropped CARD8 -> card8Taken() true
   __check('with CARD8 taken he never reappears (InitCowardDuck gate)', duck===null);
+  // regression for #91: the gate must come from actually owning the card, not a phantom flag
+  __check('picking up CARD8 records ownership (items has SELECTED_CARD1+7)', items.has(SELECTED_CARD1+7));
 
   // ==== Basement dogs (dogbasement.asm; rooms 58-63): free-roaming sleep -> run -> chase ====
   stopAlarm(); guardsData={}; rooms.set(58, { img:null, collision:C() });
@@ -109,7 +111,7 @@ const test = `
   __check('chase re-arms the bark timer (0x18) on its axis', sleeper.wait===0x18);
 
   // ==== Ambush shooters (shooter.asm; rooms 88/90/91 alarm, 206 does not) ====
-  card8Taken=false; stopAlarm(); alertRespawnTimer=0; numRespawnGuards=0; guardsData={};
+  items.delete(SELECTED_CARD1+7); stopAlarm(); alertRespawnTimer=0; numRespawnGuards=0; guardsData={};
   rooms.set(206, { img:null, collision:C() }); rooms.set(88, { img:null, collision:C() });
   manifest={start:206}; snake.x=10; snake.y=10;          // far away (no transform)
   setRoom(206);

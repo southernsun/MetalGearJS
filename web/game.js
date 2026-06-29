@@ -1685,10 +1685,10 @@ function dogSolid(d, dir) {
   return !!c.solid[(((d.y + py) >> 3) * c.width) + ((d.x + px) >> 3)];
 }
 function dogNearPlayer(d) {                                                 // ChkDogNearPlayer
-  if (d.dir === 3 || d.dir === 4) {                                         // moving horizontally
-    return Math.abs(snake.x - d.x) < 0x30 && d.y > snake.y - 0x18 && d.y <= snake.y + 0x18;
+  if (d.dir === 3 || d.dir === 4) {                                         // moving horizontally (ChkDogNearPlayer3)
+    return Math.abs(snake.y - d.y) < 0x30 && d.x > snake.x - 0x20 && d.x <= snake.x + 0x20;
   }
-  return Math.abs(snake.y - d.y) < 0x30 && d.x > snake.x - 0x20 && d.x <= snake.x + 0x20;
+  return Math.abs(snake.x - d.x) < 0x30 && d.y > snake.y - 0x18 && d.y <= snake.y + 0x18;     // moving vertically (ChkDogNearPlayer2)
 }
 function dogTurn(d) {                                                       // ChkDogChgDir: turn at a wall
   const horiz = d.dir === 3 || d.dir === 4;
@@ -1792,13 +1792,18 @@ function drawDogs() {
 // stop and THROW A BOOMERANG (elliptical flight via the sine table, clockwise by side,
 // random short range, returns and vanishes), wait 5, return toward the room centre, and
 // again. Life 0x14, touch 8; his death drops CARD8 at (0x38, 0x70) (DismissActor4).
-let duck = null, duckSpeechDone = false, card8Taken = false;
+let duck = null, duckSpeechDone = false;
 let boomerangs = [];
 let duckSheet = null, boomerangSheet = null;
+// Card8Taken (the flag set when CARD8 is collected): the port tracks card ownership in `items`, so
+// derive it instead of carrying a separate flag (kept in sync with save/load and the HIRAKEGOMA
+// cheat for free). InitCowardDuck reads Card8Taken (cowardduck.asm:307), so the jailer reappears
+// until the card is actually picked up — even after the duck is killed and drops it.
+function card8Taken() { return items.has(SELECTED_CARD1 + 7); }   // CARD8 = SELECTED_CARD1+7 (0x15)
 function buildDuck(n) {
   boomerangs = [];
   const a = actorsData && actorsData[n];
-  if (!a || !a.duck || card8Taken) { duck = null; return; }
+  if (!a || !a.duck || card8Taken()) { duck = null; return; }
   duck = { x: a.duck.x, y: a.duck.y, homeX: a.duck.x, status: 0, timer: 3,
            vx: 0, anim: 0, life: 0x14, shotShape: GUARD_SHAPE };
   startBossMusic();                                // SetBossMusic
@@ -4867,7 +4872,7 @@ function chkAlarmEnd() {
 }
 
 // RoomsNoAlert (Banks0123.asm:1756): rooms where the transmitter doesn't re-raise the alert.
-const NO_ALERT_ROOMS = new Set([6, 9, 10, 20, 102, 103, 120, 173, 174, 175, 208, 209, 135, 199, 133]);
+const NO_ALERT_ROOMS = new Set([6, 9, 10, 20, 102, 103, 120, 173, 174, 175, 208, 209, 135, 199, 133, 129, 143]);
 
 // StopAlert: clear all alarm state, stop the alert music, and drop the current guard back to patrol.
 function stopAlarm() {

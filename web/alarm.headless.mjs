@@ -265,6 +265,29 @@ const test = `
   guards[0].life = 0;
   updateGuard(); chkAlarmEnd();
   __check('room cleared: the alarm ends', guards.length === 0 && alertMode === false);
+
+  // #39: ChkWaitPathPoint stop + GuardPatrolTurn/Wait two-phase look-around (deterministic via stubbed RNG)
+  actorsData = null; alertMode = false; redAlertFlag = false;
+  snake.x = 240; snake.y = 10;                                   // far away: no LOS during the look
+  guardsData = { '0': { x: 100, y: 100, dir: 'up', path: [[100,100],[100,60]] } };
+  currentRoom = 0; buildGuard(0);
+  const g39 = guards[0];
+  const _rnd = Math.random; Math.random = () => 0.1;            // < 0.5 -> ChkWaitPathPoint STOPS
+  updateGuard();                                                // spawns on point 0 -> reach -> face new dir (up) -> stop
+  __check('#39 a stop enters the look (phase 1, facing the travel dir up)',
+    g39.lookPhase === 1 && g39.dir === 'up' && g39.waitTimer === 0x10);
+  for (let i = 0; i < 0x10; i++) updateGuard();                 // hold 0x10, then GuardPatrolTurn turns ±90°
+  __check('#39 after 0x10 it turns to look perpendicular (up -> left), phase 2',
+    g39.lookPhase === 2 && g39.dir === 'left');
+  for (let i = 0; i < 0x10; i++) updateGuard();                 // hold 0x10, then GuardPatrolWait restores + resumes
+  __check('#39 after another 0x10 it restores the travel facing (up) and resumes patrol',
+    g39.lookPhase === 0 && g39.dir === 'up');
+  // and the ~50% walk-through: a high RNG keeps the guard moving (no stop)
+  Math.random = () => 0.9;
+  buildGuard(0); const g39b = guards[0]; updateGuard();
+  __check('#39 a high RNG roll does NOT stop (keeps walking)', g39b.lookPhase === 0);
+  Math.random = _rnd;
+
   actorsData = null;
 })();
 `;

@@ -32,6 +32,7 @@ called out in `web/game.js` comments; this table is the index.
 | Password input | `617-618` (`passwordKey`) | `passwords.asm` (space code `0x47`) | The space character in "DS 4" / "ANTA WA ERAI" / "HIRAKE GOMA" is not modeled; codes match contiguously. (Behaviourally the cheats still trigger — see #75 if exact-keystroke fidelity is wanted.) |
 | Text-window grow-in | text window (`748-873`) | `textboxappear.asm` | The animated window grow-in is omitted; the box appears at full size. |
 | Intro black beat | intro scene `status -1` (`3847-4017`) | `introscene.asm` | A short black beat was added to the intro that the ROM does not have, to smooth the JS transition. |
+| Patrol look-around turn (Down/Right) | `PATROL_TURN` + patrol logic (`GUARD_LOOK_TICKS`) | `guard.asm:144` `GuardPatrolTurn` (`xor 2`) | The look-around turn (#39) is exact for Up→Left / Left→Up, but the ROM's `Direction xor 2` yields **out-of-range** direction values (0 / 6) for Down/Right facings — a genuine ROM bug (it then indexes the LOS jump-table and sprite table out of bounds). We port the routine's evident ±90° intent instead, completing the symmetric pair Down↔Right. The ~50% walk-through skip and the two-phase 0x10/0x10 timing are faithful. |
 
 > If you add a new deliberate divergence, (1) comment it at the call site in `web/game.js`,
 > (2) add a row here, and (3) note it in the change's OpenSpec tasks/notes — per `CLAUDE.md`.

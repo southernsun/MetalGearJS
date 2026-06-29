@@ -87,6 +87,14 @@ const ARMOR_HALVES = new Set([
 
 // ---- Guard tunables (ported from chkdiscover.asm / guard.asm) --------------
 const GUARD_WALK_TICKS = 8;   // GuardPatrolLogic2 `ld bc,700h` -> Anim2FramesActor masks ANIM_CNT&7: swap every 8 (#58)
+// Patrol stop-and-look (ChkWaitPathPoint -> GuardPatrolTurn -> GuardPatrolWait, #39): at a path
+// point there's a ~50% chance to KEEP walking; otherwise the guard stands 0x10 facing its travel
+// direction, then turns ±90° and looks 0x10 more (LOS active the whole time), then resumes.
+const GUARD_LOOK_TICKS = 0x10;   // Wait set in ChkWaitPathPoint / GuardPatrolTurn (each phase)
+// GuardPatrolTurn's turn (guard.asm:144 `xor 2`): Up<->Left is exact (the random `or` bit has no
+// effect there); Down<->Right is our symmetric completion — the ROM's `xor 2` yields out-of-range
+// direction values (0/6) for Down/Right facings, a ROM bug, so we port the routine's ±90° INTENT.
+const PATROL_TURN = { up: 'left', left: 'up', down: 'right', right: 'down' };
 // ChkViewVertical/Horizontal: Snake is in the sight band when |perp| < HALF (strict). ChkViewVertical
 // uses HALF 8 (up/down); ChkViewHorizontal uses HALF 6 for a guard, HALF 4 for a camera.
 const LOS_BAND_UD = 8;        // facing up/down: |dx| < 8 (ChkViewVertical, H=0x08)
@@ -4848,7 +4856,7 @@ function stopAlarm() {
   stopAlert();                                                 // stop the alert music
   startAreaMusic();                                            // the area music returns
   if (guard && guard.state === 'alert') {                      // revert the guard to its patrol
-    guard.state = 'patrol'; guard.waitTimer = 0; guard.animTimer = 0; guard.walkPhase = 0;
+    guard.state = 'patrol'; guard.waitTimer = 0; guard.lookPhase = 0; guard.animTimer = 0; guard.walkPhase = 0;
     // Re-home onto the patrol path so it doesn't try to walk back from an off-path chase position
     // (and can't cut through walls getting there).
     if (guard.path && guard.path.length) {
@@ -4872,7 +4880,7 @@ function makeGuard(g) {
     dir: g.shooter ? ((g.y & 0x80) ? 'up' : 'down') : (g.switch ? 'right' : (g.dir || 'left')),  // shooter faces the room interior
     isSwitch: !!g.switch, swStatus: 0, swWait: 0,          // room-16 GuardSwitchLogic state
     silState: 0, silWait: 1,                               // room-150 GuardSilencerLogic state
-    waitMax: g.wait || 40, waitTimer: 0,
+    waitTimer: 0, lookPhase: 0, lookSaved: null,   // ChkWaitPathPoint stop + GuardPatrolTurn/Wait look-around (#39)
     path: (g.path && g.path.length ? g.path : [[g.x, g.y]]),
     target: 1, state: 'patrol', animTimer: 0, walkPhase: 0, stepping: false,
     // ACTOR.LIFE / ActorTouchDamage seeded per actor ID from the ROM tables (SetupActor; issue #48).
@@ -5261,13 +5269,31 @@ function updateGuardOne(guard) {
   // tick — a paused/standing guard shows the dedicated standing frame (GuardPatrolTurn/Wait).
   guard.stepping = false;
   if (guard.path.length < 2) return;
-  if (guard.waitTimer > 0) { guard.waitTimer--; guard.walkPhase = 0; guard.animTimer = 0; return; }  // stand while paused
+  // GuardPatrolTurn (status 1) / GuardPatrolWait (status 2): the two-phase stop-and-look. The guard
+  // stands (no step); LOS still runs above on guard.dir, so the turned facing in phase 2 can detect.
+  if (guard.lookPhase > 0) {
+    guard.walkPhase = 0; guard.animTimer = 0;
+    if (--guard.waitTimer > 0) return;                       // hold the current facing for 0x10
+    if (guard.lookPhase === 1) {                             // GuardPatrolTurn: turn ±90° and look again
+      guard.lookSaved = guard.dir;                           // PreviousDirection
+      guard.dir = PATROL_TURN[guard.dir] || guard.dir;
+      guard.waitTimer = GUARD_LOOK_TICKS; guard.lookPhase = 2;
+    } else {                                                 // GuardPatrolWait: restore facing + resume
+      guard.dir = guard.lookSaved || guard.dir; guard.lookPhase = 0;
+    }
+    return;
+  }
   const t = guard.path[guard.target];
   const dx = t[0] - guard.x, dy = t[1] - guard.y;
   if (Math.abs(dx) + Math.abs(dy) <= guard.speed) {
     guard.x = t[0]; guard.y = t[1];
     guard.target = (guard.target + 1) % guard.path.length;
-    guard.waitTimer = guard.waitMax;        // pause at each point (as the ROM guard does)
+    // SetDirToPoint: face the NEW destination, so the look (if any) holds that facing first.
+    const nt = guard.path[guard.target], ndx = nt[0] - guard.x, ndy = nt[1] - guard.y;
+    if (ndx !== 0 || ndy !== 0)
+      guard.dir = Math.abs(ndx) >= Math.abs(ndy) ? (ndx < 0 ? 'left' : 'right') : (ndy < 0 ? 'up' : 'down');
+    // ChkWaitPathPoint (`ld a,r; rra; ret nc`): ~50% chance to NOT stop and keep walking; else stop+look.
+    if (Math.random() < 0.5) { guard.lookPhase = 1; guard.waitTimer = GUARD_LOOK_TICKS; }
     return;
   }
   // ROM guards NEVER move diagonally — GuardsInfo scripts walk one axis at a time. The

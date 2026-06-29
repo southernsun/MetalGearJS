@@ -142,7 +142,9 @@ const BULLET_DAMAGE = actorTouchDmg(ID_GUARD_BULLET); // ActorTouchDamage[ID_GUA
                                       //   2 — the ROM value is 8; #48 corrects every enemy bullet to 8)
 const INVULN_TICKS  = 0x20;           // DamageDelayTimer: i-frames after any enemy hit (32 @ 60Hz)
 const SNAKE_MAX_LIFE = 0x18;          // InitPlayerVars starting life (24); MaxLife also 24 this slice
-const DEAD_TICKS = 0x80;              // DeadTimer: dead-state countdown before restart (128 @ 60Hz)
+const DEAD_TICKS = 0x80;              // DeadTimer: dead-state countdown before the GAME OVER screen (128 @ 60Hz)
+const GAME_OVER_TICKS = 0x100;       // GS_GameOver F5 window — the ROM waits for the game-over music to
+                                     //   finish (SoundWorkArea+2); we approximate that tail as a fixed span (#35)
 
 // ---- Player handgun shots (ChkHandGunShot + ShootDirSpeeds + BulletLogic) -------------------
 // Literal ROM values: shot speed ±6 px/frame along the facing axis (ShootDirSpeeds), a range timer
@@ -310,6 +312,8 @@ let menuHoldWait = 8;         // ControlHoldWait — ticks until a held directio
 let menuDirTrigger = null;    // ControlsTrigger: direction pressed this frame (latched for menuTick)
 let menuFireTrigger = false;  // ControlsTrigger: Fire pressed this frame (latched for menuTick)
 let deadTimer = 0;            // counts down in the dead state (DeadTimer)
+let gameOverTimer = 0;        // GS_GameOver: counts down the F5 window after the dead animation (#35)
+let continueArmed = false;    // RestoreGameFlag — F5 pressed on the GAME OVER screen -> continue
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -3004,6 +3008,10 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keydown', (e) => {
   if (gameState === 'title') return;                 // the title listener owns boot input
+  if (gameState === 'gameover') {                    // GS_GameOver: ChkContinueKey watches F5 only
+    if (e.key === 'F5') { e.preventDefault(); continueArmed = true; }
+    return;
+  }
   if (demoActive) { e.preventDefault(); endDemo(); return; }   // a key aborts the attract demo
   if (gameState === 'ending') { e.preventDefault(); return; }  // the ending cinematic ignores input
   if (gameState === 'intro') { e.preventDefault(); return; }  // CONTROL_INTRO ignores the player
@@ -4096,6 +4104,16 @@ function drawTitle() {
     drawText('KONAMI 1987', 0x58, 0x60);               // KEY; visible while bit 2 is clear
     if ((titleCnt & 4) === 0) drawText('PLAY START', 0x58, 0x88);
   }
+}
+
+// PrintGameOver (Banks0123.asm:10458): ClearScreen + GAME OVER / CONTINUE F5. The ROM coords are
+// txtGameOver (0x58,0x58) and txtContinue (0x50,0x70) (data/hudstartendtexts.asm). "CONTINUE F5"
+// is erased (ChkContinueKey) once F5 arms the continue. (#35)
+function drawGameOver() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H + HUD_H);
+  drawText('GAME  OVER', 0x58, 0x58);
+  if (!continueArmed) drawText('CONTINUE  F5', 0x50, 0x70);
 }
 
 // ---- Laser beams (InitLaserRoom / ChkTouchLaser / DrawLaserBeams / DrawMovingLasers) --------
@@ -6188,6 +6206,23 @@ function enterDead() {
   playDead();
 }
 
+// GS_GameOver (Banks0123.asm:10410): once the dead animation (DeadTimer) ends, the PLAYING flag
+// clears and the GAME OVER / CONTINUE F5 screen shows while the death music plays. F5 arms a
+// continue (RestoreGameFlag); when the music finishes the game continues from the last checkpoint
+// or RebootGames to the title. The "music finished" wait is approximated by GAME_OVER_TICKS. (#35)
+function enterGameOver() {
+  gameState = 'gameover';
+  gameOverTimer = GAME_OVER_TICKS;
+  continueArmed = false;
+}
+// RebootGame -> ResetGameStat: no continue -> stop the music and return to the title (a fresh start).
+function rebootToTitle() {
+  stopAreaMusic(); stopAlert(); stopBossMusic(); stopRadioNoise();
+  alertMode = false; redAlertFlag = false;
+  gameState = 'title'; titlePhase = 'ready'; titleIdle = 0;
+  titleClear(); drawLogoParked();
+}
+
 // DeadLogic end / RestoreGameStat: continue from the last checkpoint. The ROM reverts the whole
 // progress (room, position, doors, equipment, ammo, rank) to the last SaveStatRooms snapshot — so
 // items/doors/rank gained since the checkpoint are LOST — then respawns there with a fresh body.
@@ -6789,6 +6824,12 @@ function update() {
   if (gameState === 'capture') { captureTick(); return; }    // GameMode 0xB: the capture scene
   if (gameState === 'lorry') { lorryTick(); return; }        // GameMode 5: the moving lorry
   if (gameState === 'ending') { endingTick(); return; }      // EndingLogic: the escape cinematic
+  // GS_GameOver: its own GameStatus (PlayModeLogic does NOT run — no incoming-call cycle here). Wait
+  // the F5 window, then continue from the checkpoint (RestoreGameFlag) or RebootGame to the title. (#35)
+  if (gameState === 'gameover') {
+    if (--gameOverTimer <= 0) { if (continueArmed) restart(); else rebootToTitle(); }
+    return;
+  }
   // CONTROL_INTRO: the scripted infiltration. IntroSceneLogic runs in ROM ITERATIONS (the
   // ~30Hz game-logic rate — see chkIncomingCall's pacing note), and its counts and speeds
   // (0x100 dive / 0x200 swim / 0x188 climb, the 0x40-style waits) are literal per-iteration
@@ -6802,7 +6843,7 @@ function update() {
   // Dead = control mode 3 (Dead/DeadLogic): input is inert; count down, then restart the slice.
   if (gameState === 'dead') {
     if (demoActive) { endDemo(); return; }       // Snake died mid-demo -> abort to the title
-    if (--deadTimer <= 0) restart();
+    if (--deadTimer <= 0) enterGameOver();        // DeadLogicEnd -> GS_GameOver (the GAME OVER screen)
     return;
   }
 
@@ -7579,6 +7620,7 @@ function drawRadioScreen() {
 
 function draw() {
   if (gameState === 'title') { drawTitle(); return; }
+  if (gameState === 'gameover') { drawGameOver(); return; }
   if (gameState === 'menu') { drawMenu(); return; }
   if (gameState === 'binoculars') { drawBinoculars(); return; }   // DrawBinocRoom (the telescope view)
   if (gameState === 'intro' && introStatus < 0) {   // GS_StartGame's ClearScreen: black,

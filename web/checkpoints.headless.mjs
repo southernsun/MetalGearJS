@@ -96,6 +96,17 @@ const test = `
   restart();
   __check('with no checkpoint it falls back to the intro landing', currentRoom === 121 && snake.x === 0x40);
   __check('the fallback keeps the current inventory', weapons.get(HAND_GUN) === 0x22 && snake.class === 3);
+
+  // #35: DeadLogic end -> GS_GameOver (GAME OVER / CONTINUE F5) -> continue (F5) or RebootGame to title
+  currentRoom = 121; snake.x = 0xC0; snake.y = 0xB8; previousRoom = 0; pendingCheckpoint = true;
+  takePendingCheckpoint();                              // a checkpoint to continue back to
+  gameState = 'dead'; deadTimer = 1; continueArmed = false;
+  update();
+  __check('#35 the dead-timer expiry shows the GAME OVER screen', gameState === 'gameover');
+  continueArmed = true; gameOverTimer = 1; update();    // F5 armed -> continue from the checkpoint
+  __check('#35 GAME OVER + F5 continues from the checkpoint', gameState === 'play' && currentRoom === 121);
+  gameState = 'gameover'; gameOverTimer = 1; continueArmed = false; update();   // no F5 -> reboot to title
+  __check('#35 GAME OVER with no F5 reboots to the title', gameState === 'title');
 })();
 `;
 

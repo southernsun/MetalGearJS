@@ -52,6 +52,11 @@ const test = `
   t.cannon=1; snake.x=t.x; tankShells.length=0;
   iter2(midBossTick, 1);
   __check('the cannon fires a shell when Snake stands in its column', tankShells.length===1);
+  // #102: the column is a symmetric ±4 window (PlayerX-X+4 < 9 unsigned), not the shifted [-12,+4]
+  t.cannon=1; snake.x=t.x-8; tankShells.length=0; iter2(midBossTick, 1);
+  __check('#102 no cannon shot 8px LEFT of the tank (symmetric window)', tankShells.length===0);
+  t.cannon=1; snake.x=t.x-4; tankShells.length=0; iter2(midBossTick, 1);
+  __check('#102 cannon fires 4px left of the tank', tankShells.length===1);
   snake.x=10; snake.y=Math.round(tankShells[0].y+4); snake.invulnTimer=0; snake.life=200;
   tankShells[0].x=snake.x;
   iter2(midBossTick, 2);

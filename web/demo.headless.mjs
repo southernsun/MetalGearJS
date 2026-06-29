@@ -52,6 +52,11 @@ globalThis.__run = async () => {
   await loadAssets();
 
   // --- Start gameplay demo 1 exactly as the idling title does (SetupDemoPlay, scene 0) ---
+  // Determinism: the demo replays scripted player input, but the patrol guards use Math.random for
+  // ChkWaitPathPoint (50% stop-and-look). Stub it so the run is reproducible (otherwise a guard can
+  // randomly turn to face Snake down an open corridor and raise a spurious alarm — flaky, unrelated
+  // to the recorded demo). 0.9 keeps guards walking their path (no random look-around).
+  const _rnd = Math.random; Math.random = () => 0.9;
   demoSceneIdx = 0;
   startDemo();
   __check('gameplay demo 1 starts in the lorry yard (room 5) at (0x10,0x70)',
@@ -80,6 +85,7 @@ globalThis.__run = async () => {
     }
     prevGuards = guards.length; prevCtrl = snake.controlMod;
   }
+  Math.random = _rnd;
 
   __check('the demo walks 5 -> 127 (a parked lorry) -> 5 -> 1', rooms.join(',') === '5,127,5,1', rooms.join(','));
   __check('HideGuardRoom1 leaves 2 guards on a west entry', enteredRoom1Guards === 2, 'n='+enteredRoom1Guards);

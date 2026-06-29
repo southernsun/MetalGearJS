@@ -95,6 +95,11 @@ const test = `
   tickCounter=0; for (let i=0;i<0x100;i++) update();   // fires at tick 64/128/192/0 -> 4 drains
   __check('poison drains 4 life over 0x100 ticks (every 0x40)', snake.life===20, 'life='+snake.life);
 
+  // #97: entering room 69 issues an unconditional StopAlert so the uniform/"Come in" door flow can run
+  alertMode=true; redAlertFlag=true; roomAlert=42; previousRoom=10; buildDesertSecurity(69);
+  __check('#97 room 69 entry clears the alert (InitDesertSecurity StopAlert)',
+    alertMode===false && desertSecurity!==null);
+
   // --- the antidote (ChkUseAntidote): clears poison, NOT consumed ---
   items.set(SELECTED_ANTIDOTE, 1); selectedItem = SELECTED_ANTIDOTE;
   chkUseItem();

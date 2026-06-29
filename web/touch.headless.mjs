@@ -97,6 +97,24 @@ const test = `
   // --- touch discovers regardless of facing (ChkSeePlayer2 before the directional LOS) ---
   reset(); guard.dir='right'; snake.x=110; snake.y=100; tick();  // behind the guard, touching
   __check('touch behind the guard still alarms', alertMode===true);
+
+  // --- #106: chkPunch is suppressed inside the cardboard box (also in water/deep water) ---
+  reset(); currentRoom=0; selectedItem=SELECTED_BOX; snake.x=200; snake.y=150; snake.state='idle';
+  punchQueued=true; normalControl();
+  __check('#106 cannot punch while wearing the box',
+          snake.state!=='punch' && snake.controlMod===CONTROL_NORMAL && punchQueued===false);
+  selectedItem=0;
+
+  // --- #107: ChkWaterTiles classifies the H tile (X-4) first; H shallow beats L deep ---
+  reset(); currentRoom=70; snake.x=128; snake.y=100;            // room 70 is shallow-water tileset
+  const wty=snake.y>>3, hcol=(snake.x-4)>>3, lcol=(snake.x+4)>>3, W=assets.collision.width;
+  const setT=(col,v)=>{ assets.collision.tiles[wty*W+col]=v; };
+  setT(hcol,0x73); setT(lcol,0x75); snake.anim=ANIM_NORMAL; snake.invulnTimer=0; chkWater();
+  __check('#107 H shallow + L deep -> SHALLOW (H wins, no deep drain)', snake.anim===ANIM_WATER);
+  setT(hcol,0x00); setT(lcol,0x75); snake.invulnTimer=0; chkWater();
+  __check('#107 H non-water + L deep -> DEEP (L consulted)', snake.anim===ANIM_DEEP_WATER);
+  setT(hcol,0x6D); setT(lcol,0x75); snake.anim=ANIM_NORMAL; snake.invulnTimer=0; chkWater();
+  __check('#107 H brick + L deep -> DEEP (brick checked last)', snake.anim===ANIM_DEEP_WATER);
 })();
 `;
 

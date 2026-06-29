@@ -187,18 +187,18 @@ const test = `
   lg.dir='left'; snake.x=80; snake.y=100;
   snake.y=100+5; __check('LOS left (guard): |dy|=5 is inside the ±6 band', guardSeesSnake(lg)===true);
   snake.y=100+6; __check('LOS left (guard): |dy|=6 is outside the band', guardSeesSnake(lg)===false);
-  // a wall blocks LOS; a railing (0x6B) is see-through in a water room only
-  reset(0); const lc=C(); currentRoom=105;             // 105 is a water-channel room (ROOMS_WATER)
+  // #101: the handrail see-through (LOS_SEETHROUGH) applies only in the Building tileset (id 0),
+  // matching ChkViewObstacles (CurrentTileSet == 0) — not a hardcoded water-room set.
+  reset(0); const lc=C(); currentRoom=105;             // 105 is a Building-tileset room (roomTileset 0)
   lc.solid[(100>>3)*lc.width + ((120>>3)-2)]=1;        // a solid cell two tiles left of the guard
   lc.tiles[(100>>3)*lc.width + ((120>>3)-2)]=0x6B;     // ...that is a RAILING tile
   assets.collision=lc; guardsData={'105':{x:120,y:100,dir:'left'}}; buildGuardRaw(105); currentRoom=105;
   const rg=guards[0]; rg.touched=false; rg.dir='left'; snake.x=80; snake.y=100;
-  __check('LOS sees THROUGH a railing tile in a water room', guardSeesSnake(rg)===true);
+  __check('#101 LOS sees THROUGH a railing in a Building-tileset room (105)', guardSeesSnake(rg)===true);
   lc.tiles[(100>>3)*lc.width + ((120>>3)-2)]=0x55;     // a plain solid wall tile (not see-through)
   __check('LOS is blocked by a solid non-railing wall', guardSeesSnake(rg)===false);
-  currentRoom=0;                                        // a non-water room: the railing is NOT see-through
-  lc.tiles[(100>>3)*lc.width + ((120>>3)-2)]=0x6B; assets.collision=lc;
-  __check('the railing see-through is gated to water rooms (blocks elsewhere)', guardSeesSnake(rg)===false);
+  lc.tiles[(100>>3)*lc.width + ((120>>3)-2)]=0x6B; currentRoom=100;   // room 100 is NOT the Building tileset
+  __check('#101 the railing BLOCKS LOS outside the Building tileset (room 100)', guardSeesSnake(rg)===false);
 
   // ==== ListenShotsChkTouch: an exploding shot's NOISE wakes sleeping guards / sentinels ====
   reset(0); assets.collision=C(); snake.x=10; snake.y=10;   // Snake far away (no LOS, no touch)
@@ -276,10 +276,13 @@ const test = `
   updateGuard();                                                // spawns on point 0 -> reach -> face new dir (up) -> stop
   __check('#39 a stop enters the look (phase 1, facing the travel dir up)',
     g39.lookPhase === 1 && g39.dir === 'up' && g39.waitTimer === 0x10);
-  for (let i = 0; i < 0x10; i++) updateGuard();                 // hold 0x10, then GuardPatrolTurn turns ±90°
+  // #100: the 0x10 look timer ticks at the ~30Hz ROM iteration; keep tickCounter even so each
+  // updateGuard() lands on the iteration boundary (0x10 iterations = one look phase).
+  tickCounter = 0;
+  for (let i = 0; i < 0x10; i++) { updateGuard(); tickCounter = (tickCounter + 2) & 0xff; }
   __check('#39 after 0x10 it turns to look perpendicular (up -> left), phase 2',
     g39.lookPhase === 2 && g39.dir === 'left');
-  for (let i = 0; i < 0x10; i++) updateGuard();                 // hold 0x10, then GuardPatrolWait restores + resumes
+  for (let i = 0; i < 0x10; i++) { updateGuard(); tickCounter = (tickCounter + 2) & 0xff; }
   __check('#39 after another 0x10 it restores the travel facing (up) and resumes patrol',
     g39.lookPhase === 0 && g39.dir === 'up');
   // and the ~50% walk-through: a high RNG keeps the guard moving (no stop)

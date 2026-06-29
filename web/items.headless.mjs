@@ -85,6 +85,12 @@ const test = `
   // --- first weapon auto-selects with 0 ammo (GetWeapon3 + ItemTakeAmount) ---
   reset(); takeItem(1);
   __check('handgun first: auto-selected, 0 ammo', selectedWeapon===HAND_GUN && weapons.get(HAND_GUN)===0);
+
+  // #109: the antenna pickup (id 0x10 -> inv SELECTED_ANTENNA=8) forces a pending incoming call
+  reset(); incomingCallTimer=0; radioCallFlag=2; takeItem(0x10);
+  __check('#109 antenna pickup forces a pending incoming call (AddItemInventory3)',
+    incomingCallTimer===0x10 && radioCallFlag===0 && items.has(SELECTED_ANTENNA));
+
   reset(); takeItem(3);                                          // grenade launcher first
   __check('grenade launcher first: NOT auto-selected', weapons.has(GRENADE_LAUNCHER) && selectedWeapon===0);
   reset(); takeItem(1); takeItem(5);                             // plastic bomb grants 5

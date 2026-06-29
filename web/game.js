@@ -624,6 +624,8 @@ function takeItem(id) {
   const inv = id - SUPRESSOR;
   if (inv === 0x1A) { recoverEquipment(); return; }           // the trash bag (logic/items.asm:122)
   items.set(inv, (items.get(inv) || 0) + ITEM_TAKE_AMOUNT[id - 1]);
+  // AddItemInventory3: picking up the antenna forces a pending incoming call (items.asm:162-170). (#109)
+  if (inv === SELECTED_ANTENNA) { incomingCallTimer = 0x10; radioCallFlag = 0; }
   clampInventory();
 }
 
@@ -1156,6 +1158,9 @@ const SELECTED_UNIFORM = 0x18;               // Enums.asm SELECTED_UNIFORM
 const SELECTED_COMPASS = 0x0B;               // Enums.asm SELECTED_COMPASS (navigates the desert, room 103)
 let desertSecurity = null, desertGuardTextShown = false;
 function buildDesertSecurity(n) {
+  // InitDesertSecurity: an unconditional StopAlert on entering room 69 (clears the alert so the
+  // uniform/"Come in" flow can run), then dismiss if Snake arrived from building 2 (room 73). (#97)
+  if (n === 69) stopAlarm();
   desertSecurity = (n === 69 && previousRoom !== 73) ? { status: 0, timer: 0x10, doorStep: 0 } : null;
 }
 function desertSecurityTick() {
@@ -1992,7 +1997,7 @@ function midBossTick() {
     if (b.life <= 0) { midBossKill(b, i); continue; }
     b.anim = (b.anim + 1) & 0xff;
     if (b.kind === 'tank') {
-      if (Math.abs(snake.x - b.x + 4) < 9 && b.cannon === 1) {     // the cannon column
+      if (Math.abs(snake.x - b.x) < 5 && b.cannon === 1) {     // cannon column: PlayerX-X+4 < 9 unsigned = ±4 (#102)
         tankShells.push({ x: b.x, y: b.y + 4 });
         playBuf(assets.rocketBuf);                          // shell shot
         b.cannon = 0x1E;
@@ -2796,15 +2801,16 @@ function buildDoors(n) {
       id: d.id, type: d.type, lock: d.lock || 0, dest: d.dest,
       img: g.img ? doorImages.get(g.img) : null,
       rect: doorCollRect(d.type, d.x, d.y),                          // collision/touch footprint
-      // The entry trigger. Type 6 (the elevator room's invisible floor exit) has DISTINCT
-      // touch and enter zones (DoorOpenEnterDat row 6: open at X-8..X+8, enter at X+8..X+24)
-      // — entering on the touch zone would cut to the floor room 16px early. Type 20 (the
-      // room-117 roof-jump edge, door 0x91) enters through DoorOpenEnterDat row 20's tall
-      // strip: (X, Y-16) 8x64 — the whole dark edge, not a 16x16 square. Other types
-      // enter on the same footprint as before.
-      enterRect: d.type === 6 ? { x: d.x + 8, y: d.y + 24, w: 16, h: 16 }
-               : d.type === 20 ? { x: d.x, y: d.y - 16, w: 8, h: 64 }
-                               : doorCollRect(d.type, d.x, d.y),
+      // The entry trigger is the per-type DoorOpenEnterDat zone (door-types.json enter* fields),
+      // distinct from both the open area and the collision footprint — e.g. the north door (type 1)
+      // enters at (X, Y+16) 32x16, and type 6 / type 20 get their DISTINCT enter strips for free
+      // (was: the collision footprint for every type but 6/20, cutting some rooms early). (#104)
+      enterRect: (() => {
+        const t = doorTypes[String(d.type)];
+        return (t && t.enterNX != null)
+          ? { x: d.x + t.enterOffX, y: d.y + t.enterOffY, w: t.enterNX, h: t.enterNY }
+          : doorCollRect(d.type, d.x, d.y);
+      })(),
       srect: { x: d.x + g.offX, y: d.y + g.offY, w: g.w, h: g.h },   // sprite draw rect
       shear: g.shear || 0,
       x: d.x, y: d.y,
@@ -2886,6 +2892,7 @@ async function loadSounds() {
   if (!assets.logoMoveBuf)  assets.logoMoveBuf  = await decode('assets/logo-move.wav');  // SFX 0x47 (logo moving)
   if (!assets.logoStopBuf)  assets.logoStopBuf  = await decode('assets/logo-stop.wav');  // SFX 0x4A (logo stops)
   if (!assets.wallHitBuf)    assets.wallHitBuf    = await decode('assets/wall-hit.wav');    // SFX 0x0A (punch breakable wall)
+  if (!assets.punchWallBuf)  assets.punchWallBuf  = await decode('assets/punch-wall.wav');  // SFX 9 (punch solid wall)
   if (!assets.wallBrokenBuf) assets.wallBrokenBuf = await decode('assets/wall-broken.wav'); // SFX 0x1E (wall broken)
   if (!assets.laserBuf)      assets.laserBuf      = await decode('assets/laser.wav');       // SFX 4 (laser shot)
   if (!assets.smgBuf)           assets.smgBuf           = await decode('assets/smg.wav');            // SFX 0x0D
@@ -3407,6 +3414,7 @@ const snake = {
 const HAND_GUN = 1, SUB_MACHINE_GUN = 2, GRENADE_LAUNCHER = 3, ROCKET_LAUNCHER = 4, SUPRESSOR = 8;
 const SELECTED_BOX = 0x19, SELECTED_OXYGEN = 0x0A, SELECTED_RATION = 0x16;   // constants/Enums.asm
 const SELECTED_GOGGLES = 4;   // the infrared goggles (Enums.asm:87) — reveal the laser beams
+const SELECTED_ANTENNA = 8;   // Enums.asm:91 — the radio antenna (AddItemInventory3 forces a pending call)
 const SELECTED_BINOCULARS = 0x09;   // Enums.asm:92 — the recon telescope (BinocularMode)
 // Keycards (constants/Enums.asm): SELECTED_CARDn = 0x0D + n (CARD1=0x0E .. CARD8=0x15). A door's lock
 // value L (2..9, from IdDoorsLogic & 0x1F) requires card (L-1), i.e. item id 0x0C + L (ChkCard1..8).
@@ -3508,6 +3516,11 @@ function isDeepWater(tx, ty) {
   if (t >= 0x6F && t <= 0x72) return DEEP_WATER_ROOMS.has(currentRoom);
   return false;
 }
+// RoomGfxSetIds (data/roomtileset.asm): each room's tileset id, nibble-packed two rooms per byte.
+// GetNibbleRoom: even room = high nibble (byte>>4), odd room = low nibble (byte&0xF). Tileset 0 =
+// Building — the only tileset whose tiles include the see-through handrails (ChkViewObstacles). (#101)
+const ROOM_TILESET_IDS = [0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x22,0x22,0x20,0x02,0x22,0x52,0x22,0x11,0x11,0x11,0x11,0x11,0x11,0x11,0x11,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x22,0x22,0x21,0x11,0x11,0x11,0x11,0x11,0x10,0x00,0x00,0x01,0x11,0x11,0x12,0x60,0x10,0x41,0x11,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x44,0x34,0x44,0x11,0x10,0x04,0x44,0x44,0x44,0x11,0x10,0x33,0x30,0x00,0x00,0x00,0x00,0x00,0x00,0x33,0x33,0x33,0x33,0x33,0x37];
+const roomTileset = (n) => { const b = ROOM_TILESET_IDS[n >> 1] || 0; return (n & 1) ? (b & 0x0f) : (b >> 4); };
 
 // Hard cut to the neighbor room and place Snake at the matching (mirrored) entry edge.
 function transition(dir, neighborRoom) {
@@ -3651,10 +3664,10 @@ function chkPunchOpenDoors() {
     const need = lock === 10 || lock === 11 ? d.type : PUNCH_WALL_DIRS[d.type - 7];
     if (DIR_TO_PD[snake.dir] !== need) continue;
     if (!touchDoor(d)) continue;
-    if (lock === 10 || lock === 11) { openDoor(d); continue; }   // one punch (lock 11 =
-                                                      //   ChkDoorLorry: punch OR bomb)
-    if (lock === 16) { playWallHit(); continue; }     // ChkPunchBaseWall: "punching them sounds
-                                                      //   funny" — the SFX, never opens (bomb only)
+    if (lock === 10) { openDoor(d); continue; }       // ChkPunchDoor: ONE punch facing the door opens
+    if (lock === 11 || lock === 16) { playWallHit(); continue; }  // ChkDoorLorry (PlayBreakableSfx) /
+                                                      //   ChkPunchBaseWall: a punch only SOUNDS the wall;
+                                                      //   these open by plastic bomb only (#103)
     const broke = d.id === 0x0C ? --prisonWall2Life <= 0 : --prisonWall1Life <= 0;
     if (broke) openDoor(d);
     else playWallHit();                               // SFX 0x0A: punching a breakable wall
@@ -4581,7 +4594,7 @@ function elevatorTick() {
   } else {                                     // ElevatorDown
     if (currentRoom >= 247 && currentRoom <= 249 && held === 'down') return; // ChkDoNotStop2
     if (elevatorY === 0xB8) { elevatorStatus = 1; return; }
-    if (currentRoom === 250 && held === 'down') return;
+    if (currentRoom === 250 && held === 'up') return;          // ElevatorDown3 room 0xFA: `rra` tests the Up bit (#99)
     if (elevatorY === 0x78 || elevatorY === 0x38) elevatorStatus = 1;
   }
 }
@@ -5090,7 +5103,7 @@ const guardBlocked = (x, y, dir) => blocked(x, y, dir, false, GUARD_PROBES);
 // (a solid tile that isn't a see-through railing — only in the building/water tilesets) blocks LOS.
 function losClear(g, s, dir) {
   const c = assets.collision;
-  const seethrough = ROOMS_WATER.has(currentRoom);     // railings exist in the water-channel rooms
+  const seethrough = roomTileset(currentRoom) === 0;   // handrails see-through only in the Building tileset (#101)
   const gx = g.x >> 3, gy = g.y >> 3, sx = s.x >> 3, sy = s.y >> 3;
   const blockedTile = (i) => c.solid[i] !== 0 && !(seethrough && LOS_SEETHROUGH.has(c.tiles[i]));
   if (dir === 'left' || dir === 'right') {
@@ -5230,17 +5243,20 @@ function updateGuardOne(guard) {
   // or on Snake's noise/touch (then it raises the alarm). While awake it patrols/detects normally,
   // dozing off again after AwakeTime.
   if (guard.sleepy) {
+    // The sleepy AwakeTime (0xC0) / SleepingTime (256) are ROM iteration counts; gate their decrements
+    // to the ~30Hz boundary like the alert/sentinel/respawn code (updateGuard runs at 60Hz). (#100)
+    const romTick = (tickCounter & 1) === 0;
     if (guard.asleep) {
-      animateZzz(guard);                                                    // AnimZzzSign
+      animateZzz(guard);                                                    // AnimZzzSign (cosmetic, 60Hz)
       if (alertMode) guardWake(guard);                                      // GuardWakeUp on alarm
       else if (listenShotsChkTouch(guard)) {
         // GuardSleeping -> ListenShotsChkTouch: a touch OR the noise of an exploding (unsuppressed)
         // shot wakes the guard and raises the alarm. Plain gun-fire noise still comes via
         // chkAlertTrigger (which sets the alarm, waking him through the AlertMode branch above).
         guardWake(guard); raiseAlarm(currentRoom);
-      } else if (--guard.sleepTimer <= 0) { guardWake(guard); setText(34, 2); }  // GuardSleeping: SleepingTime elapsed -> GuardWakeUp: TEXT 34 "OVERSLEPT" (only the natural wake says it; alarm/noise/touch wakes don't)
+      } else if (romTick && --guard.sleepTimer <= 0) { guardWake(guard); setText(34, 2); }  // GuardSleeping: SleepingTime elapsed -> GuardWakeUp: TEXT 34 "OVERSLEPT" (only the natural wake says it; alarm/noise/touch wakes don't)
       if (guard.asleep) { guard.dir = 'down'; return; }                     // still asleep: no patrol/LOS
-    } else if (--guard.awakeTimer <= 0) {                                   // ChkSleepyGuard: AwakeTime elapsed -> doze off
+    } else if (romTick && --guard.awakeTimer <= 0) {                        // ChkSleepyGuard: AwakeTime elapsed -> doze off
       guard.asleep = true; guard.sleepTimer = SLEEPY_SLEEP_TICKS; guard.zzzFrame = 0; guard.zzzTimer = 0;
       setText(33, 2);                                                       // ChkSleepyGuard: TEXT 33 "I'M SLEEPY" via SetTextUnskippable
       guard.dir = 'down'; return;
@@ -5301,6 +5317,7 @@ function updateGuardOne(guard) {
   // stands (no step); LOS still runs above on guard.dir, so the turned facing in phase 2 can detect.
   if (guard.lookPhase > 0) {
     guard.walkPhase = 0; guard.animTimer = 0;
+    if ((tickCounter & 1) !== 0) return;                     // advance the 0x10 look timer at ~30Hz only (#100)
     if (--guard.waitTimer > 0) return;                       // hold the current facing for 0x10
     if (guard.lookPhase === 1) {                             // GuardPatrolTurn: turn ±90° and look again
       guard.lookSaved = guard.dir;                           // PreviousDirection
@@ -5794,25 +5811,40 @@ function swAlarm(g) {
   g.alertIconTimer = ALERT_ICON_TICKS;                  // DrawAlertSign flash
   g.swStatus = 6; g.swWait = 0x0F; g.dir = snake.x < g.x ? 'left' : 'right';
 }
+// GuardSwChkBox: the cardboard box hides Snake from the switch guard only while STILL — a MOVING box
+// still alarms (matches GuardSwChkBox testing PlayerSpeedX/Y).
+function swBoxOk() { return !(snake.anim === ANIM_BOX && snake.state !== 'walk'); }
+// GuardSwChkSeeY: the lower-half tripwire — the switch guard does NOT use a directional LOS; Snake at
+// PlayerY >= 0x80 is "inline" and triggers the alarm regardless of the guard's facing/X (box-aware). (#94)
+function swChkSeeY() { return snake.y >= 0x80 && swBoxOk(); }
+// GuardSwChkPlayer (look-north): at the right limit (0xD0), Snake far-right (PlayerX >= 0xC0) is seen;
+// otherwise at 0x98/0x50 Snake within ~8px of the guard's X is seen; else the Y tripwire applies. (#94)
+function swChkPlayer(g) {
+  if (g.x >= 0xD0) return snake.x >= 0xC0 ? swBoxOk() : swChkSeeY();
+  if (Math.abs(snake.x - g.x) <= 8) return swBoxOk();   // GuardSwChkSee: |PlayerX - GuardX + 8| < 0x11
+  return swChkSeeY();
+}
 function switchGuardLogic(g) {
   if ((tickCounter & 1) !== 0) return;                  // ROM iteration rate
   g.stepping = false;
   switch (g.swStatus) {
     case 0:                                             // GuardSwPatrol
       if (alertMode) { swGoToSwitch(g); return; }
+      if (swChkSeeY()) { swAlarm(g); return; }          // GuardSwChkSeeY: lower-half tripwire (#94)
       g.stepping = true;
       g.x += g.dir === 'right' ? 1 : -1;
       if (g.x <= 0x50) { g.x = 0x50; g.dir = 'right'; }
       else if (g.x === 0x98 || g.x >= 0xD0) {           // GuardSwPatrol2: stop + look north
         if (g.x > 0xD0) g.x = 0xD0;
+        g.swTravelDir = g.dir;                          // GuardSwLookNorth resumes the SAME travel dir (#95)
         g.swStatus = 1; g.swWait = 0x1E; g.dir = 'up'; g.stepping = false; return;
       }
-      if (guardSeesSnake(g)) swAlarm(g);                // GuardSwChkSee (box-aware)
       return;
     case 1:                                             // GuardSwLookNorth
       if (alertMode) { swGoToSwitch(g); return; }
-      if (guardSeesSnake(g)) { swAlarm(g); return; }
-      if (--g.swWait <= 0) { g.swStatus = 0; g.dir = g.x >= 0xD0 ? 'left' : 'right'; }
+      if (--g.swWait > 0) { if (swChkPlayer(g)) swAlarm(g); return; }   // GuardSwChkPlayer while looking (#94)
+      // wait expired: resume — only the right limit (0xD0) turns left; elsewhere keep the travel dir (#95)
+      g.swStatus = 0; g.dir = g.x >= 0xD0 ? 'left' : (g.swTravelDir || 'right');
       return;
     case 2:                                             // GuardSwGoToSw
       g.stepping = true; g.dir = 'left'; g.x -= 3;
@@ -5846,7 +5878,8 @@ function switchGuardLogic(g) {
 // UP/DOWN and fire HORIZONTAL — a cross-fire. Idle -> move -> shoot -> turn -> walk back, on a
 // random cadence. ChkChasePlayer: Snake entering the guard's lane (within 0x21 on the
 // perpendicular axis) transforms the guard into a normal alert chaser.
-const SIL_MOVE = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+// GuardSilencIdle/GuardSilencTurn both `jp SetWalkSpeedFast` -> DirectionSpeeds2 = ±2px/iteration. (#96)
+const SIL_MOVE = { up: [0, -2], down: [0, 2], left: [-2, 0], right: [2, 0] };
 function silencerLogic(g) {
   if ((tickCounter & 1) !== 0) return;                  // ROM iteration rate
   const horiz = (g.y & 0x80) === 0;                     // bit7 Y: upper move L/R, lower U/D
@@ -6645,7 +6678,7 @@ function explodeShot(b, medium) {
 function chkBombWalls(b) {
   for (const d of activeDoors) {
     const lock = d.lock || 0;
-    if (d.open || d.opening || (lock !== 16 && lock !== 11)) continue;   // 11 = ChkDoorLorry (bomb or punch)
+    if (d.open || d.opening || (lock !== 16 && lock !== 11)) continue;   // 11 = ChkDoorLorry (bomb only)
     const t = doorTypes[String(d.type)];
     if (!t) continue;
     const dy = b.y - (d.y + t.openOffY), dx = b.x - (d.x + t.openOffX);
@@ -6944,8 +6977,20 @@ function chkWater() {
     return;
   }
   const ty = snake.y >> 3, hx = (snake.x - 4) >> 3, lx = (snake.x + 4) >> 3;
-  if (isDeepWater(hx, ty) || isDeepWater(lx, ty)) snake.anim = ANIM_DEEP_WATER;
-  else if (isShallowWater(hx, ty) || isShallowWater(lx, ty)) snake.anim = ANIM_WATER;
+  // ChkWaterTiles (Banks0123.asm:9162): classify the H tile (X-4) across the 0x6F-0x76 water ranges
+  // FIRST — whatever it is (shallow OR deep) wins outright; the L tile (X+4) is consulted only when H
+  // is non-water; bricks (0x6D) are checked LAST, shallow only when NEITHER tile is 0x6F-0x76. (#107)
+  const waterKind = (tx) => {                       // 0x6F-0x76 only (brick handled below)
+    const t = tileAt(tx, ty);
+    if (t === 0x75 || t === 0x76) return 'deep';
+    if (t === 0x73 || t === 0x74) return 'shallow';
+    if (t >= 0x6F && t <= 0x72) return DEEP_WATER_ROOMS.has(currentRoom) ? 'deep' : 'shallow';  // shadow split
+    return null;
+  };
+  const kind = waterKind(hx) || waterKind(lx)
+    || (tileAt(hx, ty) === 0x6D || tileAt(lx, ty) === 0x6D ? 'shallow' : null);   // ChkWaterTiles3 bricks
+  if (kind === 'deep') snake.anim = ANIM_DEEP_WATER;
+  else if (kind === 'shallow') snake.anim = ANIM_WATER;
   else if (snake.anim === ANIM_WATER || snake.anim === ANIM_DEEP_WATER) snake.anim = ANIM_NORMAL;
 
   // Deep water without the oxygen tank drains life (SetInWaterMode3 -> DecrementLife_C): lose
@@ -6992,14 +7037,21 @@ function normalControl() {
     snake.anim = (selectedItem === SELECTED_BOX) ? ANIM_BOX : ANIM_NORMAL;
   }
   if (punchQueued) {
-    punchQueued = false;
-    snake.state = 'punch';
-    snake.controlMod = CONTROL_PUNCH;
-    snake.anim = ANIM_PUNCH;       // punch overrides the box/walk animation (chkPunch sets it)
-    snake.punchTimer = PUNCH_TICKS;
-    playPunch();
-    tryPunchGuard();
-    return;
+    punchQueued = false;           // ControlsTrigger is per-frame: the press is consumed either way
+    // chkPunch (Banks0123.asm:8939): can't punch in water, deep water, or inside the box
+    // (PlayerAnimation 2/4/7 -> `ret z`). (#106)
+    if (snake.anim !== ANIM_WATER && snake.anim !== ANIM_DEEP_WATER && snake.anim !== ANIM_BOX) {
+      snake.state = 'punch';
+      snake.controlMod = CONTROL_PUNCH;
+      snake.anim = ANIM_PUNCH;       // punch overrides the box/walk animation (chkPunch sets it)
+      snake.punchTimer = PUNCH_TICKS;
+      playPunch();
+      // ChkPunchColl (Banks0123.asm:9017): probe the tile one cell ahead in the facing direction;
+      // on a solid tile play SFX 9 "punch wall" (distinct from the 0x0A breakable-wall sound). (#108)
+      if (blocked(snake.x, snake.y, snake.dir)) playBuf(assets.punchWallBuf);
+      tryPunchGuard();
+      return;
+    }
   }
 
   const dir = currentDir();

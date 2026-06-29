@@ -61,7 +61,7 @@ print · pick up · spawn · rank up · rank down · logo move/stop · radio noi
 |---|---|---|
 | Tank shell shot (0x6D1D) | desert barrage / tank cannon fires | reuses rocket.wav (stand-in) |
 | Tank shell whistle (0x7145) | a shell falling from the sky | ❌ not exported (no whistle) |
-| Punch wall (0x6C32) | punching a solid (non-breakable) wall | reuses wall-hit.wav (stand-in) |
+| Punch wall (0x6C32) | punching a solid (non-breakable) wall | ✅ exported (punch-wall.wav) + wired in ChkPunchColl (#108, 2026-06-29) |
 | Pause (0x8658) | pressing pause | ❌ not exported (pause is silent) |
 | Big Boss dies (0x8675) | Big Boss's death | reuses guard-dead.wav (stand-in) |
 | Ending explosion (SFX 0x56) | the ending cinematic | reuses bomb-explosion.wav (stand-in) |

@@ -147,6 +147,19 @@ const test = `
     'elevY='+elevatorY);
   held.clear();
 
+  // #99: room 250 going DOWN skips the intermediate stops only while UP is held (ElevatorDown3 rra = Up bit)
+  gameState = 'elevator'; currentRoom = 250; elevatorDir = 2; elevatorStatus = 0;
+  elevatorY = 0x40; snake.y = 0x3C; held.add('dir:up'); pushRecency('up');
+  tick(2 * (0x78 - 0x40) + 8);                       // enough iterations to pass Y 0x78
+  __check('#99 room 250 down + holding UP skips the 0x78 stop', gameState === 'elevator' && elevatorY > 0x78,
+    'elevY='+elevatorY);
+  held.clear();
+  gameState = 'elevator'; currentRoom = 250; elevatorDir = 2; elevatorStatus = 0;
+  elevatorY = 0x40; snake.y = 0x3C; held.add('dir:down'); pushRecency('down');
+  guard_ = 0; while (gameState === 'elevator' && guard_++ < 400) tick(1);
+  __check('#99 room 250 down + holding DOWN stops at 0x78', elevatorY === 0x78, 'elevY='+elevatorY);
+  held.clear();
+
   // --- shaft exit chaining (unit-level): Y < 24 cuts to the connected elevator room ---
   connections['248'] = { up: 240, down: null, left: null, right: null };
   gameState = 'elevator'; currentRoom = 248; elevatorDir = 1; elevatorStatus = 0;

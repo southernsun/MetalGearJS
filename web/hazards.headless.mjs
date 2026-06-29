@@ -144,8 +144,8 @@ const test = `
   const ux=up.x; iter2(()=>silencerLogic(up), 1);
   // InitBulletVert: vy is the full ±2.5 axis speed (down, since the guard is in the upper half);
   // vx is the small random drift (-0x40..+0x3F in 8.8, /2 => |vx| <= 0.125).
-  __check('an upper suppressor guard slides along its axis and fires a VERTICAL bullet (down) with drift',
-    up.x!==ux && bullets.length>0 && bullets[0].vy===2.5 && Math.abs(bullets[0].vx) <= 0.125, 'v='+bullets[0].vx+','+bullets[0].vy);
+  __check('an upper suppressor guard slides 2px (SetWalkSpeedFast, #96) and fires a VERTICAL bullet (down) with drift',
+    up.x===ux-2 && bullets.length>0 && bullets[0].vy===2.5 && Math.abs(bullets[0].vx) <= 0.125, 'x='+up.x+'/'+ux+' v='+bullets[0].vx+','+bullets[0].vy);
   snake.y=up.y; snake.x=up.x;                           // step into his lane (within 0x21 in Y)
   iter2(()=>silencerLogic(up), 1);
   __check('Snake entering the lane transforms the guard into an alert chaser', up.state==='alert');
@@ -164,6 +164,29 @@ const test = `
   __check('#69 switch guard holds fire while PlayerY < 0x80', bullets.length===0);
   sw.swStatus=5; sw.swWait=1; snake.y=0xA0; tickCounter=0; updateGuardOne(sw);   // lower half: fire
   __check('#69 switch guard fires once PlayerY >= 0x80', bullets.length>0);
+
+  // #94: GuardSwChkSeeY is a lower-half tripwire (NOT a directional LOS) — it alarms on Snake at
+  // PlayerY >= 0x80 regardless of the guard's facing/X (box-aware).
+  alertMode=false; redAlertFlag=false; powerSwitchOn=false; powerSwitch=null;
+  buildGuard(16); const sw2=guards[0]; sw2.swStatus=0; sw2.x=0x80; sw2.dir='right';
+  snake.anim=ANIM_NORMAL; snake.state='idle'; snake.x=0x10;
+  snake.y=0x40; tickCounter=0; updateGuardOne(sw2);     // upper half, far away: no alarm
+  __check('#94 switch guard ignores Snake in the upper half', sw2.swStatus===0 && alertMode===false);
+  snake.y=0xA0; tickCounter=0; updateGuardOne(sw2);     // lower half, out of the facing line: alarm
+  __check('#94 switch guard alarms on Snake in the LOWER half (tripwire, any facing)',
+    alertMode===true && sw2.swStatus===6);
+
+  // #95: look-north resumes the SAME travel direction — a left-moving guard does not flip to right at
+  // 0x98 (which would oscillate 0x98<->0xD0 and never reach the 0x50 limit).
+  alertMode=false; redAlertFlag=false;
+  buildGuard(16); const sw3=guards[0]; sw3.swStatus=0; sw3.x=0x99; sw3.dir='left';
+  snake.anim=ANIM_NORMAL; snake.state='idle'; snake.x=0x10; snake.y=0x10;   // far upper: no alarm
+  tickCounter=0; updateGuardOne(sw3);                   // steps left to 0x98 -> look north, saves 'left'
+  __check('#95 a left-moving guard stops to look at 0x98 (travel dir saved)',
+    sw3.swStatus===1 && sw3.swTravelDir==='left' && sw3.x===0x98);
+  sw3.swWait=1; tickCounter=0; updateGuardOne(sw3);     // the wait expires -> resume LEFT, not right
+  __check('#95 it resumes moving LEFT after the look (full patrol, no oscillation)',
+    sw3.swStatus===0 && sw3.dir==='left');
 
   // ==== Land mines (InitMines, the buried mine fields) ====
   gameState='play'; assets.collision=C(); currentRoom=9; buildMines(9);

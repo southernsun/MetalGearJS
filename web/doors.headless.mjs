@@ -140,6 +140,27 @@ const test = `
   maybeEnterDoor();                                    // walking into the opened passage
   __check('walking through an opened in-room wall does NOT teleport / reload the room',
           currentRoom === 60 && snake.x === px && snake.y === py);
+
+  // --- #103: a lock-11 wall (ChkDoorLorry, e.g. door 0x69) opens by plastic bomb ONLY ---
+  const t2 = doorTypes['2'];
+  const d11 = { id: 0x69, type: 2, lock: 11, x: 100, y: 100, open: false, opening: false,
+                rect: { x: 100, y: 100, w: 16, h: 16 }, enterRect: { x: 100, y: 100, w: 16, h: 16 } };
+  activeDoors = [d11];
+  audioCtx = null;                                              // silence the wall-hit SFX
+  snake.dir = 'down'; snake.controlMod = CONTROL_PUNCH;         // facing the door (type 2), punching
+  snake.x = d11.x + t2.openOffX; snake.y = d11.y + t2.openOffY; // inside its open area
+  chkPunchOpenDoors();
+  __check('#103 punching a lock-11 wall does NOT open it', d11.open === false && d11.opening === false);
+  chkBombWalls({ x: d11.x + t2.openOffX, y: d11.y + t2.openOffY });   // an exploding plastic bomb in its zone
+  __check('#103 a plastic bomb DOES open the lock-11 wall', d11.open === true || d11.opening === true);
+
+  // --- #104: the entry trigger uses the per-type DoorOpenEnterDat zone, not the collision footprint ---
+  doorsData['999'] = [{ id: 0xAA, type: 1, lock: 0, dest: 0, x: 100, y: 50 }];
+  buildDoors(999);
+  const nd = activeDoors.find(x => x.id === 0xAA);
+  __check('#104 type-1 (north) enters at (x, y+16) 32x16 — DoorOpenEnterDat, not the footprint',
+    nd.enterRect.x === 100 && nd.enterRect.y === 66 && nd.enterRect.w === 32 && nd.enterRect.h === 16,
+    JSON.stringify(nd.enterRect));
 })();
 `;
 

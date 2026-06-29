@@ -3058,10 +3058,7 @@ window.addEventListener('keydown', (e) => {
   if (gameState === 'binoculars') {                  // BinocularLogic input (F3 exits, d-pad peeks)
     e.preventDefault();
     if (e.repeat) return;
-    const d = DIR_KEYS[e.key];
-    if (d) { if (binoc && binoc.mode === 'idle') binocDirTrigger = d; }   // ControlsTrigger, idle only
-    else if (e.key === 'Escape' || e.key === 'e' || e.key === 'E' || e.key === 'q' || e.key === 'Q')
-      exitBinoculars();                              // ExitBinocularMode (the ROM's F3)
+    binocOnKey(e.key);
     return;
   }
   if (PUNCH_KEYS.has(e.key)) { e.preventDefault(); if (!e.repeat) punchQueued = true; }
@@ -7511,7 +7508,8 @@ function chkUseItem() {
 //   - The ROM saves/restores EnemyList/power/radio/alert because DrawBinocRoom overwrites the shared
 //     room RAM; this port renders from a transient snapshot and never mutates play state, so there
 //     is nothing to back up.
-//   - The crosshair sprite art (LoadSprTarget) isn't an exported asset — drawn here with primitives.
+// The crosshair sprite art (LoadSprTarget/SprTarget) isn't an exported asset, so it is reproduced
+// pixel-exact inline from the decoded ROM pattern (see BINOC_RETICLE / drawBinocReticle).
 const TIMER_BINOC = 0x80;          // TimerBinocular: iterations an adjacent room is shown (128)
 let binoc = null;                  // null = not active; else { home, mode:'idle'|'show', timer, lookDir, snap }
 let binocDirTrigger = null;        // ControlsTrigger edge: a direction pressed this frame (idle only)
@@ -7538,6 +7536,17 @@ function enterBinoculars() {        // ExitEquipMenu -> GAME_MODE_BINOCULARS (Bi
 }
 function exitBinoculars() { gameState = 'play'; binoc = null; binocDirTrigger = null; }   // ExitBinocularMode -> play
 
+// BinocularMode input (Banks0123.asm:12256): the d-pad peeks a neighbour (ControlsTrigger edge, idle
+// only); F3 (Escape/E/Q here) exits — but ONLY when idle (BinoculStatus==1, showing the player's own
+// room). While a neighbour is shown the player is locked in until the timer returns the view home.
+function binocOnKey(key) {
+  const d = DIR_KEYS[key];
+  if (d) { if (binoc && binoc.mode === 'idle') binocDirTrigger = d; }
+  else if (key === 'Escape' || key === 'e' || key === 'E' || key === 'q' || key === 'Q') {
+    if (binoc && binoc.mode === 'idle') exitBinoculars();   // ExitBinocularMode (the ROM's F3)
+  }
+}
+
 // BinocularLogic: idle shows the player's room and polls the d-pad; a press toward a valid neighbour
 // shows it for TIMER_BINOC, then returns. A dead-end direction does nothing (GetNextRoomNum FF).
 function binocularsTick() {
@@ -7560,7 +7569,10 @@ function binocularsTick() {
 // the crosshair, "TELESCOPE MODE", and the direction arrow.
 function drawBinoculars() {
   if (!binoc) return;
-  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
+  // DrawBinocRoom ClearPage0: clear the whole 212-line screen, HUD strip included (else the normal
+  // HUD chrome — life bar, weapon/item boxes — bleeds through under the scope view).
+  ctx.clearRect(0, 0, VIEW_W, VIEW_H + HUD_H);
+  ctx.fillStyle = '#000'; ctx.fillRect(0, VIEW_H, VIEW_W, HUD_H);   // backdrop behind the bottom-strip banner/arrow
   const s = binoc.snap;
   if (s.img) ctx.drawImage(s.img, 0, 0, VIEW_W, VIEW_H);
   const sd = activeDoors, si = roomItems, sg = guards;
@@ -7568,39 +7580,68 @@ function drawBinoculars() {
   drawRoomItems(); drawDoors(); drawGuard();
   activeDoors = sd; roomItems = si; guards = sg;
   drawBinocReticle(VIEW_W >> 1, VIEW_H >> 1);
-  drawText('TELESCOPE MODE', 8, 8);                                  // txtTelescope (PrintTextXY)
+  // txtTelescope 0C420h -> X=0x20 (32), Y=0xC4 (196): the banner sits in the bottom strip, not the
+  // room view (PrintTextXY; word is 0xYYXX, calibrated against txtLife 0xC110 -> (16,193)).
+  drawText('TELESCOPE MODE', 32, 196);
   if (binoc.mode === 'show' && binoc.lookDir) drawBinocArrow(binoc.lookDir);   // ArrowsChars
 }
-// Centre target reticle — the ROM's LoadSprTarget crosshair (SprTarget, BinocularSprAtt): a 32x32
-// WHITE (BinocularSprCol = colour 0x0E) target laid out 2x2 — four L-shaped corner brackets plus a
-// centred cross, no filled centre dot. (Was a green circle — issue #14.)
+// Centre target reticle — the ROM's LoadSprTarget crosshair (SprTarget, gfx/targetspr.asm), a 32x32
+// WHITE (BinocularSprCol = colour 0x0E) target laid out 2x2 (patterns 10h/14h/18h/1Ch). This is the
+// EXACT art, decoded from the UnpackGfx (Banks0123.asm:3684) RLE: four corner brackets, a continuous
+// centred plus with diamond bulges, and four tick marks. (Was a green circle — issue #14; the
+// hand-drawn approximation that replaced it diverged from the real art — issue #118.)
+const BINOC_RETICLE = [
+  '.#######................#######.',
+  '########................########',
+  '###..........................###',
+  '##............................##',
+  '##............................##',
+  '##............................##',
+  '##.............##.............##',
+  '##...........######...........##',
+  '...............##...............',
+  '...............##...............',
+  '.............######.............',
+  '...............##...............',
+  '...............##...............',
+  '.......#..#....##....#..#.......',
+  '.......#..#....##....#..#.......',
+  '......####################......',
+  '......####################......',
+  '.......#..#....##....#..#.......',
+  '.......#..#....##....#..#.......',
+  '...............##...............',
+  '...............##...............',
+  '.............######.............',
+  '...............##...............',
+  '...............##...............',
+  '##...........######...........##',
+  '##.............##.............##',
+  '##............................##',
+  '##............................##',
+  '##............................##',
+  '###..........................###',
+  '########................########',
+  '.#######................#######.',
+];
 function drawBinocReticle(cx, cy) {
   ctx.save();
   ctx.fillStyle = '#ffffff';
-  const px = (x, y, w, h) => ctx.fillRect(Math.round(cx) + x, Math.round(cy) + y, w, h);
-  const H = 16, ARM = 8, T = 1;            // 32x32 cell, 8px corner arms, 1px strokes
-  // Four corner brackets (L-shapes pointing inward).
-  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
-    px(sx < 0 ? -H : H - ARM, sy < 0 ? -H : H - T, ARM, T);   // horizontal arm along the top/bottom edge
-    px(sx < 0 ? -H : H - T, sy < 0 ? -H : H - ARM, T, ARM);   // vertical arm along the left/right edge
+  const x0 = Math.round(cx) - 16, y0 = Math.round(cy) - 16;   // 32x32 centred (ROM sprites X 112-143, Y 80-111)
+  for (let r = 0; r < BINOC_RETICLE.length; r++) {
+    const row = BINOC_RETICLE[r];
+    for (let c = 0; c < row.length; c++) if (row[c] === '#') ctx.fillRect(x0 + c, y0 + r, 1, 1);
   }
-  // Centred cross with a small gap at the middle.
-  px(-ARM, 0, ARM - 2, T); px(2, 0, ARM - 2, T);   // horizontal arms
-  px(0, -ARM, T, ARM - 2); px(0, 2, T, ARM - 2);   // vertical arms
   ctx.restore();
 }
+// ArrowsChars (Banks0123.asm:12586-12603): the peek-direction indicator is a single FONT glyph
+// (up 9Ah / down 9Bh / left 99h / right 3Ch) drawn with DrawChar in the standard text colour at
+// XY 0C0C4h -> X=0xC4 (196), Y=0xC0 (192) — bottom strip, NOT a tinted shape near the reticle.
+const BINOC_ARROW_GLYPH = { up: 0x9A, down: 0x9B, left: 0x99, right: 0x3C };
 function drawBinocArrow(dir) {
-  const cx = VIEW_W >> 1, cy = (VIEW_H >> 1) + 30, s = 5;
-  ctx.save();
-  ctx.fillStyle = '#9ef0a0';
-  ctx.translate(cx, cy);
-  ctx.beginPath();
-  if (dir === 'up')        { ctx.moveTo(0, -s); ctx.lineTo(s, s);  ctx.lineTo(-s, s); }
-  else if (dir === 'down') { ctx.moveTo(0, s);  ctx.lineTo(s, -s); ctx.lineTo(-s, -s); }
-  else if (dir === 'left') { ctx.moveTo(-s, 0); ctx.lineTo(s, s);  ctx.lineTo(s, -s); }
-  else                     { ctx.moveTo(s, 0);  ctx.lineTo(-s, s); ctx.lineTo(-s, -s); }
-  ctx.closePath(); ctx.fill();
-  ctx.restore();
+  const g = BINOC_ARROW_GLYPH[dir];
+  if (g == null) return;
+  drawText(String.fromCharCode(g), 196, 192);
 }
 
 // The equipment-screen consume path of DecItemUnits (Banks0123.asm:1824, type C=2): count -1;

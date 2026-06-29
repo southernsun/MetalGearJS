@@ -2718,6 +2718,9 @@ function updatePrisoner() {
   }
   if (p.status === 'idle') {
     if (++p.animTimer >= 16) { p.animTimer = 0; p.phase ^= 1; }   // Anim2FramesActor (b=0Fh)
+    // PrisonerIdle (prisoner.asm:82-88): in the Coward Duck room the prisoner (Jennifer's brother)
+    // can't be rescued until CARD8 is taken. The animation still ticks; only the touch check is gated.
+    if (currentRoom === 193 && !card8Taken()) return;
     if (Math.abs(p.y + PRISONER_TOUCH_SHAPE.offY - snake.y) < PRISONER_TOUCH_SHAPE.distY &&
         Math.abs(p.x + PRISONER_TOUCH_SHAPE.offX - snake.x) < PRISONER_TOUCH_SHAPE.distX) {
       p.status = 'wait'; p.waitTimer = 2;               // PrisonerIdle2: freed pose + TIMER 2

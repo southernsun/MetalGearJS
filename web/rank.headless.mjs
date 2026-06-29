@@ -141,7 +141,14 @@ const test = `
 
   // --- per-room rescue dialogue (PrisonerRescued, logic/actors/prisoner.asm:216-260) ---
   const rescueIn = (room, y) => { reset(); currentRoom = room;
+    if (room === 193) items.set(SELECTED_CARD1 + 7, 1);   // #98: CARD8 is required to rescue in the Coward Duck room
     placePrisoner(100, y || 100); snake.x = 100; snake.y = y || 100; tick(3); };
+  // #98: the room-193 prisoner (Jennifer's brother) can't be rescued until CARD8 is taken (PrisonerIdle gate)
+  reset(); currentRoom = 193; items.delete(SELECTED_CARD1 + 7);
+  placePrisoner(100, 100); snake.x = 100; snake.y = 100; tick(3);
+  __check('#98 room 193: no rescue without CARD8', prisoner && prisoner.status === 'idle' && rescuedCnt === 0);
+  items.set(SELECTED_CARD1 + 7, 1); tick(3);
+  __check('#98 room 193: CARD8 taken -> the prisoner frees', rescuedRooms.has(193));
   rescueIn(134);
   __check('PrisonerTexts room 134 -> Grey Fox confined (52)', textBox && textBox.id === 52,
     'id=' + (textBox && textBox.id));

@@ -68,6 +68,10 @@ const test = `
   reset(7); raiseAlarm(7);   // a plain guard SIGHTING in a red-alert room: GuardSetAlarm6 seeds 0x1E (not 0x28)
   __check('red alert sets redAlertFlag + arms reinforcements (timer 0x1E, budget 3)',
     redAlertFlag===true && alertRespawnTimer===0x1E && numRespawnGuards===3);
+  // #59: a guard sighting in a red room shows the SIGN but plays the NORMAL alert track (not red music)
+  __check('#59 red-room sighting: sign on, but red-alert MUSIC off', redAlertFlag===true && redAlertMusic===false);
+  reset(7); raiseAlarm(7, true);   // a CAMERA/LASER trigger (forceRed) -> SetAlertMode5 red-alert music
+  __check('#59 a camera/laser trigger plays the red-alert music', redAlertMusic===true);
   reset(0); raiseAlarm(0);
   __check('low alert: redAlertFlag clear, no reinforcement timer', redAlertFlag===false && alertRespawnTimer===0);
   // SetAlertMode2/3/4: the budget is the highest keycard owned + 3, and 0 in room 216.

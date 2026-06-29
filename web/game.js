@@ -498,7 +498,7 @@ function setRoom(n) {
   // they run ShooterLogic until they self-transform. (Room 206's shooters do NOT raise the alarm.)
   if ([88, 90, 91].includes(n) && actorsData && actorsData[n] &&
       actorsData[n].guards.some((g) => g.shooter) && !alertMode) {
-    alertMode = true; redAlertFlag = devForceRed || redAlertBit(n); roomAlert = n;
+    alertMode = true; redAlertFlag = devForceRed || redAlertBit(n); redAlertMusic = devForceRed; roomAlert = n;
     alertRespawnTimer = 0x80; numRespawnGuards = 0x0A;        // InitShooter's 0x0A80
     playAlert();
   }
@@ -4409,7 +4409,7 @@ function putInPrison() {
   equipRemoved = true;
   selectedWeapon = 0;
   selectedItem = 0;
-  alertMode = false; redAlertFlag = false; roomAlert = -1;
+  alertMode = false; redAlertFlag = false; redAlertMusic = false; roomAlert = -1;
   stopAlert();
   captureGuards = [];
   captureFade = 0;
@@ -4775,7 +4775,8 @@ const ELEVATOR_ROOM = 240;            // ChkAlarmEnd: room >= 0xF0 (elevator) en
 const redAlertBit = (room) => room < 128 && ((RED_ALERT_ROOMS[room >> 3] >> (7 - (room & 7))) & 1) === 1;
 
 let alertMode = false;        // AlertMode — the game-wide alarm flag
-let redAlertFlag = false;     // RedAlertFlag — high alert for the trigger room (RedAlertRooms): red sign
+let redAlertFlag = false;     // RedAlertFlag — high alert for the trigger room (RedAlertRooms): red sign + reinforcements
+let redAlertMusic = false;    // SetAlertMode5: the distinct Red Alert TRACK — only a camera/laser trigger (#59)
 let roomAlert = -1;           // RoomAlert — the room where the alarm was triggered
 
 // Raise the global alarm (GuardSetAlarm → SetAlert → SetAlertMode). No-op if already up. Sets the
@@ -4786,8 +4787,11 @@ let roomAlert = -1;           // RoomAlert — the room where the alarm was trig
 function raiseAlarm(room, forceRed, respawnSeed) {
   if (alertMode) return;
   alertMode = true;
-  // Cameras and laser beams force the RED alert (SetAlertMode5, logic/setalert.asm:52-64).
+  // RedAlertFlag (red SIGN + reinforcements) is set by a RedAlertRooms bit OR a camera/laser. The
+  // distinct Red Alert MUSIC (SetAlertMode5, setalert.asm:52-64), though, plays ONLY for a camera/
+  // laser trigger — a plain guard sighting in a red-alert room still plays the normal Alert track. (#59)
   redAlertFlag = !!forceRed || devForceRed || redAlertBit(room);
+  redAlertMusic = !!forceRed || devForceRed;
   roomAlert = room;
   numRespawnGuards = (room === 216) ? 0 : highestCardOwned() + 3;   // SetAlertMode2/3/4 (card-based)
   // AlertRespawnTimer seed (SetAlertModeRespawn). Each trigger SOURCE supplies its own ROM seed:
@@ -4839,7 +4843,7 @@ const NO_ALERT_ROOMS = new Set([6, 9, 10, 20, 102, 103, 120, 173, 174, 175, 208,
 
 // StopAlert: clear all alarm state, stop the alert music, and drop the current guard back to patrol.
 function stopAlarm() {
-  alertMode = false; redAlertFlag = false; roomAlert = -1;
+  alertMode = false; redAlertFlag = false; redAlertMusic = false; roomAlert = -1;
   alertRespawnTimer = 0; numRespawnGuards = 0;                 // disarm the reinforcements + budget
   stopAlert();                                                 // stop the alert music
   startAreaMusic();                                            // the area music returns
@@ -5991,8 +5995,9 @@ function playAlert() {
   alertPlaying = true;
   stopAreaMusic();                    // the alert track replaces the area music (SetAreaMusic)
   if (!audioCtx) return;
-  // Red alert (RedAlertRooms) plays the distinct "Red Alert" track; a plain alert plays "Alert".
-  const buf = (redAlertFlag && assets.redAlertBuf) ? assets.redAlertBuf : assets.alertBuf;
+  // SetAlertMode5: only a camera/laser trigger plays the distinct "Red Alert" track; everything
+  // else (incl. a guard sighting in a red-alert room) plays the normal "Alert" track. (#59)
+  const buf = (redAlertMusic && assets.redAlertBuf) ? assets.redAlertBuf : assets.alertBuf;
   if (buf) {
     alertSource = audioCtx.createBufferSource();
     alertSource.buffer = buf;

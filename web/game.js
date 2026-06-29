@@ -6161,7 +6161,10 @@ function restart() {
   playerShots.length = 0;
   if (checkpointSnapshot) {                  // RestoreGameStat: roll back to the checkpoint
     restoreProgress(checkpointSnapshot);     // sets gameState='play', setRoom, position, control mode
-    snake.life = snake.maxLife; snake.invulnTimer = 0;          // a fresh body at the checkpoint
+    // RestoreGameStat (checkpoints.asm:44-50) restores the buffered GameDataAreas — including the
+    // checkpoint-time Life — and only zeroes DamageDelayTimer. NO refill: Snake resumes at the
+    // (possibly damaged) life he had when he crossed into the checkpoint room. (#36)
+    snake.invulnTimer = 0;                   // zero DamageDelayTimer (restoreProgress kept snake.life)
     snake.animTimer = 0; snake.walkPhase = 0; snake.punchTimer = 0;
     poisoned = false; escaped = false;       // the continue clears Poisoned (DamageDelayTimer=0)
     stopAlarm();

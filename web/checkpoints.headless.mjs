@@ -59,7 +59,7 @@ const test = `
 
   // --- StoreGameStat: takePendingCheckpoint snapshots, then clears the latch -------------------
   currentRoom = 121; snake.x = 0xC0; snake.y = 0xB8; snake.dir = 'up';
-  snake.class = 2; snake.maxLife = RANK_MAX_LIFE[2]; snake.life = snake.maxLife;
+  snake.class = 2; snake.maxLife = RANK_MAX_LIFE[2]; snake.life = 20;   // #36: checkpoint at PARTIAL life (20/32)
   weapons.clear(); weapons.set(HAND_GUN, 0x10);
   items.clear(); openedDoorIds.clear(); weaponsTaken.clear(); itemsTaken.clear();
   previousRoom = 0; pendingCheckpoint = true;
@@ -81,7 +81,8 @@ const test = `
   __check('death returns to the checkpoint room', currentRoom === 121, 'room='+currentRoom);
   __check('death restores the checkpoint position', snake.x === 0xC0 && snake.y === 0xB8);
   __check('death rolls back rank (class 4 -> 2)', snake.class === 2, 'class='+snake.class);
-  __check('death refills life to the rolled-back max', snake.life === RANK_MAX_LIFE[2]);
+  __check('death restores the checkpoint-time life, NOT a full refill (20/32) (#36)',
+    snake.life === 20 && snake.maxLife === RANK_MAX_LIFE[2]);
   __check('death rolls back ammo gained since the checkpoint', weapons.get(HAND_GUN) === 0x10);
   __check('weapons picked up since the checkpoint are LOST', !weapons.has(ROCKET_LAUNCHER));
   __check('doors opened since the checkpoint are LOST', !openedDoorIds.has(0x0B));

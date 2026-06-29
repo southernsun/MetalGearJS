@@ -6805,9 +6805,12 @@ function update() {
   bigBossTick();        // Big Boss (room 119)
   fakeMadnarTick();     // the room-189 trap
   destructTick();       // DecNukeTimer (the self-destruct countdown)
-  // Poison (GS_Playing, Banks0123.asm:12197-12206): 1 life every 0x40 ITERATIONS (the ROM
-  // TickCounter counts iterations — 0x80 of our 60Hz ticks) until the antidote clears it.
-  if (poisoned && (tickCounter & 0x7F) === 0) {
+  // Poison (GS_Playing, Banks0123.asm:12197-12206): `TickCounter & 3Fh == 0` -> DecrementLife 1,
+  // i.e. 1 life every 0x40 iterations. Poison lives in the SAME PlayModeLogic loop as the i-frame
+  // timer (DamageDelayTimer 0x20) — exactly 2× its interval. The port runs this loop at 60Hz and
+  // uses the literal ROM counts for the rest of the damage subsystem (i-frames 0x20, gas 0x10,
+  // electric 8), so poison must too: mask 0x3F (was 0x7F = half-rate — broke the 2:1 ratio). (#29)
+  if (poisoned && (tickCounter & 0x3F) === 0) {
     snake.life = Math.max(0, snake.life - 1);
     if (snake.life === 0) { enterDead(); return; }
   }
@@ -7293,7 +7296,12 @@ function menuSelect() {
 const SELECTED_TRANSMITTER = 0x17, SELECTED_ANTIDOTE = 0x0D, SELECTED_CIGARETTES = 6;  // Enums.asm
 function chkUseItem() {
   if (!selectedItem) return;                                   // no item selected
-  if (selectedItem === SELECTED_RATION && snake.anim !== ANIM_DEEP_WATER) {
+  // ChkUseItem (menuequipment.asm:215-221): in DEEP WATER it jumps to ChkDropTransmitter with A
+  // still = PlayerAnimation (4), which never matches any item id — so NO item is usable in deep
+  // water, not just rations. (The ROM's "Can't use rations in deep water" comment understates its
+  // own register bug; faithfully, transmitter/antidote/cigarettes are blocked too.) (#41)
+  if (snake.anim === ANIM_DEEP_WATER) return;
+  if (selectedItem === SELECTED_RATION) {
     useConsume(SELECTED_RATION);
     snake.life = snake.maxLife;                                // fill the energy (Life = MaxLife)
     playUseItem();

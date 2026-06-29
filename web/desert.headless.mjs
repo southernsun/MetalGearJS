@@ -81,17 +81,23 @@ const test = `
   tickCounter=0; iter(1);
   __check('a sting poisons without direct damage', poisoned===true && snake.life===24);
 
-  // --- the drain: 1 life per 0x40 iterations (0x80 ticks) in the play loop ---
+  // --- the drain: 1 life every 0x40 ticks in the play loop (#29) ---
   currentRoom=0; guardsData={}; buildGuardRaw(0); actorsData=null; buildScorpions(0);
   doorsData={}; activeDoors=[]; itemsData={}; buildRoomItems(0);
   snake.life=24; snake.invulnTimer=0; poisoned=true; gameState='play';
-  tickCounter=0; for (let i=0;i<0x100;i++) update();
-  __check('poison drains 2 life over 0x100 ticks (every 0x80)', snake.life===22, 'life='+snake.life);
+  tickCounter=0; for (let i=0;i<0x100;i++) update();   // fires at tick 64/128/192/0 -> 4 drains
+  __check('poison drains 4 life over 0x100 ticks (every 0x40)', snake.life===20, 'life='+snake.life);
 
   // --- the antidote (ChkUseAntidote): clears poison, NOT consumed ---
   items.set(SELECTED_ANTIDOTE, 1); selectedItem = SELECTED_ANTIDOTE;
   chkUseItem();
   __check('the antidote clears the poison and is kept', poisoned===false && items.get(SELECTED_ANTIDOTE)===1);
+
+  // #41: in DEEP WATER no item is usable — ChkUseItem keeps A=PlayerAnimation (4), so every cp fails
+  poisoned=true; snake.anim=ANIM_DEEP_WATER; selectedItem=SELECTED_ANTIDOTE; chkUseItem();
+  __check('#41 deep water blocks the antidote (poison stays)', poisoned===true);
+  snake.anim=ANIM_NORMAL; chkUseItem();
+  __check('#41 out of deep water the antidote works again', poisoned===false);
 
   // --- shots kill (shape 2 box, life 2 = one handgun bullet) ---
   actorsData = JSON.parse(__actors); currentRoom=208; buildScorpions(208);

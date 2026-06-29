@@ -159,19 +159,36 @@ const test = `
   __check('after the beat it enters the chase and TRIGGERS the alarm', wa.status==='walk' && alertMode===true);
 
   // ==== SetRespawnTime: per-room reinforcement-schedule override at alert-guard init ====
+  // SetRespawnTime fires at alert-guard INIT (enterAlert), not at the alarm itself (#110): raiseAlarm
+  // sets the card budget, then the guard that alerts applies the per-room override.
   reset(0); items.clear(); currentRoom=187; guardsData={'187':{x:120,y:100,dir:'left'}}; buildGuardRaw(187);
-  raiseAlarm(187);                                        // base budget 3, then InitGuardAlert overrides
+  raiseAlarm(187); enterAlert(guards[0]);                 // base budget 3, then InitGuardAlert overrides
   __check('SetRespawnTime: room 187 overrides the budget to 10', numRespawnGuards===0x0A);
   __check('SetRespawnTime: room 187 sets a random timer 0x10..0x1F', alertRespawnTimer>=0x10 && alertRespawnTimer<=0x1F);
   reset(0); currentRoom=92; guardsData={'92':{x:120,y:100,dir:'left'}}; buildGuardRaw(92);
-  raiseAlarm(92);
+  raiseAlarm(92); enterAlert(guards[0]);
   __check('SetRespawnTime: roof building 2 (rooms 88-92) also gets the budget-10 override', numRespawnGuards===0x0A);
   reset(0); currentRoom=216; guardsData={'216':{x:120,y:100,dir:'left'}}; buildGuardRaw(216);
-  raiseAlarm(216);
+  raiseAlarm(216); enterAlert(guards[0]);
   __check('SetRespawnTime: room 216 keeps no respawn (budget + timer 0)', numRespawnGuards===0 && alertRespawnTimer===0);
   reset(0); currentRoom=50; guardsData={'50':{x:120,y:100,dir:'left'}}; buildGuardRaw(50);
-  raiseAlarm(50);                                         // a non-special room keeps the card budget (3)
+  raiseAlarm(50); enterAlert(guards[0]);                  // a non-special room keeps the card budget (3)
   __check('SetRespawnTime: a non-special room keeps the card-based budget', numRespawnGuards===3);
+
+  // ==== #110: multi-guard sighting — the SEER alerts, not the global guards[0] ====
+  reset(0); assets.collision=C(); currentRoom=0; snake.anim=ANIM_NORMAL; snake.state='idle';
+  snake.x=60; snake.y=100; snake.dir='left';
+  const farG  = makeGuard({ x:200, y:60,  dir:'left', path:[[200,60],[120,60]] });   // upper row: cannot see Snake
+  const nearG = makeGuard({ x:120, y:100, dir:'left', path:[[120,100],[40,100]] });  // Snake's row, facing him: sees
+  guards=[farG, nearG]; guard=guards[0];
+  tickCounter=0; updateGuard();
+  __check('#110 the guard that SEES Snake is the one that alerts + flashes "!" (not guards[0])',
+    nearG.state==='alert' && nearG.alertIconTimer>0 && farG.state!=='alert',
+    'near='+nearG.state+' far='+farG.state);
+  __check('#110 the seer does not keep patrolling (it faces Snake and reacts)',
+    nearG.dir==='left' && nearG.state==='alert');
+  tickCounter=0; updateGuard();                            // the other guard joins via the alertMode branch
+  __check('#110 the second guard joins the alert the next iteration', farG.state==='alert');
 
   // ==== Exact LOS / sight bands (chkdiscover.asm ChkView*) ================================
   reset(0); assets.collision=C(); currentRoom=0; snake.anim=ANIM_NORMAL; snake.state='idle';

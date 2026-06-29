@@ -4853,7 +4853,10 @@ function raiseAlarm(room, forceRed, respawnSeed) {
   // reinforcements). Previously every red alert was flattened to 0x28 and noise to 0 — issue #28.
   alertRespawnTimer = (respawnSeed != null) ? respawnSeed : (redAlertFlag ? 0x1E : 0);
   playAlert();                                        // SetAlertMode: alert music (0x32)
-  if (guard && guard.state !== 'alert') enterAlert(guard);
+  // NOTE: do NOT alert a specific guard here. The seer is alerted at its own detection site, and every
+  // other guard transitions via the `alertMode` branch in updateGuardOne. (Previously this alerted the
+  // GLOBAL `guard` = guards[0], so when a NON-first guard spotted Snake the wrong guard reacted while the
+  // seer kept patrolling — looking like it "jumped back" to an earlier spot. #110)
 }
 
 // ChkAlertTrigger: an unsuppressed shot raises the alarm unless the room is secure or the alarm is
@@ -5284,9 +5287,10 @@ function updateGuardOne(guard) {
 
   if (devForceAlert && guard.state !== 'alert') raiseAlarm(currentRoom);
 
-  // An alarm raised anywhere pulls this guard into the chase; LOS discovery raises the global alarm.
+  // An alarm raised anywhere pulls this guard into the chase; LOS discovery raises the global alarm AND
+  // alerts THIS guard (the seer), so the guard that actually spotted Snake is the one that reacts. (#110)
   if (alertMode && guard.state !== 'alert') enterAlert(guard);
-  if (guard.state !== 'alert' && guardSeesSnake(guard)) raiseAlarm(currentRoom);
+  else if (guard.state !== 'alert' && guardSeesSnake(guard)) { raiseAlarm(currentRoom); enterAlert(guard); }
 
   if (guard.state === 'alert') {
     if (guard.alertIconTimer > 0) guard.alertIconTimer--;   // count down the discovery flash

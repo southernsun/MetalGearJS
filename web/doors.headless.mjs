@@ -57,7 +57,7 @@ const test = `
     snake.x = 208; snake.y = 176; snake.dir = 'down'; snake.anim = ANIM_NORMAL;
     held.clear(); held.add('dir:down'); pushRecency('down');
     const d = activeDoors.find(x => x.id === 4);
-    for (let i = 0; i < 30 && !d.open; i++) { normalControl(); updateDoors(); }
+    for (let i = 0; i < 50 && !d.open; i++) { normalControl(); updateDoors(); }   // per-type open up to 36 ticks (#105)
     held.clear();
     return d;
   }
@@ -70,7 +70,7 @@ const test = `
             snake.x=208; snake.y=176; snake.dir='down';
             held.clear(); held.add('dir:down'); pushRecency('down');
             const d = activeDoors.find(x=>x.id===4);
-            for (let i=0;i<30 && !d.open;i++){ normalControl(); updateDoors(); }
+            for (let i=0;i<50 && !d.open;i++){ normalControl(); updateDoors(); }
             held.clear(); return d.open; })() === false);
 
   // --- door-entry placement (SetPlayerInDoor2..4 + PlayerInDoorDat, logic/nextroom.asm) ---
@@ -161,6 +161,34 @@ const test = `
   __check('#104 type-1 (north) enters at (x, y+16) 32x16 — DoorOpenEnterDat, not the footprint',
     nd.enterRect.x === 100 && nd.enterRect.y === 66 && nd.enterRect.w === 32 && nd.enterRect.h === 16,
     JSON.stringify(nd.enterRect));
+
+  // --- #105: door-open animation length is PER-TYPE (EraseDoor counts), not a flat 18 ---
+  openDoor(nd);                                          // the type-1 north door
+  __check('#105 north (type 1) opens over 25 ticks', nd.opening && nd.openTotal === 25 && nd.openTimer === 25);
+  doorsData['998'] = [{ id: 0xAB, type: 3, lock: 0, dest: 0, x: 50, y: 50 }];
+  buildDoors(998); const wd = activeDoors.find(x => x.id === 0xAB); openDoor(wd);
+  __check('#105 west (type 3) opens over 36 ticks', wd.openTotal === 36);
+
+  // --- #105: a card door opened by the player pauses the world (GAME_MODE_OPEN_DOOR) until it erases ---
+  assets.collision = __coll7; currentRoom = 7; gameState = 'play'; demoActive = false;
+  alertMode = false; incomingCallTimer = 0; guardsData = {}; guards.length = 0;
+  roomItems = [null, null, null]; bullets.length = 0; playerShots.length = 0;
+  buildDoors(7); weapons.clear(); items.clear();
+  items.set(SELECTED_CARD4, 0x34); selectedItem = SELECTED_CARD4;
+  snake.x = 208; snake.y = 176; snake.dir = 'down'; snake.anim = ANIM_NORMAL; snake.controlMod = CONTROL_NORMAL;
+  held.clear(); held.add('dir:down'); pushRecency('down');
+  const sd = activeDoors.find(x => x.id === 4);          // the lock-5 SOUTH door (type 2 -> 33 ticks)
+  let froze = false, frozenX = null, frozenFrames = 0;
+  for (let i = 0; i < 120 && !(froze && gameState === 'play'); i++) {
+    update();
+    if (gameState === 'opendoor') { if (!froze) { froze = true; frozenX = snake.x; } frozenFrames++; }
+  }
+  __check('#105 a card-door open enters GAME_MODE_OPEN_DOOR (the world freezes)', froze);
+  __check('#105 the freeze lasts the type-2 erase count (~33 ticks)',
+    frozenFrames >= 30 && frozenFrames <= 36, 'frames=' + frozenFrames);
+  __check('#105 Snake does not move during the freeze, and the door ends OPEN, back in play',
+    snake.x === frozenX && sd.open === true && gameState === 'play');
+  held.clear();
 })();
 `;
 

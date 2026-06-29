@@ -46,7 +46,10 @@ const EXIT_LEFT_X = 12, EXIT_RIGHT_X = 244, EXIT_UP_Y = 16, EXIT_DOWN_Y = 186;
 const crossesEdge = (dir, x, y) =>
   dir === 'left' ? x < EXIT_LEFT_X : dir === 'right' ? x >= EXIT_RIGHT_X :
   dir === 'up'   ? y < EXIT_UP_Y   : dir === 'down'  ? y >= EXIT_DOWN_Y : false;
-const DOOR_OPEN_TICKS = 18; // how long a door's open animation runs (~0.3s) before it's passable
+// Per-type door-open animation length = the EraseDoor{dir} erase-line count to SetDoorOpen
+// (logic/doors/erasedoor.asm): north 25, south 33, west 36, east 36, elevator 13. (#105)
+const DOOR_OPEN_TICKS_BY_TYPE = { 1: 25, 2: 33, 3: 36, 4: 36, 5: 13 };
+const DOOR_OPEN_TICKS = 25;   // fallback / drawDoors progress denominator
 
 // ---- Per-actor attribute tables (issue #48) --------------------------------
 // The ROM keys an actor's HP and contact damage off its actor ID (constants/Enums.asm), via
@@ -3664,7 +3667,7 @@ function chkPunchOpenDoors() {
     const need = lock === 10 || lock === 11 ? d.type : PUNCH_WALL_DIRS[d.type - 7];
     if (DIR_TO_PD[snake.dir] !== need) continue;
     if (!touchDoor(d)) continue;
-    if (lock === 10) { openDoor(d); continue; }       // ChkPunchDoor: ONE punch facing the door opens
+    if (lock === 10) { openDoor(d); d.playerOpening = true; continue; }   // ChkPunchDoor: ONE punch opens (-> freeze, #105)
     if (lock === 11 || lock === 16) { playWallHit(); continue; }  // ChkDoorLorry (PlayBreakableSfx) /
                                                       //   ChkPunchBaseWall: a punch only SOUNDS the wall;
                                                       //   these open by plastic bomb only (#103)
@@ -3685,12 +3688,13 @@ function openDoor(d) {
   else playDoor();
   if (d.type === 6 || d.type >= 7) { d.open = true; return; }
   d.opening = true;
-  d.openTimer = DOOR_OPEN_TICKS;
+  d.openTotal = DOOR_OPEN_TICKS_BY_TYPE[d.type] || DOOR_OPEN_TICKS;
+  d.openTimer = d.openTotal;
 }
 // Advance door animations and refresh the "was Snake inside last tick" latch.
 function updateDoors() {
   for (const d of activeDoors) {
-    if (d.opening && --d.openTimer <= 0) { d.opening = false; d.open = true; }
+    if (d.opening && --d.openTimer <= 0) { d.opening = false; d.open = true; d.playerOpening = false; }
     d.wasInside = pointInRect(d.enterRect, snake.x, snake.y);
   }
 }
@@ -6862,6 +6866,13 @@ function update() {
   if (gameState === 'radio') { radioTick(); return; } // GameMode 4: the transceiver runs instead of play
   if (gameState === 'binoculars') { binocularsTick(); return; }  // GameMode 8: the recon telescope
   if (gameState === 'elevator') { elevatorTick(); return; }  // GameMode 6: the moving elevator
+  // GAME_MODE_OPEN_DOOR (enterdoor.asm:53): while a door the player walked/punched into erases, the
+  // whole game is paused (it is not GS_Playing) — only the door animates — until SetDoorOpen. (#105)
+  if (gameState === 'opendoor') {
+    updateDoors();
+    if (!activeDoors.some((d) => d.opening && d.playerOpening)) gameState = 'play';   // SetDoorOpen -> resume
+    return;
+  }
   if (gameState === 'capture') { captureTick(); return; }    // GameMode 0xB: the capture scene
   if (gameState === 'lorry') { lorryTick(); return; }        // GameMode 5: the moving lorry
   if (gameState === 'ending') { endingTick(); return; }      // EndingLogic: the escape cinematic
@@ -6939,6 +6950,8 @@ function update() {
   chkCaptured();        // the capture trigger follows the item checks (CommonLogic :26)
   if (gameState !== 'play') return;   // captured this frame: the scene takes over
   chkPunchOpenDoors();  // ChkDoors covers the punch-opened locks every frame (10 / 15)
+  // A door opened by walking/punching into it pauses the world while it erases (GAME_MODE_OPEN_DOOR). (#105)
+  if (activeDoors.some((d) => d.opening && d.playerOpening)) { gameState = 'opendoor'; return; }
   chkTouchLasers();     // ChkTouchEnemies covers the laser beams (ID_LASER) every frame
   if ((tickCounter & 1) !== 0) {      // the actor phase runs on ROM iterations
     cameraTick();       // CameraLogic / LaserCameraLogic + the live laser shots
@@ -7065,7 +7078,7 @@ function normalControl() {
     // blocked by the door's footprint either way (a locked door stays shut).
     const closed = closedDoorBlocking(nx, ny, dir);
     if (closed) {
-      if (canOpenDoor(closed)) openDoor(closed);
+      if (canOpenDoor(closed)) { openDoor(closed); closed.playerOpening = true; }   // ChkDoors2 -> GAME_MODE_OPEN_DOOR (#105)
     } else {
       // Can Snake leave through this edge here? Needs a connected neighbor and an
       // open boundary tile (doorway) at his position.
@@ -7920,7 +7933,7 @@ function drawDoors() {
   for (const d of activeDoors) {
     if (d.open || !d.img) continue;
     const s = d.srect, shear = d.shear;
-    const prog = d.opening ? 1 - d.openTimer / DOOR_OPEN_TICKS : 0;  // 0 closed .. 1 open
+    const prog = d.opening ? 1 - d.openTimer / (d.openTotal || DOOR_OPEN_TICKS) : 0;  // 0 closed .. 1 open
 
     // Visual bounding box (sheared doors are taller than their footprint).
     const vb = { x: s.x, y: s.y, w: s.w, h: s.h + Math.abs(shear) * s.w };

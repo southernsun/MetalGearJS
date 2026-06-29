@@ -169,6 +169,13 @@ const test = `
   reset(); openedDoorIds.clear(); passwordBuffer='HIRAKEGOMA'; chkPasswords();
   __check('password HIRAKE GOMA: all 8 cards + Grey Fox cell (door 0x0B)',
     [0,1,2,3,4,5,6,7].every(c=>items.has(SELECTED_CARD1+c)) && openedDoorIds.has(0x0B));
+  // #74: only the class-changing codes play the rank-up SFX (inside IncClassLv); the others are silent
+  { const _pb = playBuf; let sfxN = 0; playBuf = () => { sfxN++; };
+    reset(); passwordBuffer='INTRUDER'; chkPasswords();
+    __check('#74 INTRUDER plays NO rank-up SFX', sfxN === 0, 'n='+sfxN);
+    reset(); snake.class=0; sfxN=0; passwordBuffer='XXDS4'; chkPasswords();
+    __check('#74 DS 4 (class change) plays the rank-up SFX once', sfxN === 1, 'n='+sfxN);
+    playBuf = _pb; }
   reset(); snake.class=0; passwordBuffer='NOTACODE'; chkPasswords();
   __check('a non-code leaves the game unchanged', snake.class===0);
   // the buffer only accepts letters/digits, rolling to 12 chars

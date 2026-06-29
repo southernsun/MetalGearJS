@@ -675,7 +675,9 @@ function chkPasswords() {                       // ChkPasswords, on ExitPauseMod
   const b = passwordBuffer;
   if (b.endsWith('SAVE')) { passwordBuffer = ''; saveGame(); return; }
   if (b.endsWith('LOAD')) { passwordBuffer = ''; loadGame(); return; }
-  for (const p of PASSWORDS) if (b.endsWith(p.code)) { passwordBuffer = ''; p.apply(); clampInventory(); playBuf(assets.rankUpBuf); return; }
+  // Only the class-changing codes play SFX 0x26 — and they do it inside IncClassLv (incClassLv).
+  // INTRUDER/ISOLATION/HIRAKE GOMA (SetMaxAmmount/SetMaxRations/SetAllCards) play no SFX. (#74)
+  for (const p of PASSWORDS) if (b.endsWith(p.code)) { passwordBuffer = ''; p.apply(); clampInventory(); return; }
 }
 
 const SAVE_KEY = 'metalgear.save';

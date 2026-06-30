@@ -15,8 +15,12 @@ General conventions used throughout the ROM:
 - **8-bit wrap as signed offsets.** Position tables store negative offsets as wrapped bytes:
   `0xF8` acts as −8, `0xF6` as −10 (`PlayerInDoorDat`, logic/nextroom.asm:463). Adds are
   8-bit, so the wrap is the sign.
-- **Y-before-X words.** `dw` coordinate words usually store Y in the low byte and X in the
-  high byte (items, text XYs: "dw YX").
+- **Y-before-X words.** `dw` coordinate words are written `dw YYXX`: the **high** byte is Y and
+  the **low** byte is X (items, text XYs). E.g. `txtLife dw 0C110h` → X=`0x10` (16), Y=`0xC1`
+  (193); `txtClass dw 0C908h` → (8, 201) — both match where the port draws those HUD labels.
+  Calibrate any new coordinate against those two known on-screen texts before trusting it; do
+  **not** assume which byte is which. (`ld de,XXYYh` immediates for `DrawChar` follow the same
+  D=Y/E=X split, e.g. the binoculars arrow `0C0C4h` → X=196, Y=192.)
 - **0xFF / 0xFE terminators.** Lists end on 0xFF; 0xFE is an in-stream control (new XY in
   text blocks, opcode prefix in sound data).
 - **Tick domain.** Timing constants count iterations of `GameStatusLogic` (incremented at

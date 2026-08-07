@@ -19,6 +19,62 @@ Issue numbers link to [the tracker](https://github.com/southernsun/MetalGearJS/i
 
 ---
 
+## 0.11.3 — 2026-08-08
+
+### Changed
+- **Every in-code approximation claim now has a record** (#133, closed). 24 comments asserted an
+  approximation or divergence while the canonical index held 11 rows; the gap is now zero. Two were
+  fixed (the shotgunner's hand-set speed, a stale respawn note), two registered as genuine
+  divergences (both wait on the PSG driver reporting a track finished — no WebAudio equivalent, #35),
+  and eight filed as bugs with the ROM evidence: #140 door-open directions, #141 `RoomPalette10`,
+  #142 `idxSprOffsets` blast spread, #143 death sprites, #144 floor-item art, #145 ending assets,
+  #146 `Guard1/2/3ExitedLorry`, #147 `ID_GUARD_ELEVATOR`. Each comment now points at its issue, so
+  a comment can no longer *be* the record.
+- `docs/faithfulness-divergences.md`: cleared the stale **Jennifer dead-brother** row (implemented in
+  #134) and added the two sound-timing rows.
+
+---
+
+## 0.11.2 — 2026-08-08
+
+### Changed
+- **Door/wall collision is one derived map, not four predicates** (#137). The ROM keeps a single
+  collision map and mutates it — `DrawWall` stamps a wall's tiles in, `RestoreSavedTiles` writes the
+  background back — so the port now does the same: `effSolid` is the room map with each door's
+  current state stamped in, and `blocked()` is a single lookup. `inOpenDoor` and `closedWallSolid`
+  are **deleted**; `rebuildCollision()` runs on `buildDoors`, on `openDoor`, and when a door finishes
+  opening, with a staleness guard so a swapped room map can never be read stale.
+  Three bugs (#129 twice, plus the broken-wall stubs) were all two of those predicates disagreeing.
+  `closedDoorBlocking` deliberately stays for the *door-opening* interaction — pushing into a closed
+  doorway is what opens it, and its block rect can exceed the door's tiles — but it no longer
+  duplicates the collision decision for walls. New `collisionSolidAt(x,y)` is the public query.
+- Mutating a room's `solid` array in place now requires `invalidateCollision()` — the one cost of
+  mirroring the ROM's single-map model. Only test fixtures do that; noted at the definition.
+
+---
+
+## 0.11.1 — 2026-08-08
+
+### Fixed
+- **Room 193 built 1 of its 3 prisoners** (#134). `buildPrisoner` took `prisoners[0]`, so two of the
+  Coward Duck room's three `ID_PRISONER1` actors did not exist — two lost rescue credits toward
+  rank — and the one it kept was the plain prisoner at (104,48), **not Jennifer's brother** at
+  (128,84). His `text 140` rescue branch was already written and could never fire. Room 193 is the
+  only multi-prisoner room in the game.
+- **`JennifBrotherDead` is modelled** (#134). Killing the brother (`IDX_SAME_ID == 3`) now sets the
+  flag *and* marks `RescuedArray+0Dh` — room 193 — rescued, so the other two are lost, then
+  downgrades rank like any prisoner kill. Jennifer consequently stops **calling in**
+  (`ChkRadioCalls`) and stops **answering** (`ChkReplyJeniffer`). The flag persists in the save.
+
+### Changed
+- `prisoner` (singular) is now `prisoners[]` across the 8 logic sites and 4 test suites. The rescued
+  flag stays keyed by ROOM, which is what the ROM does: `InitPrisoner` finds `Room` in
+  `RoomsPrisoner` with `cpir` and reads one `RescuedArray` byte, so all three of room 193's
+  prisoners share it and one rescue erases the room. (My issue text had assumed per-prisoner keys
+  were needed — reading `InitPrisoner` showed otherwise.)
+
+---
+
 ## 0.11.0 — 2026-08-08
 
 Both remaining finds from the death-path sweep.

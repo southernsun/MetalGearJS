@@ -27,7 +27,7 @@
 // is hand-maintained rather than injected. Bump it in the same commit as the change it describes:
 //   PATCH  fixes only          MINOR  new behaviour/systems          MAJOR  reserved for 1.0
 // APP_BUILD is the date of that bump — it is what tells you whether the server has the newest copy.
-const APP_VERSION = '0.11.0';
+const APP_VERSION = '0.11.3';
 const APP_BUILD = '2026-08-08';
 const APP_VERSION_FULL = `v${APP_VERSION} (${APP_BUILD})`;
 
@@ -166,7 +166,7 @@ const INVULN_TICKS  = 0x20;           // DamageDelayTimer: i-frames after any en
 const SNAKE_MAX_LIFE = 0x18;          // InitPlayerVars starting life (24); MaxLife also 24 this slice
 const DEAD_TICKS = 0x80;              // DeadTimer: dead-state countdown before the GAME OVER screen (128 @ 60Hz)
 const GAME_OVER_TICKS = 0x100;       // GS_GameOver F5 window — the ROM waits for the game-over music to
-                                     //   finish (SoundWorkArea+2); we approximate that tail as a fixed span (#35)
+                                     //   finish (SoundWorkArea+2); no equivalent signal here, so a fixed span — registered divergence, #35
 
 // ---- Player handgun shots (ChkHandGunShot + ShootDirSpeeds + BulletLogic) -------------------
 // Literal ROM values: shot speed ±6 px/frame along the facing axis (ShootDirSpeeds), a range timer
@@ -766,7 +766,7 @@ function serializeProgress() {                  // the GameProgressBuffer equiva
     room: currentRoom, x: snake.x, y: snake.y, dir: snake.dir, class: snake.class, life: snake.life,
     weapons: [...weapons], items: [...items], selectedWeapon, selectedItem, invSuppressor,
     doors: [...openedDoorIds], weaponsTaken: [...weaponsTaken], itemsTaken: [...itemsTaken],
-    rescuedCnt, transmiTaken, checkpoint: introCheckpoint,
+    rescuedCnt, transmiTaken, checkpoint: introCheckpoint, jennifBrotherDead,
     maxAmmoCheat, maxRationsCheat,
     tankKO, dozerKO, ftKO, hindDKO, mgkDead, sgDead, bigBossDead, mgDestroyed, card7Taken, escaped,
     exitedLorry: [...guardExitedLorry],          // Guard1/2/3ExitedLorry
@@ -793,6 +793,7 @@ function restoreProgress(s) {
   weaponsTaken.clear(); for (const w of s.weaponsTaken) weaponsTaken.add(w);
   itemsTaken.clear(); for (const i of s.itemsTaken) itemsTaken.add(i);
   rescuedCnt = s.rescuedCnt; transmiTaken = s.transmiTaken; introCheckpoint = s.checkpoint;
+  jennifBrotherDead = !!s.jennifBrotherDead;   // a run-long flag like transmiTaken (#134)
   maxAmmoCheat = s.maxAmmoCheat; maxRationsCheat = s.maxRationsCheat;
   tankKO = s.tankKO; dozerKO = s.dozerKO; ftKO = s.ftKO; hindDKO = s.hindDKO;
   mgkDead = s.mgkDead; sgDead = s.sgDead; bigBossDead = s.bigBossDead; mgDestroyed = s.mgDestroyed;
@@ -1089,7 +1090,11 @@ const PRISONER_LIFE = actorLife(ID_PRISONER1);   // idxActorLife[ID_PRISONER1] =
 // Touch shape (ActorsShapeTouch[ID-1] = 0x17 -> ImpactAreasInfo row 0x17, data/shapes.asm:70:
 // 0F8h, 10h, 0, 10h): touch iff |prisonerY - 8 - snakeY| < 16 AND |prisonerX - snakeX| < 16.
 const PRISONER_TOUCH_SHAPE = { offY: -8, distY: 16, offX: 0, distX: 16 };
-let prisoner = null;              // active room's prisoner (or null)
+let prisoners = [];               // the active room's prisoners (usually 0 or 1; room 193 has 3)
+// JennifBrotherDead (Variables.asm:326) — set by KillPrisoner when Jennifer's brother is killed.
+// ChkRadioCalls (:1712) then stops her CALLING IN and ChkReplyJeniffer (:11144) stops her
+// ANSWERING. Persists for the run; not per room. (#134)
+let jennifBrotherDead = false;
 let prisonerSheet = null, prisonerMeta = null;   // prisoner.png / prisoner.json (optional)
 let greyFoxSheet = null;      // greyfox.png — SprPrisoner2, room 164's blue palette (same layout)
 let ellenSheet = null;        // ellen.png — SprElen, tan + the red dress (room 167)
@@ -3012,13 +3017,25 @@ function stopLorryEngine() {
   if (lorryEngineSrc) { try { lorryEngineSrc.stop(); } catch (e) {} lorryEngineSrc = null; }
 }
 
+// InitPrisoner (prisoner.asm:7-37) runs PER ACTOR, and a room can hold more than one: room 193
+// (Coward Duck) carries THREE ID_PRISONER1 actors and is the only such room in the game. The port
+// used to build `prisoners[0]` alone, so two of the three did not exist — two lost rescue credits —
+// and the one it kept was the plain prisoner at (104,48), NOT Jennifer's brother at (128,84).
+//
+// The rescued flag is per ROOM, not per prisoner: InitPrisoner finds `Room` in RoomsPrisoner with
+// `cpir` and reads RescuedArray at that index, so all three of room 193's prisoners share one byte
+// and one rescue erases the room. `rescuedRooms` (keyed by room) already models that correctly.
+// (#134)
 function buildPrisoner(n) {
-  const real = actorsData && actorsData[n] && actorsData[n].prisoners[0];
-  const p = real;
-  prisoner = (p && !rescuedRooms.has(n))
-    ? { x: p.x, y: p.y, status: 'idle', phase: 0, animTimer: 0, waitTimer: 0, life: PRISONER_LIFE }
-    : null;
+  const list = (actorsData && actorsData[n] && actorsData[n].prisoners) || [];
+  prisoners = rescuedRooms.has(n) ? [] : list.map((p, i) => ({
+    x: p.x, y: p.y, status: 'idle', phase: 0, animTimer: 0, waitTimer: 0, life: PRISONER_LIFE,
+    idxSameId: i + 1,                       // IDX_SAME_ID: CountEnemyType including itself (1-based)
+  }));
 }
+// ChkRescJenBro / KillPrisoner (Banks0123.asm:13278): Jennifer's brother is room 193's prisoner
+// with IDX_SAME_ID == 3 — the third in actor order, at (X 0x80, Y 0x54).
+const isJenniferBrother = (p) => currentRoom === 193 && p.idxSameId === 3;
 
 // PrisonerLogic: idle (2-frame animation + touch check) -> wait (2 ticks in the freed pose)
 // -> rescued (SetAsRescued + IncRescued; he stays standing until the room changes). A LIFE-0
@@ -3026,12 +3043,21 @@ function buildPrisoner(n) {
 // DowngradeRank). Touching a prisoner causes no damage and no alarm (TouchPlayer exempts
 // the prisoner IDs).
 function updatePrisoner() {
-  const p = prisoner;
-  if (!p) return;
+  for (let i = prisoners.length - 1; i >= 0; i--) updateOnePrisoner(prisoners[i], i);
+}
+function updateOnePrisoner(p, i) {
   if (p.life === 0) {                                   // KillActor -> KillPrisoner
     playBuf(assets.guardDeadBuf);                       // SFX 0x16 (enemy dead)
+    // KillPrisoner (Banks0123.asm:13278-13290): killing JENNIFER'S BROTHER sets JennifBrotherDead
+    // and ALSO marks RescuedArray+0Dh (= room 193) as rescued — so the other two prisoners in the
+    // room are gone for good and can never be rescued. Then it falls into KillPrisoner2's
+    // DowngradeRank like any other prisoner.
+    if (isJenniferBrother(p)) {
+      jennifBrotherDead = true;
+      rescuedRooms.add(193);
+    }
     downgradeRank();
-    prisoner = null;
+    prisoners.splice(i, 1);
     return;
   }
   if (p.status === 'idle') {
@@ -3073,8 +3099,9 @@ function prisonerTextId(p) {
 // Draw the prisoner (idle-1/idle-2 alternating; the freed pose once touched). Fallback figure
 // if the decoded sheet is missing.
 function drawPrisoner() {
-  const p = prisoner;
-  if (!p) return;
+  for (const p of prisoners) drawOnePrisoner(p);
+}
+function drawOnePrisoner(p) {
   const key = p.status === 'idle' ? (p.phase ? 'idle-2' : 'idle-1') : 'rescued';
   // Room 164's prisoner is Grey Fox (SprPrisoner2, blue), 167's is Ellen (SprElen,
   // tan + the red dress), and 182's is DR. MADNAR (SprMadnar, the white coat) —
@@ -3094,7 +3121,7 @@ function drawPrisoner() {
 }
 
 // Floor items drawn from the HUD icon sheet (same GfxItems family as the ROM's dedicated
-// WeaponGfxXY/ItemGfxXY bitmaps — documented approximation until a floor-item export exists).
+// WeaponGfxXY/ItemGfxXY bitmaps — a floor-item export would replace this: #144).
 function drawRoomItems() {
   for (const it of roomItems) {
     if (!it) continue;
@@ -3133,6 +3160,7 @@ function buildDoors(n) {
       opening: false, openTimer: 0, wasInside: false,
     };
   });
+  rebuildCollision();          // #137: the doors' state is part of the collision map
 }
 
 // Collision footprint per door type, from drawdoors.asm (SetOpenDoorTiles / SetDoorEWColl).
@@ -3774,8 +3802,9 @@ const snake = {
 // The REAL inventory: Snake starts with NOTHING (the infiltration starts empty) and entries
 // exist only once picked up (ChkTakeItem, logic/items.asm). The ROM fills the first empty slot
 // (GetWeapon3 / AddItemInventory), so inventory order = pickup order — a JS Map's insertion
-// order matches for free. Ammo/units are plain integers (the ROM stores BCD via `daa`; same
-// values — documented divergence).
+// order matches for free. Ammo/units are plain integers where the ROM stores BCD via `daa`. Same
+// values for normal play, but it leaks at the edges (keycard ID display, cheat caps) — open bug
+// #68, awaiting a call on whether to decode BCD at the edges or store units as BCD.
 const HAND_GUN = 1, SUB_MACHINE_GUN = 2, GRENADE_LAUNCHER = 3, ROCKET_LAUNCHER = 4, SUPRESSOR = 8;
 const SELECTED_BOX = 0x19, SELECTED_OXYGEN = 0x0A, SELECTED_RATION = 0x16;   // constants/Enums.asm
 const SELECTED_GOGGLES = 4;   // the infrared goggles (Enums.asm:87) — reveal the laser beams
@@ -3813,56 +3842,88 @@ function blocked(x, y, dir, allowOff = false, probes = PROBES) {
     return blockedShape(x, y, dir, allowOff, PROBES_SHAPE2);
   return false;
 }
+// ---- ONE derived collision map (#137) ---------------------------------------------------------
+// The ROM keeps a single collision map and MUTATES it: DrawWall (drawdoors.asm:311) stamps a
+// wall's tile block in, RestoreSavedTiles (erasedoor.asm:399) writes the saved background back, and
+// "does this pixel block?" is one lookup. The port used to layer four override predicates over an
+// immutable room map — closedWallSolid, closedDoorBlocking, doorBlockRect, inOpenDoor — checked in
+// a particular order, and every bug in this area was two of them disagreeing:
+//   * the per-cell wall mask went into closedWallSolid while normalControl consulted
+//     closedDoorBlocking FIRST -> room 59's lane stayed sealed while every static check passed;
+//   * inOpenDoor blanket-opened a broken wall's whole rect -> Snake walked into the stubs the ROM
+//     leaves standing above and below the hole.
+// So do what the ROM does. `effSolid` is the room's solid map with the doors' current state stamped
+// into it, and blocked() is a single lookup against it. `inOpenDoor` and `closedWallSolid` are gone.
+//
+// What is NOT folded in, deliberately: `closedDoorBlocking` still runs in normalControl, because a
+// closed DOORWAY needs identifying (pushing into it is what opens it — ChkDoors2) and because its
+// block rect can be larger than the door's actual tiles, so stamping it would over-block. It no
+// longer duplicates the collision decision for WALLS, which is where every bug was. `wallCellSolid`
+// stays as the shared per-cell rule both the stamp and that lookup use — one rule, two readers,
+// instead of four independent answers.
+let effSolid = null;          // Uint8Array, or null before the first build
+let effSolidSrc = null;       // the collision object it was derived from (staleness guard)
+// Drop the derived map so the next read rebuilds it. Call this after mutating the ROOM's own solid
+// array in place — the staleness guard below only notices when the collision OBJECT is swapped
+// (which is the normal path: one object per room, replaced on entry). Mirroring the ROM's single
+// mutable map buys one lookup per probe at the cost of this one rule.
+function invalidateCollision() { effSolid = null; effSolidSrc = null; }
+// Rebuild from the room map + every door's CURRENT state. Cheap (a copy plus a few tile rects), and
+// called whenever that state can change: buildDoors, openDoor, and a door finishing its animation.
+function rebuildCollision() {
+  const c = assets.collision;
+  if (!c || !c.solid) { effSolid = null; effSolidSrc = null; return; }
+  effSolid = Uint8Array.from(c.solid);          // never mutate the room's own map (it is shared)
+  effSolidSrc = c;
+  const stamp = (r, v) => {
+    for (let ty = r.y >> 3; ty <= (r.y + r.h - 1) >> 3; ty++)
+      for (let tx = r.x >> 3; tx <= (r.x + r.w - 1) >> 3; tx++)
+        if (tx >= 0 && ty >= 0 && tx < c.width && ty < c.height) effSolid[ty * c.width + tx] = v;
+  };
+  for (const d of activeDoors) {
+    const wall = d.type >= 7 && d.type <= 19;
+    if (wall) {
+      // DrawWall: a CLOSED wall stamps only the SOLID cells of its tile block. An OPEN (broken) one
+      // stamps nothing — RestoreSavedTiles put the background back, and the background decides.
+      if (d.open || d.opening) continue;
+      for (let ty = d.rect.y >> 3; ty <= (d.rect.y + d.rect.h - 1) >> 3; ty++)
+        for (let tx = d.rect.x >> 3; tx <= (d.rect.x + d.rect.w - 1) >> 3; tx++) {
+          if (tx < 0 || ty < 0 || tx >= c.width || ty >= c.height) continue;
+          if (wallCellSolid(d, tx * 8, ty * 8)) effSolid[ty * c.width + tx] = 1;
+        }
+    } else if (d.open) {
+      // An open DOORWAY is drawn over solid wall tiles, so it must clear them.
+      stamp(d.rect, 0);
+    }
+  }
+}
+// Does the DERIVED map block this pixel? The single question the old four predicates were each
+// answering a piece of. Use this rather than reasoning about doors — it is what movement reads.
+function collisionSolidAt(px, py) {
+  const c = assets.collision;
+  if (!c || !c.solid) return true;
+  if (effSolid === null || effSolidSrc !== c) rebuildCollision();
+  const tx = px >> 3, ty = py >> 3;
+  if (tx < 0 || ty < 0 || tx >= c.width || ty >= c.height) return true;
+  return (effSolid || c.solid)[ty * c.width + tx] !== 0;
+}
 function blockedShape(x, y, dir, allowOff, probes) {
+  const c = assets.collision;
+  if (!c || !c.solid) return !allowOff;
+  if (effSolid === null || effSolidSrc !== c) rebuildCollision();   // never read a stale map
+  const map = effSolid || c.solid;
   for (const [oy, ox] of probes[dir]) {
     const px = Math.round(x + ox), py = Math.round(y + oy);
-    if (inOpenDoor(px, py)) continue;       // an open doorway is passable, even over wall tiles
-    if (closedWallSolid(px, py)) return true;   // a closed breakable wall blocks until bombed/punched
-    const c = assets.collision;
     const tx = px >> 3, ty = py >> 3;
     const off = tx < 0 || ty < 0 || tx >= c.width || ty >= c.height;
     if (off) { if (allowOff) continue; return true; }
-    if (c.solid[ty * c.width + tx] !== 0) return true;
+    if (map[ty * c.width + tx] !== 0) return true;
   }
   return false;
 }
 
 const pointInRect = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-// An open DOORWAY (render types 1-6) is passable even where the room's collision map says wall —
-// the door graphic is drawn over solid tiles, so opening it has to override them.
-//
-// A broken BREAKABLE WALL (types 7-19) is NOT that. RestoreSavedTiles (logic/doors/erasedoor.asm:399)
-// redraws the *saved background* over the wall's block, so what is walkable afterwards is whatever
-// the background was — and for most of these walls the background is only partly open. Room 59's
-// 3x13 block has solid tiles at the top (tile rows 4-7) and bottom (12-16) with the passage in the
-// middle (rows 8-11); the ROM leaves those stubs standing. Blanket-opening the whole rect let Snake
-// walk into the leftover wall above and below the hole. (User-reported.)
-//
-// Verified safe across every breakable wall in the game: all 20 have at least one FULLY open row
-// behind them, so bombing always yields a real passage.
-function inOpenDoor(px, py) {
-  for (const d of activeDoors) {
-    if (!d.open) continue;
-    if (d.type >= 7 && d.type <= 19) continue;    // a broken wall defers to the restored background
-    if (pointInRect(d.rect, px, py)) return true;
-  }
-  return false;
-}
-// A CLOSED breakable wall (DrawWall render types 7-19) is a solid tile block at the door XY until
-// it is bombed/punched open — the ROM's DrawWall writes the wall's tiles into the room collision
-// map and EraseBasemWall removes them on break. Several of these walls sit over an otherwise-OPEN
-// passage in the exported room collision, so without this they were walk-through without bombing.
-//
-// The block is NOT uniformly solid. The ROM resolves collision per TILE NUMBER through
-// IdxColisTiles[tileset] (one bit each), and these tile blocks deliberately mix solid tiles with
-// WALKABLE ones — 8 of the 13 wall types have at least one walkable cell. Treating the whole rect
-// as solid stole the very lane the player must stand in: TilesWallPrison1 (room 165, type 14) and
-// TilesBasemWall59 (room 59, type 9) are both 3 columns whose RIGHTMOST column (tiles 35h / 41h)
-// is walkable, and ChkTouchDoor's punch box reaches only 26px from the wall origin. With all 24px
-// solid, Snake could get no closer than 7px past the block — 62 vs the 57 the box needed in room
-// 165, 30 vs 25 in room 59 — so the cell wall could never be punched open (no prison escape) and
-// room 59's side lane could not be walked at all. `solid` comes from the ROM's own bitmap via
-// RoomViewer's SaveWallBlock. Issues #129, #130.
+
 const staleWallMaskWarned = new Set();
 function warnStaleWallMask(type) {
   if (staleWallMaskWarned.has(type)) return;
@@ -3874,28 +3935,20 @@ function warnStaleWallMask(type) {
       '`dotnet run --project Tools/RoomViewer -- --export-doors`.');
   } catch (e) {}
 }
-// Is the point (already known to be inside d.rect) on a SOLID cell of the wall's tile block?
-// The single rule both blocking paths use — closedWallSolid (via blocked()) and
-// closedDoorBlocking (normalControl's earlier check). Having only the first one consult the mask
-// is what made the #129 fix inert in play.
+// Is this cell of a wall's tile block SOLID? Collision in the ROM is per TILE NUMBER
+// (IdxColisTiles[tileset], one bit each) and these blocks deliberately mix solid tiles with
+// walkable ones — 8 of the 13 wall types have at least one walkable cell, e.g. room 165's
+// TilesWallPrison1 and room 59's TilesBasemWall59 are both 3 columns whose RIGHTMOST column
+// (tiles 35h / 41h) is the lane the player stands in. rebuildCollision() stamps this into the
+// derived map; closedDoorBlocking() uses it to tell "pushing the wall" from "standing in the lane".
 function wallCellSolid(d, px, py) {
   const mask = (doorGfx[String(d.type)] || {}).solid;
-  // No mask -> fall back to the old whole-block-solid behaviour. That fallback is silent and
-  // looks EXACTLY like the bug this fix removed, so shout about it: door-gfx.json is a separate
-  // static file from game.js and is cached separately, so a stale copy of it re-breaks room 59 /
-  // room 165 on an otherwise up-to-date build. (Cost one round of user testing to find.)
+  // No mask -> fall back to whole-block-solid. That fallback is silent and looks EXACTLY like the
+  // bug this replaced, so shout: door-gfx.json is cached separately from game.js, and a stale copy
+  // re-breaks room 59 / room 165 on an otherwise current build.
   if (!mask) { warnStaleWallMask(d.type); return true; }
   const row = mask[(py - d.rect.y) >> 3];
   return !!(row && row[(px - d.rect.x) >> 3]);
-}
-function closedWallSolid(px, py) {
-  for (const d of activeDoors) {
-    if (d.open || d.opening) continue;
-    if (d.type < 7 || d.type > 19) continue;
-    if (!pointInRect(d.rect, px, py)) continue;
-    if (wallCellSolid(d, px, py)) return true;     // this cell's tile is a solid one
-  }
-  return false;
 }
 
 // Is Snake clear (no probe solid) at (x,y) in the active room, in every direction?
@@ -4118,7 +4171,7 @@ function openDoor(d) {
   if (d.type >= 7) playBuf(assets.wallBrokenBuf);
   else if (d.type >= 5) playElevatorDoor();
   else playDoor();
-  if (d.type === 6 || d.type >= 7) { d.open = true; return; }
+  if (d.type === 6 || d.type >= 7) { d.open = true; rebuildCollision(); return; }
   d.opening = true;
   d.openTotal = DOOR_OPEN_TICKS_BY_TYPE[d.type] || DOOR_OPEN_TICKS;
   d.openTimer = d.openTotal;
@@ -4126,7 +4179,10 @@ function openDoor(d) {
 // Advance door animations and refresh the "was Snake inside last tick" latch.
 function updateDoors() {
   for (const d of activeDoors) {
-    if (d.opening && --d.openTimer <= 0) { d.opening = false; d.open = true; d.playerOpening = false; }
+    if (d.opening && --d.openTimer <= 0) {
+      d.opening = false; d.open = true; d.playerOpening = false;
+      rebuildCollision();        // #137: it is passable now — restamp
+    }
     d.wasInside = pointInRect(d.enterRect, snake.x, snake.y);
   }
 }
@@ -5322,15 +5378,18 @@ const FREQ_BIGBOSS = 0x85, FREQ_BIGBOSS_B2 = 0x13, FREQ_SCHNEIDER = 0x79, FREQ_S
 // and it looks only at the FIRST caller in the room's list (RadioPersonsDat): a captured Schneider
 // never calls, and Jennifer needs Class 3 and a living brother. Without this the ring fired for
 // contacts that could not answer — a phantom ring leading nowhere. (#43)
-// The ROM also gates on MapZone >= 5 needing the antenna, and on JennifBrotherDead; neither system
-// is modelled here (tracked in #78 / the deferred list), so those pass.
+// Both of the ROM's other gates are modelled now: the MapZone >= 5 antenna requirement (#78,
+// shipped in 0.9.0) and JennifBrotherDead (#134). This comment claimed neither existed long after
+// the first one landed.
 function incomingCallPossible(room) {
   const first = (radiocallsData && radiocallsData[room] && radiocallsData[room][0]) || null;
   if (!first) return true;
   const f = first.freq;
   if ((f === FREQ_SCHNEIDER || f === FREQ_SCHNEIDER_B2) && schneiderCaptured) return false;
   // `cp 3 / jr nz` — exactly Class 3. Class caps at 3 (IncClassLv `cp 3 / ret z`), so >= is the same.
-  if (f === FREQ_JENIFFER && snake.class < 3) return false;
+  // ChkRadioCalls (Banks0123.asm:1705-1715): Jennifer needs Class 3 AND a LIVING brother — if he
+  // is dead she never calls in again. (#134; the gate existed in the ROM read but had no flag.)
+  if (f === FREQ_JENIFFER && (snake.class < 3 || jennifBrotherDead)) return false;
   // ChkRadioCalls3 (:1719-1726): from building 2 on (MapZone >= 5) you need the antenna to receive
   // incoming calls at all. Now modelled. (Was passing unconditionally.)
   if (mapZoneFor(room) >= 5 && !antennaTaken()) return false;
@@ -5348,7 +5407,9 @@ function radioReplyGate(p) {
     return p.textId;
   }
   if (f === FREQ_SCHNEIDER || f === FREQ_SCHNEIDER_B2) return schneiderCaptured ? null : p.textId;
-  if (f === FREQ_JENIFFER) return snake.class >= 3 ? p.textId : null;
+  // ChkReplyJeniffer (Banks0123.asm:11135-11148): the same two conditions on the reply side —
+  // "Jeniffer will not answer anymore if her brother is dead".
+  if (f === FREQ_JENIFFER) return (snake.class >= 3 && !jennifBrotherDead) ? p.textId : null;
   return p.textId;
 }
 
@@ -5781,7 +5842,7 @@ function stunnedBounce(g) {
 
 // Guard1/2/3ExitedLorry (set by the lorry-ride guard logic, guardlorry.asm rooms 5/7): a lorry
 // soldier is "out" (1) or "in" (0). The lorry-ride emerge/return system isn't ported, so these
-// stay 0 — documented divergence; lorryGuardExitDismiss() is the ready guard-side hook for it.
+// stay 0 — prerequisite-blocked, tracked in #146; lorryGuardExitDismiss() is the guard-side hook.
 let guardExitedLorry = [false, false, false];
 // InitGuardAlert2/3 + ChkDismissGuard: when a guard in a lorry-interior room (127/131/132) would
 // become an alert guard and its lorry soldier has already exited, it is dismissed (deduped) instead
@@ -6893,7 +6954,7 @@ function enterDead() {
 // GS_GameOver (Banks0123.asm:10410): once the dead animation (DeadTimer) ends, the PLAYING flag
 // clears and the GAME OVER / CONTINUE F5 screen shows while the death music plays. F5 arms a
 // continue (RestoreGameFlag); when the music finishes the game continues from the last checkpoint
-// or RebootGames to the title. The "music finished" wait is approximated by GAME_OVER_TICKS. (#35)
+// or RebootGames to the title. The "music finished" wait is GAME_OVER_TICKS — registered divergence, #35
 function enterGameOver() {
   gameState = 'gameover';
   gameOverTimer = GAME_OVER_TICKS;
@@ -7313,7 +7374,7 @@ function shotCanDamage(b) {
 function shotTargetsAll(b, explosion) {
   const out = [];
   if (!shotCanDamage(b)) return out;
-  for (const t of [...guards, prisoner, boss, ...scorpions, powerSwitch, ...cameras,
+  for (const t of [...guards, ...prisoners, boss, ...scorpions, powerSwitch, ...cameras,
                    ...jetpacks, ...dogs, duck, ...midBosses, hindD, bigBoss]) {
     if (!t) continue;
     if (t.dying != null) continue;             // already exploding — KillActor cleared COLLISION_CFG
@@ -7446,7 +7507,7 @@ function updatePlayerShots() {
       }
       case LAND_MINE: {                                // MineDummy: armed until contact
         const t = shotTarget(b, true);
-        if (t && t !== prisoner) {                     // an enemy steps on it
+        if (t && !prisoners.includes(t)) {             // an enemy steps on it (never a prisoner)
           t.life = Math.max(0, t.life - weaponDamage(t, type));
           t.hitBy = type;
           explodeShot(b, false);
@@ -7521,7 +7582,7 @@ function drawPlayerShots() {
 // Draw each guard bullet from the decoded sprite (centered on its position), or a small
 // fallback dot if guard-bullet.png isn't available. Shotgun blasts (sgAge) draw their
 // expanding pellet frame four times, spreading apart (the ROM's 4-copy attr rows —
-// ShotGunShot1-3 — at growing offsets; the spread distance approximates idxSprOffsets).
+// ShotGunShot1-3 — at growing offsets; the spread distance is not yet the real idxSprOffsets: #142).
 function drawBullets() {
   for (const b of bullets) {
     const x = Math.round(b.x), y = Math.round(b.y);
@@ -7912,7 +7973,7 @@ function snapToLadderColumn() {
 // SetLeavedOuterH: reaching the top of room 226 escapes Outer Heaven (flag + banner; the full
 // ending scene is out of scope). Freeze control.
 // SetLeavedOuterH -> EndingSetup (logic/ending.asm): reaching the top of room 226 ends the game.
-// The ROM cinematic, ported faithfully in sequence (assets approximated where we lack them — the
+// The ROM cinematic, ported faithfully in sequence (two assets are stand-ins, #145 — the
 // ExploxionTiles frames are a flash, and the ending "room 251" tileset is a black backdrop):
 //   run + the final countdown -> Outer Heaven explodes -> Snake's radio report (text 155) ->
 //   auto-tune to the news 120.77 -> KNK news (text 31) -> ending music + STAFF (text 45) ->
@@ -8021,7 +8082,7 @@ function playerSpriteKey() {
 }
 
 // Snake's death animation, driven by deadTimer (SetSprDead): leaned back, then a spin (the four
-// facings cycling, approximating sprites 0x39-0x3C), then the final dead frame.
+// facings cycling; the real sprites 0x39-0x3C are not decoded yet, #143), then the final dead frame.
 function deadFrameKey() {
   if (deadTimer > 64) return 'die-lean';
   if (deadTimer > 10) return ['up-idle', 'right-idle', 'down-idle', 'left-idle'][(deadTimer >> 2) % 4];
@@ -8312,7 +8373,7 @@ function drawBinoculars() {
 // WHITE (menuequipment.asm:343-347). Exported byte-exact to assets/target.png by
 // `dotnet run --project Tools/MetalGearSpriteMover -- --export-target`; target.json carries the
 // ROM screen origin so nothing about the geometry is hand-written here.
-// (Was a green circle — issue #14; then a hand-drawn approximation, then an inline decoded
+// (Was a green circle — issue #14; then hand-drawn, then an inline decoded
 // bitmap — issue #118, now a proper exported asset.)
 // Fallback origin if target.json is missing: the BinocularSprAtt top-left sprite (X 70h, Y 50h).
 const BINOC_RETICLE_XY = { x: 0x70, y: 0x50 };
@@ -8690,10 +8751,10 @@ function drawStar(x, y) {
 // sheared into the recessed-wall parallelogram (reproducing the per-column shift in
 // drawdoors.asm). While opening, the door is wiped away directionally — revealing the
 // room behind it — matching erasedoor.asm (north L->R, south R->L, west/east diagonal,
-// approximated here as a vertical wipe). An open door draws nothing.
+// one vertical wipe here instead of the four per-type directions, #140). An open door draws nothing.
 function drawDoors() {
   // Doors and prison walls are drawn from the room's tile slots, which ChkGogglesPal's
-  // grey palette covers — a grayscale filter approximates the exact grey ramp.
+  // grey palette covers — a CSS grayscale filter stands in for RoomPalette10, #141.
   const infrared = selectedItem === SELECTED_GOGGLES;
   if (infrared) { ctx.save(); ctx.filter = 'grayscale(1)'; }
   for (const d of activeDoors) {

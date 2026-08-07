@@ -43,40 +43,43 @@ sandbox.__reachable = (room, px, py) =>
   !!reach.masks[room] && pointReachable(reach.coll[room], reach.masks[room], px, py);
 
 sandbox.__texts = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'texts.json'), 'utf8'));
+// #134 needs the REAL actor lists: room 193 is the only room with more than one prisoner.
+sandbox.__actors = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'actors.json'), 'utf8'));
 
 const test = `
 ;(function(){
   textsData = __texts;                                  // the real decoded text table
+  actorsData = __actors;                                // real per-room actor lists (#134)
   const C = () => ({ width:32, height:24, solid:new Array(32*24).fill(0), tiles:new Array(32*24).fill(0) });
   function reset(){ alertMode=false; redAlertFlag=false; roomAlert=-1; gameState='play';
     currentRoom=0; assets.collision=C(); bullets.length=0; playerShots.length=0;
     snake.x=200; snake.y=150; snake.dir='down'; snake.state='idle'; snake.anim=ANIM_NORMAL;
     snake.class=0; snake.maxLife=24; snake.life=24; snake.invulnTimer=0; guard=null;
     weapons.clear(); items.clear(); invSuppressor=false; selectedWeapon=0; selectedItem=0;
-    rescuedCnt=0; rescuedRooms.clear(); prisoner=null; textBox=null; textReturnState='play';
+    rescuedCnt=0; rescuedRooms.clear(); prisoners.length=0; textBox=null; textReturnState='play';
     roomItems=[null,null,null]; itemsData={}; spawnedItemLatch=false; }
-  const placePrisoner = (x,y) => { prisoner={x,y,status:'idle',phase:0,animTimer:0,waitTimer:0,life:PRISONER_LIFE}; };
+  const placePrisoner = (x,y) => { prisoners.length=0; prisoners.push({x,y,status:'idle',phase:0,animTimer:0,waitTimer:0,life:PRISONER_LIFE,idxSameId:1}); };
   // Rescue completes after the 2-tick wait (PrisonerIdle -> PrisonerWait -> RescuedLogic3).
   const tick = (n) => { for (let i=0;i<(n||1);i++) updatePrisoner(); };
 
   // --- touch box (ActorsShapeTouch 0x17: |y-8-sy|<16, |x-sx|<16, strict) ---
   reset(); placePrisoner(100,100); snake.x=116; snake.y=92; tick();
-  __check('touch X edge 16 is a miss (strict <)', prisoner.status==='idle');
+  __check('touch X edge 16 is a miss (strict <)', prisoners[0].status==='idle');
   snake.x=115; tick();
-  __check('touch X 15 frees him', prisoner.status==='wait');
+  __check('touch X 15 frees him', prisoners[0].status==='wait');
   reset(); placePrisoner(100,100); snake.x=100; snake.y=108; tick();   // |92-108| = 16
-  __check('touch Y edge 16 is a miss (strict <)', prisoner.status==='idle');
+  __check('touch Y edge 16 is a miss (strict <)', prisoners[0].status==='idle');
   reset(); placePrisoner(100,100); snake.x=100; snake.y=107; tick();
-  __check('touch Y 15 frees him', prisoner.status==='wait');
+  __check('touch Y 15 frees him', prisoners[0].status==='wait');
 
   // --- rescue: flag + counter, no damage, no alarm; gone on re-entry ---
   reset(); currentRoom=3; placePrisoner(100,100); snake.x=100; snake.y=100;
   tick(3);
   __check('rescue: flag set + counter 1', rescuedRooms.has(3) && rescuedCnt===1);
-  __check('rescue: prisoner stays visible (freed pose)', prisoner!==null && prisoner.status==='rescued');
+  __check('rescue: prisoner stays visible (freed pose)', prisoners.length>0 && prisoners[0].status==='rescued');
   __check('rescue: no damage, no alarm', snake.life===24 && alertMode===false);
   buildPrisoner(3);
-  __check('rescued prisoner absent on re-entry', prisoner===null);
+  __check('rescued prisoner absent on re-entry', prisoners.length===0);
 
   // --- 5th rescue ranks up: class 1, FULL heal to 32, counter reset, ammo ceiling 100 ---
   reset(); snake.life=10; weapons.set(HAND_GUN, 50);
@@ -96,9 +99,9 @@ const test = `
   rescuedRooms.add(5); rescuedRooms.add(167);            // a regular room + Ellen (special)
   currentRoom=6; placePrisoner(100,100); snake.x=200; snake.y=150;
   playerShots.push({x:100,y:84,vx:0,vy:0,range:10}); updatePlayerShots();
-  __check('shot prisoner takes damage, still present', prisoner.life===0 && prisoner!==null);
+  __check('shot prisoner takes damage, still present', prisoners[0] && prisoners[0].life===0);
   tick();
-  __check('killed on his logic tick', prisoner===null);
+  __check('killed on his logic tick', prisoners.length===0);
   __check('downgrade: class 0, life clamped to 24', snake.class===0 && snake.life===24);
   __check('downgrade: ammo clamped to 50', weapons.get(HAND_GUN)===50);
   __check('downgrade: regular flag cleared, special kept',
@@ -146,9 +149,58 @@ const test = `
   // #98: the room-193 prisoner (Jennifer's brother) can't be rescued until CARD8 is taken (PrisonerIdle gate)
   reset(); currentRoom = 193; items.delete(SELECTED_CARD1 + 7);
   placePrisoner(100, 100); snake.x = 100; snake.y = 100; tick(3);
-  __check('#98 room 193: no rescue without CARD8', prisoner && prisoner.status === 'idle' && rescuedCnt === 0);
+  __check('#98 room 193: no rescue without CARD8', prisoners[0] && prisoners[0].status === 'idle' && rescuedCnt === 0);
   items.set(SELECTED_CARD1 + 7, 1); tick(3);
   __check('#98 room 193: CARD8 taken -> the prisoner frees', rescuedRooms.has(193));
+
+  // ==== #134: room 193 carries THREE prisoners, and the third is Jennifer's brother ==========
+  reset(); jennifBrotherDead = false; currentRoom = 193; items.set(SELECTED_CARD1 + 7, 1);
+  buildPrisoner(193);
+  __check('#134 room 193 builds all THREE prisoners (was 1)', prisoners.length === 3,
+    'n=' + prisoners.length);
+  __check('#134 the third prisoner is the BROTHER at (128,84), IDX_SAME_ID 3',
+    prisoners[2].x === 128 && prisoners[2].y === 84 && prisoners[2].idxSameId === 3,
+    JSON.stringify(prisoners.map((p) => [p.x, p.y])));
+  __check('#134 his rescue text is 140 (ChkRescJenBro), the others 131',
+    prisonerTextId(prisoners[2]) === 140 && prisonerTextId(prisoners[0]) === 131);
+  // The rescued flag is per ROOM (InitPrisoner's cpir over RoomsPrisoner), so one rescue erases
+  // the room -- but each prisoner still runs its own RescuePrisoner -> IncRescued in that visit.
+  reset(); currentRoom = 193; items.set(SELECTED_CARD1 + 7, 1); buildPrisoner(193);
+  snake.x = prisoners[0].x; snake.y = prisoners[0].y; tick(4);
+  __check('#134 rescuing one credits IncRescued and marks the ROOM rescued',
+    rescuedCnt === 1 && rescuedRooms.has(193), 'cnt=' + rescuedCnt);
+  buildPrisoner(193);
+  __check('#134 on re-entry the whole room is empty (shared RescuedArray byte)',
+    prisoners.length === 0, 'n=' + prisoners.length);
+
+  // Killing the brother: JennifBrotherDead + RescuedArray+0Dh (room 193) + DowngradeRank.
+  reset(); jennifBrotherDead = false; currentRoom = 193; snake.class = 2;
+  items.set(SELECTED_CARD1 + 7, 1); buildPrisoner(193);
+  snake.x = 10; snake.y = 10;                       // out of touch range
+  prisoners[2].life = 0; tick(1);
+  __check('#134 killing the brother sets JennifBrotherDead', jennifBrotherDead === true);
+  __check('#134 it also marks room 193 rescued (RescuedArray+0Dh) — the others are lost',
+    rescuedRooms.has(193));
+  __check('#134 and still downgrades rank like any prisoner kill', snake.class === 1,
+    'class=' + snake.class);
+  // Killing a PLAIN room-193 prisoner must NOT set the flag.
+  reset(); jennifBrotherDead = false; currentRoom = 193; items.set(SELECTED_CARD1 + 7, 1);
+  buildPrisoner(193); snake.x = 10; snake.y = 10;
+  prisoners[0].life = 0; tick(1);
+  __check('#134 killing a PLAIN prisoner leaves JennifBrotherDead false', jennifBrotherDead === false);
+
+  // Both radio gates: she stops calling in AND stops answering.
+  // Room 193 is MapZone 9, so ChkRadioReply's antenna gate fires first — grant it so this test
+  // exercises the JENNIFER condition and not the antenna one.
+  jennifBrotherDead = false; snake.class = 3; items.set(SELECTED_ANTENNA, 1);
+  const jenFreq = 0x48;
+  __check('#134 with the brother alive Jennifer answers at Class 3',
+    radioReplyGate({ freq: jenFreq, textId: 77 }) === 77);
+  jennifBrotherDead = true;
+  __check('#134 with the brother dead she does NOT answer (ChkReplyJeniffer)',
+    radioReplyGate({ freq: jenFreq, textId: 77 }) === null);
+  jennifBrotherDead = false;
+  reset(); currentRoom = 193;
   rescueIn(134);
   __check('PrisonerTexts room 134 -> Grey Fox confined (52)', textBox && textBox.id === 52,
     'id=' + (textBox && textBox.id));

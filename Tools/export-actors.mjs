@@ -170,7 +170,7 @@ for (let room = 0; room < roomActorLabels.length; room++) {
       // into an alert chaser after 3 cycles or when the player closes in vertically.
       guards.push({ y: a.y, x: a.x, shooter: true, speed: 1.0 });
     } else if (a.id === 'ID_GUARD_ELEVATOR') {
-      // ID_GUARD_ELEVATOR (room 3 relieve ceremony): a stationary guard stand-in (LOS + alert +
+      // ID_GUARD_ELEVATOR (room 3 relieve ceremony): a stationary guard for now, #147 (LOS + alert +
       // touch); the ceremony is the room-3 elevRelief overlay. No path slot consumed.
       guards.push({ y: a.y, x: a.x, speed: 0.5 });
     } else if (a.id === 'ID_GUARD_SWITCH') {

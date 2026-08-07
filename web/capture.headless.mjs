@@ -144,7 +144,7 @@ const test = `
 
   // --- Grey Fox: room 164 is a REAL RoomsPrisoner room (prisoner.asm:43), rescue text 59 ---
   setRoom(164);
-  __check('Grey Fox waits in room 164', prisoner !== null);
+  __check('Grey Fox waits in room 164', prisoners.length > 0);
   __check('his rescue text is 59 (PrisonerTexts)', prisonerTextId(164) === 59);
 
   // --- the bag (RecoverEquipment :295): room 168, pickup 34 -> text 62 + the bugged transmitter ---
@@ -212,7 +212,7 @@ const test = `
   // Ellen
   setRoom(167);
   __check('Ellen waits in her cell with her real rescue text (129)',
-    prisoner !== null && prisonerTextId(prisoner) === 129);
+    prisoners.length > 0 && prisonerTextId(prisoners[0]) === 129);
 
   // ==== Gas rooms (ChkGasRooms, damagegas.asm) ==============================================
   rooms.set(112, { img: null, collision: __coll166 });   // any collision stands in

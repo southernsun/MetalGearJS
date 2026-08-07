@@ -119,7 +119,7 @@ const test = `
   __check('5x E/W round trips (7<->11): pixel-identical landings', !driftEW);
   __check('5x N/S round trips (7<->6): pixel-identical landings', !driftNS);
 
-  // --- lock-16 bomb-wall collision (closedWallSolid + doorCollRect, breakable types 7-19) ---
+  // --- lock-16 bomb-wall collision (the derived map + doorCollRect, breakable types 7-19) ---
   // Room 60's door 142 is a type-7 (TilesBasemWall60, 6r x 4c) BOMB wall that sits over an OPEN
   // passage in the exported room collision — before the footprint fix Snake walked through it
   // without bombing (the audit gap). The wall is solid until an exploding plastic bomb opens it.
@@ -130,15 +130,13 @@ const test = `
   __check('the lock-16 wall sits over OPEN room collision (was walk-through)', baseOpen);
   __check('its footprint matches doorCollRect type 7 (32x48 from the tile table)',
           w60.rect.w === 32 && w60.rect.h === 48);
-  __check('a CLOSED lock-16 bomb wall blocks movement (closedWallSolid)', closedWallSolid(wx, wy) === true);
+  __check('a CLOSED lock-16 bomb wall blocks movement (the derived map)', collisionSolidAt(wx, wy) === true);
   openDoor(w60);                                       // ChkBasementWall: an exploding bomb opens it
   // Bombing it stops the WALL blocking, but does NOT blanket-open its rect: RestoreSavedTiles
   // redraws the saved background, so the room's own collision decides what is walkable. An open
-  // wall must therefore be excluded from inOpenDoor (which exists for doorWAYS drawn over solid
-  // tiles) — otherwise Snake walks into the wall stubs left above and below the hole. (#129 follow-up)
-  __check('once bombed open the wall itself no longer blocks', closedWallSolid(wx, wy) === false);
-  __check('a broken wall does NOT blanket-open its rect (the background decides)',
-          inOpenDoor(wx, wy) === false);
+  // wall must therefore not clear its rect the way an open doorWAY does — otherwise Snake walks
+  // into the wall stubs left above and below the hole. (#129 follow-up; #137 made this one map.)
+  __check('once bombed open the wall itself no longer blocks', collisionSolidAt(wx, wy) === false);
   {
     // There must still be a real passage: at least one tile row inside the rect fully open.
     const c = __coll60, x0 = w60.rect.x >> 3, y0 = w60.rect.y >> 3;
@@ -177,9 +175,9 @@ const test = `
   __check('#130 room 165 carries the lock-15 prison wall (ChkPrisonWalls)',
           !!w165 && w165.type === 14 && w165.rect.x === 32 && w165.rect.w === 24);
   __check('#130 the wall still blocks its solid columns (x 32..47)',
-          closedWallSolid(36, 70) === true && closedWallSolid(44, 70) === true);
+          collisionSolidAt(36, 70) === true && collisionSolidAt(44, 70) === true);
   __check('#130 but its third column (x 48..55) is walkable — the punch lane',
-          closedWallSolid(52, 70) === false);
+          collisionSolidAt(52, 70) === false);
   snake.x = 56; snake.y = 72; snake.anim = ANIM_NORMAL;
   __check('#130 Snake can stand at x=56 in front of the wall', freeAt(56, 72) === true);
   __check('#130 and ChkTouchDoor then passes there', touchDoor(w165) === true);
@@ -198,7 +196,7 @@ const test = `
   const w59 = activeDoors.find(x => x.lock === 16);
   __check('#129 room 59 wall spans x 0..23 with the lane at x 16..23',
           w59.rect.x === 0 && w59.rect.w === 24 &&
-          closedWallSolid(8, 60) === true && closedWallSolid(20, 60) === false);
+          collisionSolidAt(8, 60) === true && collisionSolidAt(20, 60) === false);
   __check('#129 Snake can walk the lane beside it (x=24 clear over the wall rows)',
           freeAt(24, 60) === true && freeAt(24, 100) === true);
   __check('#129 and ChkTouchDoor passes there, so the wall sounds hollow',

@@ -141,8 +141,8 @@ const test = `
   reset(); currentRoom=0; guards=[]; guard=null;
   snake.x=200; snake.y=150; snake.dir='right'; snake.state='idle'; snake.controlMod=CONTROL_NORMAL;
   const W2=assets.collision.width;
-  assets.collision.solid.fill(0);
-  assets.collision.solid[(150>>3)*W2 + ((200+7+2)>>3)] = 1;
+  assets.collision.solid.fill(0); invalidateCollision();
+  assets.collision.solid[(150>>3)*W2 + ((200+7+2)>>3)] = 1; invalidateCollision();
   sfx.length=0; punchQueued=true; normalControl();
   __check('#55 punching a WALL plays SFX 9 only', sfx.length===1 && sfx[0]==='SFX9',
     JSON.stringify(sfx));
@@ -150,10 +150,10 @@ const test = `
   // wall, so nothing sounds. Put the wall ONLY where the 2px offset reaches and it must still fire.
   reset(); currentRoom=0; guards=[]; guard=null;
   snake.x=199; snake.y=150; snake.dir='right'; snake.state='idle'; snake.controlMod=CONTROL_NORMAL;
-  assets.collision.solid.fill(0);
+  assets.collision.solid.fill(0); invalidateCollision();
   const onlyAhead = (150>>3)*W2 + ((199+7+2)>>3);
   if (((199+7)>>3) !== ((199+7+2)>>3)) {         // only meaningful when the two land in different tiles
-    assets.collision.solid[onlyAhead] = 1;
+    assets.collision.solid[onlyAhead] = 1; invalidateCollision();
     sfx.length=0; punchQueued=true; normalControl();
     __check('#108 the wall thud uses the 2px-ahead probe (flush against a wall still sounds)',
       sfx.includes('SFX9'), JSON.stringify(sfx));
@@ -201,16 +201,16 @@ const test = `
   const colS2=(PX+4)>>3, colS0=(PX+7)>>3;
   __check('#49 fixture isolates the two shapes (different tile columns)', colS2 !== colS0,
     'shape2 col='+colS2+' shape0 col='+colS0);
-  assets.collision.solid.fill(0); assets.collision.solid[(PY>>3)*W3 + colS2]=1;
+  assets.collision.solid.fill(0); invalidateCollision(); assets.collision.solid[(PY>>3)*W3 + colS2]=1; invalidateCollision();
   currentRoom=0;  const base = blocked(PX,PY,'right');
   currentRoom=78; const r78  = blocked(PX,PY,'right');
   __check('#49 a shape-2-only obstacle blocks ONLY in room 78',
     base === false && r78 === true, 'room0=' + base + ' room78=' + r78);
-  assets.collision.solid.fill(0); assets.collision.solid[(PY>>3)*W3 + colS0]=1;
+  assets.collision.solid.fill(0); invalidateCollision(); assets.collision.solid[(PY>>3)*W3 + colS0]=1; invalidateCollision();
   currentRoom=0;  const s0a = blocked(PX,PY,'right');
   currentRoom=78; const s0b = blocked(PX,PY,'right');
   __check('#49 a shape-0 obstacle still blocks in BOTH rooms', s0a===true && s0b===true);
-  assets.collision.solid.fill(0);
+  assets.collision.solid.fill(0); invalidateCollision();
   currentRoom=78;
   __check('#49 open ground is still passable in room 78', blocked(PX,PY,'right')===false);
   currentRoom=0;

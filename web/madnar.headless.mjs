@@ -38,11 +38,11 @@ const test = `
 
   // ==== Dr. Madnar (182): the Ellen gate ====
   currentRoom=182; buildPrisoner(182);
-  __check('Dr. Madnar waits in room 182 as a prisoner', prisoner!==null);
+  __check('Dr. Madnar waits in room 182 as a prisoner', prisoners.length>0);
   rescuedRooms.delete(167);
-  __check('before Ellen: the "save Ellen first" text (124)', prisonerTextId(prisoner)===124);
+  __check('before Ellen: the "save Ellen first" text (124)', prisonerTextId(prisoners[0])===124);
   rescuedRooms.add(167);
-  __check('after Ellen: the Metal Gear briefing (125)', prisonerTextId(prisoner)===125);
+  __check('after Ellen: the Metal Gear briefing (125)', prisonerTextId(prisoners[0])===125);
 
   // ==== Fake Madnar (189): the trap ====
   fakeMadnarDone=false; currentRoom=189; buildFakeMadnar(189); buildPitfalls(189);

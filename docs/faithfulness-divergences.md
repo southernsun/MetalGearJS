@@ -56,6 +56,18 @@ issues instead — e.g. the poison `0x80` justification → #29, `ALERT_ICON` �
 
 ---
 
+### Sound-driver timing we cannot observe
+
+Two waits in the ROM are keyed on the PSG driver reporting a track FINISHED (`SoundWorkArea+2`).
+The port plays audio through WebAudio buffers and has no equivalent signal, so both are replaced by
+a fixed span. Tracked in **#35**; they were asserted in code comments for months without a row here,
+which is exactly the gap #133 was opened for.
+
+| Area | ROM behaviour | Port | `web/game.js` |
+| --- | --- | --- | --- |
+| SFX tail before a state change | waits for the sound entry to finish | fixed span | `~169` |
+| GAME OVER screen | waits for the game-over music to finish, then RebootGames | `GAME_OVER_TICKS` (0x100) | `~6956` |
+
 ## C. Deferred until a prerequisite system exists
 
 These ROM behaviours can't be ported faithfully yet because a system they depend on isn't
@@ -64,8 +76,11 @@ lands. Tracked in GitHub issue **#90** (and the two latent ones already have the
 
 | ROM behaviour | Blocked on | Tracking |
 | --- | --- | --- |
-| Jennifer dead-brother reply suppression | Brother-alive state (`KillPrisoner` never sets `JennifBrotherDead`) | #90 |
 | Aimed-shot speed difficulty addend (`Dificulty*8 + param`) | A real difficulty value — the formula itself is now ported with `DIFFICULTY = 0` | #60 |
+
+**Cleared 2026-08-08:** the **Jennifer dead-brother** suppression landed with #134 — `KillPrisoner`
+now sets `JennifBrotherDead` (room 193's third prisoner, `IDX_SAME_ID == 3`), and both
+`ChkRadioCalls` and `ChkReplyJeniffer` read it.
 
 **Cleared 2026-08-07:** the radio **antenna** requirement and the radio **MapZone** gates both
 landed once `idxMapZones` was ported (`mapZoneFor`, #78) — that also wired `SetAreaMusic5`'s

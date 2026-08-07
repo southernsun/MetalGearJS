@@ -71,13 +71,13 @@ const test = `
   __check('Y 15px hits', guard.life===0);
 
   // --- a wall removes the shot before the guard test ---
-  reset(); assets.collision.solid[(84>>3)*32 + (120>>3)] = 1; probe(120, 84);
+  reset(); assets.collision.solid[(84>>3)*32 + (120>>3)] = 1; invalidateCollision(); probe(120, 84);
   updatePlayerShots();
   __check('wall stops the shot; guard unhurt', guard.life===2 && playerShots.length===0);
 
   // --- a railing tile does NOT remove the shot, so it can still hit (BulletLogic + ChkPlayerShots) ---
   reset(); const ti=(84>>3)*32 + (120>>3);
-  assets.collision.solid[ti]=1; assets.collision.tiles[ti]=0x6B; probe(120, 84);
+  assets.collision.solid[ti]=1; invalidateCollision(); assets.collision.tiles[ti]=0x6B; probe(120, 84);
   updatePlayerShots();
   __check('railing passes the shot through to the hit', guard.life===0 && playerShots.length===0);
 
@@ -121,7 +121,7 @@ const test = `
   // --- grenade (MoveGrenade): the parabola rides ABOVE the real Y, flies over walls, explodes ---
   reset(); arm(GRENADE_LAUNCHER, 2);
   const wallTi = (134>>3)*32 + (170>>3);
-  assets.collision.solid[wallTi] = 1;                  // a wall in the flight path
+  assets.collision.solid[wallTi] = 1; invalidateCollision();                  // a wall in the flight path
   fireQueued = true; chkWeaponShot();
   __check('grenade: fired (1 of max 2)', playerShots.length === 1 && playerShots[0].type === GRENADE_LAUNCHER);
   const g = playerShots[0];

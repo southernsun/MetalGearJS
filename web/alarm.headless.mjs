@@ -35,6 +35,8 @@ sandbox.globalThis = sandbox;
 let src = fs.readFileSync(path.join(dir, 'game.js'), 'utf8').replace(/\bmain\(\);\s*$/, '// main() stripped\n');
 const results = [];
 sandbox.__check = (name, cond, extra='') => results.push({ name, ok: !!cond, extra });
+// The real RespawnInfo export, for the reinforcement cap/type checks (#128).
+sandbox.__respawn = fs.readFileSync(path.join(dir, 'assets', 'respawn.json'), 'utf8');
 
 const test = `
 ;(function(){
@@ -366,6 +368,58 @@ const test = `
   currentRoom = 128; chkAlarmEnd();
   __check('#12 that low alert ENDS on entering 128 (it cannot look like a wrong level there)',
     !alertMode && !redAlertFlag);
+
+  // ===== Reinforcements: cap, counted type, and the spawned actor (#128) =====
+  respawnData = JSON.parse(__respawn);          // the real table, not the stub above
+  // ChkRespawnEnemy: B = 3 for ID_GUARD_REDALERT/ID_JETPACK else 4, compared against
+  // CountEnemyType(RespawnInfo id) — NOT against every guard in the room.
+  __check('#128 the RespawnInfo ids are the three the table uses',
+    ID_GUARD_ALERT_R === 10 && ID_GUARD_REDALERT_R === 11 && ID_JETPACK_R === 22);
+  const spawnRun = (room, iters) => {
+    reset(room); currentRoom = room; guards = []; guard = null; jetpacks = [];
+    raiseAlarm(room, false, 0x1E);               // arm reinforcements
+    numRespawnGuards = 99;                       // keep the budget out of the way
+    for (let t = 0; t < iters; t++) { tickCounter = (tickCounter + 2) & 0xff; respawnTick(); }
+    return { guards: guards.length, jets: jetpacks.length };
+  };
+  // id 10 (ID_GUARD_ALERT) -> cap 4. Room 7 is id 10 but NOT a red-alert room: the old code took
+  // the cap from redAlertFlag and stopped at 3.
+  let r7 = spawnRun(7, 400);
+  __check('#128 an id-10 room fills to FOUR reinforcements (cap from the id, not the room bit)',
+    r7.guards === 4, 'n=' + r7.guards);
+  // id 11 (ID_GUARD_REDALERT) -> cap 3. Room 24 is id 11.
+  let r24 = spawnRun(24, 400);
+  __check('#128 an id-11 room stops at THREE', r24.guards === 3, 'n=' + r24.guards);
+  // Patrolling guards must NOT eat the cap — only alerted/reinforcement actors count.
+  reset(7); currentRoom = 7; jetpacks = [];
+  guards = [makeGuard({ x: 40, y: 40, path: [[40,40]] }), makeGuard({ x: 60, y: 60, path: [[60,60]] })];
+  guards.forEach((g) => { g.state = 'patrol'; });
+  guard = guards[0];
+  raiseAlarm(7, false, 0x1E); numRespawnGuards = 99;
+  guards.forEach((g) => { g.state = 'patrol'; });   // keep them on patrol for the test
+  for (let t = 0; t < 400; t++) { tickCounter = (tickCounter + 2) & 0xff; guards.forEach((g) => { if (!g.respawnKill) g.state = 'patrol'; }); respawnTick(); }
+  const reinf = guards.filter((g) => g.respawnKill).length;
+  __check('#128 guards still on patrol do not consume the reinforcement cap',
+    reinf === 4, 'reinforcements=' + reinf + ' total=' + guards.length);
+  // id 22 (ID_JETPACK) -> a flying trooper, cap 3. Rooms 40/41/42/44/48/89/92.
+  let r40 = spawnRun(40, 400);
+  __check('#128 an id-22 room sends JETPACK troopers, not foot soldiers',
+    r40.jets === 3 && r40.guards === 0, 'jets=' + r40.jets + ' guards=' + r40.guards);
+
+  // ===== ChkAlarmEnd2's room rules (#128) =====
+  // Rooms >= 188 (except 216) stop the alarm once respawning is off.
+  reset(190); currentRoom = 190; guards = [makeGuard({ x: 40, y: 40, path: [[40,40]] })];
+  guard = guards[0]; guard.state = 'alert';
+  raiseAlarm(190); alertRespawnTimer = 0; roomAlert = 190;
+  chkAlarmEnd();
+  __check('#128 a room >= 188 ends the alarm even with an alerted guard present',
+    alertMode === false, 'alert=' + alertMode);
+  // ...but a room below 188 keeps it while an alerted guard remains.
+  reset(7); currentRoom = 7; guards = [makeGuard({ x: 40, y: 40, path: [[40,40]] })];
+  guard = guards[0]; guard.state = 'alert';
+  raiseAlarm(7); alertRespawnTimer = 0; roomAlert = 7;
+  chkAlarmEnd();
+  __check('#128 a room < 188 holds the alarm while its alert enemies live', alertMode === true);
 })();
 `;
 

@@ -5224,6 +5224,10 @@ function chkAlarmEnd() {
     return;
   }
   if (currentRoom !== roomAlert) { stopAlarm(); return; }      // left the trigger room (ChkAlarmEnd2)
+  // ChkAlarmEnd2's room tests, in the ROM's order: room 216 counts ID_GUARD_REDALERT; any other
+  // room from 188 on ends the alarm outright (TransformAlertGuard also refuses to re-ID there, so
+  // there is nothing of the respawn type left to count).
+  if (currentRoom !== 216 && currentRoom >= 188) { stopAlarm(); return; }
   // ChkAlarmEnd2 ends the alarm when CountEnemyType of the room's RespawnInfo id reaches 0 — i.e.
   // when no enemy of the room's alert/reinforcement type remains, NOT when every actor is dead.
   // TransformAlertGuard (Banks0123.asm:6726) re-IDs a patrolling guard to that respawn type the
@@ -5409,6 +5413,9 @@ function highestCardOwned() {     // SetAlertMode2: scan Card8..Card1 for the hi
   for (let c = 8; c >= 1; c--) if (items.has(SELECTED_CARD1 + c - 1)) return c;
   return 0;
 }
+// RespawnInfo actor ids (constants/Enums.asm, via the InitActor dispatch): 10 = ID_GUARD_ALERT,
+// 11 = ID_GUARD_REDALERT, 22 = ID_JETPACK. These are the only three the table uses.
+const ID_GUARD_ALERT_R = 10, ID_GUARD_REDALERT_R = 11, ID_JETPACK_R = 22;
 function respawnTick() {
   if ((tickCounter & 1) !== 0) return;             // ROM iteration boundary
   if (!alertMode || alertRespawnTimer <= 0) return;
@@ -5417,15 +5424,36 @@ function respawnTick() {
   alertRespawnTimer = 0x14 + ((Math.random() * 16) | 0);   // next respawn time (r ^ tick)
   const info = respawnData && respawnData[currentRoom];
   if (!info) return;
-  // ChkRespawnEnemy CountEnemyType cap: max simultaneous of the respawn type — 3 for the RED-ALERT
-  // guard / jetpack, 4 otherwise (the budget that ends the alarm is NumRespawnGuards, on kills).
-  if (guards.length >= (redAlertFlag ? 3 : 4)) return;
+  // ChkRespawnEnemy's cap is keyed on the RESPAWN ENEMY ID from RespawnInfo — `B = 3` for
+  // ID_GUARD_REDALERT (11) and ID_JETPACK (22), `inc b` -> 4 for anything else — and it counts
+  // `CountEnemyType(A)`: only actors OF THAT TYPE.
+  // The port used to take the cap from redAlertFlag (the ROOM's RedAlertRooms bit, a different
+  // thing — wrong in 29 of the 96 respawn rooms) and count `guards.length`, i.e. every guard
+  // including ones still on patrol. Patrolling guards therefore ate the cap and far fewer
+  // reinforcements arrived than the ROM sends.
+  // TransformAlertGuard (Banks0123.asm:6726) re-IDs a guard to the respawn type the instant it
+  // alerts, so the ROM's count = alerted originals + reinforcements. `state === 'alert' ||
+  // respawnKill` is exactly that set (the same predicate chkAlarmEnd uses).
+  const id = info.id;
+  const cap = (id === ID_GUARD_REDALERT_R || id === ID_JETPACK_R) ? 3 : 4;
+  const live = id === ID_JETPACK_R
+    ? jetpacks.length
+    : guards.filter((g) => g.state === 'alert' || g.respawnKill).length;
+  if (live >= cap) return;
   const [x, y] = info.locs[tickCounter & 2 ? 1 : 0];
-  const g = makeGuard({ x, y, dir: 'down', speed: SPEED, path: [[x, y]], redalert: redAlertFlag,
-                        reinforcement: true });   // ID_GUARD_ALERT/REDALERT: spends the kill budget
-  guards.push(g);
-  enterAlert(g);                                   // reinforcements arrive chasing (red = stand-off)
-  guard = guards[0] || null;
+  if (id === ID_JETPACK_R) {
+    // InitJetpack (logic/actors/jetpack.asm:143-153): the reinforcement in these seven rooms is a
+    // FLYING jetpack trooper — Moving 1, facing left, COLLISION_CFG 2 (shots only, no body touch).
+    jetpacks.push({ x, y, mode: 'fly', wait: 0x20, vx: 0, vy: 0, anim: 0, life: 2,
+                    shotShape: GUARD_SHAPE, reinforcement: true });
+  } else {
+    const g = makeGuard({ x, y, dir: 'down', speed: SPEED, path: [[x, y]],
+                          redalert: id === ID_GUARD_REDALERT_R,   // the TYPE, not the room's bit
+                          reinforcement: true });  // ID_GUARD_ALERT/REDALERT: spends the kill budget
+    guards.push(g);
+    enterAlert(g);                                 // reinforcements arrive chasing (red = stand-off)
+    guard = guards[0] || null;
+  }
   playBuf(assets.spawnBuf);                        // SFX 0x25
 }
 

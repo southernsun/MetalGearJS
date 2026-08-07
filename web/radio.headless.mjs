@@ -268,6 +268,47 @@ const test = `
   __check('#43 Big Boss is never gated', incomingCallPossible(902) === true);
   __check('#43 a room with no caller list still rings', incomingCallPossible(903) === true);
   snake.class = 0; radiocallsData = null;
+
+  // ===== MapZone (#78 + the antenna gates) =====
+  // idxMapZones (data/musicradioconfig.asm:58) is a 126-byte nibble table: high nibble for an even
+  // room, low for an odd one — the same encoding as the tileset table.
+  __check('MapZone table covers rooms 0..251', MAP_ZONE_NIBBLES.length === 126);
+  __check('MapZone nibble order matches GetNibbleHL_A2 (even=high, odd=low)',
+    mapZoneFor(0) === 0 && mapZoneFor(16) === 1 && mapZoneFor(17) === 1 &&
+    mapZoneFor(111) === 10 && mapZoneFor(208) === 5,
+    [0,16,17,111,208].map(mapZoneFor).join(','));
+  __check('the early cluster is zone 0 (no antenna needed)', mapZoneFor(0) === 0 && mapZoneFor(5) === 0);
+
+  // ChkRadioCalls3: MapZone >= 5 needs the antenna before a call may ring.
+  radiocallsData = { 208: [{ freq: 0x85, waitCall: false, autoTune: true, textId: 1 }],
+                     5:   [{ freq: 0x85, waitCall: false, autoTune: true, textId: 1 }] };
+  schneiderCaptured = false; snake.class = 0; items.delete(SELECTED_ANTENNA);
+  __check('#78 zone 0 rings without the antenna', incomingCallPossible(5) === true);
+  __check('#78 zone 5 does NOT ring without the antenna', incomingCallPossible(208) === false);
+  items.set(SELECTED_ANTENNA, 1);
+  __check('#78 with the antenna it rings again', incomingCallPossible(208) === true);
+
+  // ChkRadioReply: same gate on the reply side.
+  items.delete(SELECTED_ANTENNA);
+  currentRoom = 208; switchOffMsx = false; transmiTaken = false;   // clear latches set earlier
+  __check('#78 zone 5 gives NO reply without the antenna',
+    radioReplyGate({ freq: 0x85, textId: 3 }) === null);
+  items.set(SELECTED_ANTENNA, 1);
+  __check('#78 with the antenna the reply comes through',
+    radioReplyGate({ freq: 0x85, textId: 3 }) === 3);
+
+  // ChkReplyBigBoss4: the bug warning is suppressed in MapZone 4 (Building 1 basement).
+  transmiTaken = true; switchOffMsx = false;
+  const zone4 = Array.from({ length: 252 }, (_, r) => r).find((r) => mapZoneFor(r) === 4);
+  const zoneOther = Array.from({ length: 252 }, (_, r) => r)
+    .find((r) => mapZoneFor(r) !== 4 && mapZoneFor(r) < 5);
+  currentRoom = zoneOther;
+  __check('#78 bugged outside zone 4 -> the warning (text 50)',
+    radioReplyGate({ freq: 0x85, textId: 3 }) === 50, 'room ' + zoneOther);
+  currentRoom = zone4;
+  __check('#78 bugged INSIDE zone 4 -> no warning, the normal reply',
+    radioReplyGate({ freq: 0x85, textId: 3 }) === 3, 'room ' + zone4);
+  transmiTaken = false; items.delete(SELECTED_ANTENNA); radiocallsData = null; currentRoom = 0;
 })();
 `;
 

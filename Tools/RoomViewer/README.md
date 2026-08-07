@@ -54,6 +54,13 @@ these flags writes a slice of `web/assets/` (most accept an optional `<outDir>`)
 | `--export-pitfall` / `--export-hindd` / `--export-ending` | the open-pitfall image / Hind D body+wreck blocks / ending-explosion atlas |
 | `--doors-audit` | a console door-data audit (no files) |
 
+One flag writes documentation instead of assets, and reads only the already-exported
+`web/assets` (no `.asm`, so the disassembly checkout isn't needed):
+
+| Flag | Writes |
+|------|--------|
+| `--export-map [assetsDir] [outDir]` | [`docs/room-maps/`](../../docs/room-maps/) — per-area overview PNGs that tile the exported room screenshots, labelled with room numbers and laid out from `connections.json`, with door/elevator links annotated |
+
 See [`docs/SESSION-STATE.md`](../../docs/SESSION-STATE.md) for the exact `--export-web` room
 list used to regenerate the connected world.
 

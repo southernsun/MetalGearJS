@@ -572,8 +572,10 @@ function setRoom(n) {
   for (const p of radioPersons) if (p.autoTune) radioFreq = p.freq;
 
   // SetAreaMusic4 (Banks0123.asm:1590): carrying the bugged transmitter re-raises the alert
-  // in every room outside RoomsNoAlert (and the elevators).
-  if (transmiTaken && n < 240 && !NO_ALERT_ROOMS.has(n)) raiseAlarm(n);
+  // in every room outside RoomsNoAlert (and the elevators) — but SetAreaMusic5 (:1560-1567) first
+  // exempts MapZone 4 (the Building 1 basement) and MapZone >= 8 (the desert through building 3).
+  if (transmiTaken && n < 240 && !NO_ALERT_ROOMS.has(n) &&
+      mapZoneFor(n) !== 4 && mapZoneFor(n) < 8) raiseAlarm(n);
 }
 
 // ---- Room items (AddRoomItems, logic/addroomitems.asm) ---------------------------------------
@@ -2059,7 +2061,8 @@ function buildMidBosses(n) {
     // emerges from the top gate. Shapes: Project/Expl 3 (-0x18, 0x18, 0, 0x18).
     midBosses.push({ kind: 'tank', x: 0x90, y: 0x10, vy: 0.5, life: 0x37, anim: 0,
                      cannon: 0x3C, mgTimer: 0x1E, mgOn: false, mgSide: 1, mgShot: 0,
-                     moveTime: 0x9A, idle: 0, dmgTable: TANK_DMG,
+                     // InitTank (tank.asm:7-25): MovingTime 0x9A, Status 0 (TankMove), speed +0.5 down.
+                     moveTime: 0x9A, tankStatus: 0, tankStatusCopy: 0, stopTime: 0, dmgTable: TANK_DMG,
                      shotShape: { offY: -0x18, distY: 0x18, offX: 0, distX: 0x18 },
                      explShape: { offY: -0x18, distY: 0x18, offX: 0, distX: 0x18 } });
     startBossMusic();
@@ -2096,13 +2099,29 @@ function midBossTick() {
   for (let i = tankShells.length - 1; i >= 0; i--) {        // the tank's cannon shells
     const s = tankShells[i];
     s.y += 6;                                               // InitTankShellBoss/InitTankShell: SpeedY 6
+    if (s.explode != null) {                                // the landed ID_BIG_EXPLOSION
+      s.y -= 6;                                             // Moving = 0: it does NOT fall
+      // ActorTouchDamage[ID_BIG_EXPLOSION-1] = 0x10, ActorsShapeTouch = 0x16 -> ImpactAreasInfo
+      // row 22 (10h,18h,0,18h): |dy - 16| < 24 and |dx| < 24. It lingers 0x12 iterations, so
+      // standing on the impact point just after the burst still hurts. (#73)
+      if (Math.abs(snake.y - (s.y + 0x10)) < 0x18 && Math.abs(snake.x - s.x) < 0x18 &&
+          snake.invulnTimer === 0) damage(0x10);
+      if (--s.explode <= 0) tankShells.splice(i, 1);
+      continue;
+    }
     if (s.timer != null) {                                  // desert air shell (ThankShellLogic)
-      s.x += s.vx || 0;                                     // the X drift (AddActorSpeedX)
+      // ThankShellLogic (tankshell.asm:33-42): AddActorSpeedX +-18h EVERY iteration, so the X
+      // speed ACCELERATES (0x18/256 = 0.09375 px/iter^2) — the shell curves out, it does not
+      // drift at a constant rate. (#73)
+      s.vx = (s.vx || 0) + (s.left ? -0x18 : 0x18) / 256;
+      s.x += s.vx;
       if (Math.abs(snake.y - s.y) < 20 && Math.abs(snake.x - s.x) < 20 && snake.invulnTimer === 0)
         damage(0x20);                                       // ActorTouchDamage[ID_TANK_SHELL_AIR-1] = 0x20
-      if (--s.timer <= 0 || s.y > 184) {                    // flying time elapsed -> ID_BIG_EXPLOSION
+      if (--s.timer <= 0 || s.y > 184) {                    // flying time elapsed
         playBuf(assets.explosionBuf);                       // SFX 0x1A
-        tankShells.splice(i, 1);
+        // The actor TRANSFORMS into ID_BIG_EXPLOSION (Timer 0x12, Moving 0) rather than being
+        // removed — a lingering hitbox at the landing point.
+        s.explode = 0x12; s.timer = null;
       }
       continue;
     }
@@ -2135,19 +2154,48 @@ function midBossTick() {
                        vx: (sp - 2) / 2, vy: 3, dmg: 8, srcId: ID_TANK_BULLET });
         playShot();
       }
-      if (--b.moveTime <= 0) { b.moveTime = 0x32 + ((Math.random() * 2) | 0) * 0x68; b.vy = -b.vy; }
-      b.y += b.vy;
-      if (b.y < 0x10) { b.y = 0x10; b.vy = 0.5; }
-      if (b.y > 0x60) { b.y = 0x60; b.vy = -0.5; }
+      // AnimateTank (tank.asm:137-165) + TankStatusLogic's 3 states. Every 128 iterations
+      // (ANIM_CNT & 7Fh == 0) the tank STOPS: Status = 2 (idle) for StopTime 0x28, then restores
+      // the previous status. Status 0 TankMove flips direction every 0x32 iterations between
+      // +0.5 (down) and -0.5 (up); on a down->up flip GetRandom3 (`ld a,r / xor ANIM_CNT / and 3`)
+      // has a 1-in-4 chance of entering Status 1 TankMoveLong instead — hold up for 0x9A, then
+      // resume down. There is NO position clamp in the ROM; the timers alone bound the drift.
+      // (The port oscillated continuously with a hard Y clamp and no idle beats — #71.)
+      if ((b.anim & 0x7F) === 0 && b.tankStatus !== 2) {      // AnimateTank: the periodic standstill
+        b.tankStatusCopy = b.tankStatus;
+        b.tankStatus = 2; b.stopTime = 0x28;
+      }
+      if (b.tankStatus === 2) {                              // TankIdle: frozen
+        if (--b.stopTime <= 0) b.tankStatus = b.tankStatusCopy;
+      } else if (b.tankStatus === 1) {                       // TankMoveLong: hold, then go down
+        if (--b.moveTime <= 0) { b.moveTime = 0x9A; b.tankStatus = 0; b.vy = 0.5; }
+        b.y += b.vy;
+      } else {                                               // TankMove
+        if (--b.moveTime <= 0) {
+          b.moveTime = 0x32;
+          if (b.vy < 0) b.vy = 0.5;                          // was moving up -> go down
+          else {                                             // was moving down -> up, maybe long
+            b.vy = -0.5;
+            if (((Math.random() * 256) | 0 ^ b.anim) % 4 === 0) { b.tankStatus = 1; b.moveTime = 0x9A; }
+          }
+        }
+        b.y += b.vy;
+      }
     } else if (b.kind === 'dozer') {
+      // BulldozerLogic (bulldozer.asm:8-22): a 7-entry status table — Moving, Stop1, Moving,
+      // Stop2, Moving, Stop3, then status 6 = BulldozerDummy, which does NOTHING. So after the
+      // third stop sets SpeedY 0xE0 the dozer plows straight down until Y >= 160, with no further
+      // pause. (The port kept alternating stop/move beats, adding one extra stutter near the
+      // bottom — #72.) Y >= 160 -> StopBulldozer, checked before the dispatch.
       if (b.y >= 160) { b.vy = 0; }                         // StopBulldozer at the bottom
-      else if (b.phase & 1) {                               // a stop beat
+      else if (b.phase >= 6) { b.y += b.vy; }               // BulldozerDummy: straight down at 0xE0
+      else if (b.phase & 1) {                               // a stop beat (Stop1/2/3)
         if (--b.timer <= 0) {
           b.phase++;
           b.timer = 0x30;
           b.vy = [0x60, 0x80, 0xC0, 0xE0][Math.min(3, b.phase >> 1)] / 256;
         }
-      } else {
+      } else {                                              // BuldozerMoving
         b.y += b.vy;
         if (--b.timer <= 0) { b.phase++; b.timer = 0x10; b.vy = 0; }
       }
@@ -2314,7 +2362,11 @@ function shellSpawnerTick() {
   }
   s.status = 0; s.wait = 0x32;                               // status 1: drop a shell (SpawnTankShell2)
   const x = (s.anim & 3) === 0 ? snake.x : (0x20 + ((Math.random() * 0xC0) | 0));   // every 4th aimed
-  tankShells.push({ x, y: 0, vx: Math.random() < 0.5 ? -0.5 : 0.5, timer: 0x0A + ((Math.random() * 16) | 0) });
+  // InitTankShell (tankshell.asm:8-24): Timer = ((r ^ TickCounter) & 0x0F) + 0x0A, and the
+  // left/right choice is that same value's bit 0. ResetActorSpeed zeroes the X speed — the drift
+  // ACCELERATES from nothing (see ThankShellLogic), it does not start at +-0.5. (#73)
+  const t = 0x0A + ((Math.random() * 16) | 0);
+  tankShells.push({ x, y: 0, vx: 0, left: (t & 1) === 0, timer: t });
 }
 
 function drawMidBosses() {
@@ -3257,10 +3309,18 @@ function pickBugMime() {
 }
 const bugSafeStop = (rec) => { try { if (rec && rec.state !== 'inactive') rec.stop(); } catch (e) {} };
 // Video (canvas) + audio (the bus tap, once the AudioContext exists) as one recorded stream.
+// CACHED: this used to build a fresh MediaStream on every window restart — one every 20s, forever.
+// The track set only changes when the audio tap appears (unlockAudio -> bugRefreshAudio), so cache
+// it and rebuild only then. (Long-session slowdown, issue #2.)
+let bugCombinedStream = null, bugStreamHadAudio = false;
 function bugStream() {
+  const hasAudio = !!captureDest;
+  if (bugCombinedStream && bugStreamHadAudio === hasAudio) return bugCombinedStream;
   const tracks = bugVideoStream.getVideoTracks();
   if (captureDest) for (const t of captureDest.stream.getAudioTracks()) tracks.push(t);
-  return new MediaStream(tracks);
+  bugCombinedStream = new MediaStream(tracks);
+  bugStreamHadAudio = hasAudio;
+  return bugCombinedStream;
 }
 function initBugReporter() {
   if (!bugReporterAvailable()) return;            // headless / unsupported browser: no-op
@@ -3269,12 +3329,20 @@ function initBugReporter() {
   const makeSlot = () => {
     const slot = { rec: null, chunks: [], startedAt: 0 };
     slot.begin = () => {
+      // Release the finished recorder before opening the next window. Without this the retiring
+      // MediaRecorder is still reachable from its own onstop closure at the moment it fires, so its
+      // encoder (and the chunk array it captured) lingers — one more per slot every 20s for the
+      // whole session. Detaching the handlers lets it go immediately. (Issue #2.)
+      const old = slot.rec;
+      if (old) { old.ondataavailable = null; old.onstop = null; }
+      slot.rec = null;
       slot.chunks = [];
       slot.startedAt = performance.now();
-      slot.rec = new MediaRecorder(bugStream(), mime ? { mimeType: mime } : undefined);
-      slot.rec.ondataavailable = (e) => { if (e.data && e.data.size) slot.chunks.push(e.data); };
-      slot.rec.onstop = () => slot.begin();        // auto-restart -> next window / audio refresh
-      slot.rec.start(1000);                        // 1s timeslice: chunks flush without stopping
+      const rec = new MediaRecorder(bugStream(), mime ? { mimeType: mime } : undefined);
+      slot.rec = rec;
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) slot.chunks.push(e.data); };
+      rec.onstop = () => { rec.ondataavailable = null; rec.onstop = null; slot.begin(); };
+      rec.start(1000);                             // 1s timeslice: chunks flush without stopping
     };
     return slot;
   };
@@ -3292,6 +3360,7 @@ function initBugReporter() {
 // rolling recorders so the next segments include the audio track (onstop -> begin -> bugStream).
 function bugRefreshAudio() {
   if (!bugSlots) return;
+  bugCombinedStream = null;              // force bugStream() to pick up the new audio track
   for (const s of bugSlots) bugSafeStop(s.rec);
 }
 function bugBestSlot() {                            // the slot covering >=20s ending now (tightest)
@@ -4972,6 +5041,22 @@ function chkRadioReceiv() {
 // (0x79 / 0x26) goes silent once captured. Jennifer (0x48) needs rank class >= 3. Returns the (maybe
 // overridden) text id, or null for no reply. Divergences: the MapZone>=5 ANTENNA gate, Jennifer's
 // dead-brother gate, and the Madnar/text-15 gate reference systems not modelled here (they pass).
+// MapZone (SetRadioArea, Banks0123.asm:1060-1066): a per-room NIBBLE from idxMapZones
+// (data/musicradioconfig.asm:58) — 126 bytes covering rooms 0..251, high nibble for an even room,
+// low for an odd one, exactly like the tileset table. Four routines read it:
+//   * ChkRadioCalls  (:1721)  — zone >= 5 needs the ANTENNA before a call may ring
+//   * ChkRadioReply  (:11049) — zone >= 5 needs the antenna before anyone replies
+//   * ChkReplyBigBoss4 (:11100) — zone == 4 (Building 1 basement) SUPPRESSES the bug warning (#78)
+//   * SetAreaMusic5  (:1562)  — the carried transmitter does NOT re-raise the alert in zone 4 or
+//                               zone >= 8 (the desert through building 3)
+// (MapZone was previously unmodelled and every one of those gates simply passed.)
+const MAP_ZONE_NIBBLES = [0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x11,0x11,0x11,0x11,0x11,0x11,0x22,0x22,0x22,0x22,0x22,0x22,0x33,0x33,0x33,0x33,0x33,0x33,0x33,0x44,0x44,0x44,0x44,0x44,0x00,0x00,0x00,0x55,0x55,0x55,0x55,0x56,0x66,0x66,0x66,0x66,0x77,0x77,0x78,0x88,0x88,0x88,0x88,0x55,0x55,0x55,0x99,0x9A,0xAA,0xAA,0xA3,0xAA,0x00,0x44,0x44,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x11,0x11,0x11,0x22,0x22,0x22,0x22,0x00,0x22,0x22,0x33,0x33,0x44,0x44,0x44,0x44,0x40,0x00,0x55,0x55,0x56,0x66,0x66,0x77,0x88,0x88,0x99,0xA1,0x88,0x60,0xA9,0x68,0x06,0x58,0x50,0x05,0x55,0x55,0x55,0x55,0x44,0x00,0xAA,0xA0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00];
+const mapZoneFor = (n) => {
+  const b = MAP_ZONE_NIBBLES[n >> 1];
+  return b == null ? 0 : ((n & 1) ? (b & 0x0F) : (b >> 4));
+};
+// AntennaTaken — the radio antenna in the inventory (SELECTED_ANTENNA, AddItemInventory3).
+const antennaTaken = () => items.has(SELECTED_ANTENNA);
 const FREQ_BIGBOSS = 0x85, FREQ_BIGBOSS_B2 = 0x13, FREQ_SCHNEIDER = 0x79, FREQ_SCHNEIDER_B2 = 0x26, FREQ_JENIFFER = 0x48;
 // ChkRadioCalls (Banks0123.asm:1689-1743) decides whether the room's incoming call RINGS at all,
 // and it looks only at the FIRST caller in the room's list (RadioPersonsDat): a captured Schneider
@@ -4986,13 +5071,20 @@ function incomingCallPossible(room) {
   if ((f === FREQ_SCHNEIDER || f === FREQ_SCHNEIDER_B2) && schneiderCaptured) return false;
   // `cp 3 / jr nz` — exactly Class 3. Class caps at 3 (IncClassLv `cp 3 / ret z`), so >= is the same.
   if (f === FREQ_JENIFFER && snake.class < 3) return false;
+  // ChkRadioCalls3 (:1719-1726): from building 2 on (MapZone >= 5) you need the antenna to receive
+  // incoming calls at all. Now modelled. (Was passing unconditionally.)
+  if (mapZoneFor(room) >= 5 && !antennaTaken()) return false;
   return true;
 }
 function radioReplyGate(p) {
   const f = p.freq;
+  // ChkRadioReply (:11048-11055): MapZone >= 5 -> nobody answers without the antenna.
+  if (mapZoneFor(currentRoom) >= 5 && !antennaTaken()) return null;
   if (f === FREQ_BIGBOSS || f === FREQ_BIGBOSS_B2) {
     if (switchOffMsx) return 136;                 // ChkReplyBigBoss2: "Stop operation. Switch off your MSX"
-    if (transmiTaken) return 50;                  // ChkReplyBigBoss4: "...check if you have been bugged..."
+    // ChkReplyBigBoss4 (:11095-11106): the bug warning is suppressed in MapZone 4, the Building 1
+    // basement — `ld a,(MapZone) / cp 4 / jp z, ChkReplySchneider`. (#78)
+    if (transmiTaken && mapZoneFor(currentRoom) !== 4) return 50;
     return p.textId;
   }
   if (f === FREQ_SCHNEIDER || f === FREQ_SCHNEIDER_B2) return schneiderCaptured ? null : p.textId;

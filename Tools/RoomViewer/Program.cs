@@ -9,6 +9,15 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Headless: --export-map [<assetsDir>] [<outDir>] — compose docs/room-maps/*.png from the
+        // ALREADY EXPORTED room screenshots + manifest/connections/doors JSON. Reads no .asm, so it
+        // runs before GameData.Load and works without the sibling disassembly checkout.
+        if (args.Length > 0 && args[0] == "--export-map")
+        {
+            MapExport.Run(args);
+            return;
+        }
+
         string root = ResolveGameRoot(args);
         var data = GameData.Load(root);
 

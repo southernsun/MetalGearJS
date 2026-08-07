@@ -127,6 +127,90 @@ const test = `
   __check('the flame jet sweeps (8 flames live)', ftFlames.length===8);
   midBosses[0].life=0; iter2(midBossTick, 0x12);
   __check('his death kills the flames and latches', ftKO===true && ftFlames.length===0);
+
+  // ===== #71 tank vertical: idle beats + the long-move state =====
+  currentRoom = 67; tankKO = false; buildMidBosses(67);
+  const tk = midBosses[0];
+  __check('#71 InitTank seeds MovingTime 0x9A, Status 0, +0.5 down',
+    tk.moveTime === 0x9A && tk.tankStatus === 0 && tk.vy === 0.5);
+  // AnimateTank: ANIM_CNT & 7Fh == 0 -> Status 2 (idle) for StopTime 0x28, tank frozen.
+  tk.anim = 0xFF; tk.tankStatus = 0; tk.vy = 0.5; tk.moveTime = 0x50;
+  const yBefore = tk.y;
+  iter2(midBossTick, 1);                                  // anim wraps to 0 -> the idle beat arms
+  // AnimateTank sets StopTime = 0x28 and then FALLS THROUGH to TankStatusLogic, which dispatches
+  // on the freshly-set Status 2 and runs TankIdle's "dec (ix+StopTime)" in the same iteration —
+  // so one tick is already consumed. The idle therefore spans 0x28 iterations in total.
+  __check('#71 every 128 iterations the tank goes IDLE (StopTime 0x28, one consumed by the fall-through)',
+    tk.tankStatus === 2 && tk.stopTime === 0x27, 'st=' + tk.tankStatus + ' t=' + tk.stopTime);
+  let idleSpan = 1;
+  while (tk.tankStatus === 2 && idleSpan < 100) { iter2(midBossTick, 1); idleSpan++; }
+  __check('#71 the idle lasts exactly 0x28 iterations', idleSpan === 0x28, 'span=' + idleSpan);
+  tk.anim = 1; tk.tankStatus = 0; tk.vy = 0.5; tk.moveTime = 0x50;
+  tk.anim = 0xFF; tk.tankStatus = 0; tk.vy = 0.5; tk.moveTime = 0x50;
+  iter2(midBossTick, 1);
+  const yIdle = tk.y;
+  iter2(midBossTick, 0x20);
+  __check('#71 it does not move while idle', tk.y === yIdle, 'y=' + tk.y + ' was ' + yIdle);
+  iter2(midBossTick, 0x10);
+  __check('#71 idle restores the previous status and it moves again',
+    tk.tankStatus === 0 && tk.y !== yIdle, 'st=' + tk.tankStatus + ' y=' + tk.y);
+  // TankMove: an up->down flip is unconditional; a down->up flip may enter TankMoveLong.
+  tk.tankStatus = 0; tk.vy = -0.5; tk.moveTime = 1; tk.anim = 1;
+  iter2(midBossTick, 1);
+  __check('#71 moving UP flips to DOWN after 0x32 with no randomness',
+    tk.vy === 0.5 && tk.moveTime === 0x32, 'vy=' + tk.vy + ' t=' + tk.moveTime);
+  // TankMoveLong: hold, then resume downward at +0.5 with MovingTime 0x9A.
+  tk.tankStatus = 1; tk.moveTime = 1; tk.vy = -0.5; tk.anim = 1;
+  iter2(midBossTick, 1);
+  __check('#71 TankMoveLong expires back to Status 0, +0.5 down, 0x9A',
+    tk.tankStatus === 0 && tk.vy === 0.5 && tk.moveTime === 0x9A);
+  __check('#71 there is no hard Y clamp any more (timers bound the drift)',
+    !/b\.y = 0x10;|b\.y = 0x60;/.test(String(midBossTick)));
+
+  // ===== #72 bulldozer: no stop after the final acceleration =====
+  currentRoom = 71; dozerKO = false; buildMidBosses(71);
+  const dz = midBosses[0];
+  dz.phase = 6; dz.vy = 0xE0 / 256; dz.timer = 1; dz.y = 100;
+  const ySeq = [];
+  for (let k = 0; k < 40; k++) { iter2(midBossTick, 1); ySeq.push(dz.y); }
+  const stalled = ySeq.some((y, k) => k > 0 && y === ySeq[k - 1]);
+  __check('#72 after the final accel (status 6) it never stops again',
+    !stalled && dz.vy === 0xE0 / 256, 'stalled=' + stalled + ' vy=' + dz.vy);
+  dz.y = 165;
+  iter2(midBossTick, 1);
+  __check('#72 it halts at Y >= 160 (StopBulldozer)', dz.vy === 0);
+  // the earlier phases still stop between accelerations
+  dz.phase = 0; dz.timer = 1; dz.vy = 0x60 / 256; dz.y = 40;
+  iter2(midBossTick, 1);
+  __check('#72 the early phases DO stop (BuldozerMoving -> Stop1)',
+    dz.phase === 1 && dz.vy === 0 && dz.timer === 0x10, 'phase=' + dz.phase + ' vy=' + dz.vy);
+
+  // ===== #73 desert air shell: accelerating drift + a lingering explosion =====
+  currentRoom = 65; tankKO = false; buildShellSpawner(65); tankShells.length = 0;
+  tankShells.push({ x: 100, y: 0, vx: 0, left: false, timer: 3 });
+  const sh = tankShells[0];
+  iter2(midBossTick, 1); const v1 = sh.vx;
+  iter2(midBossTick, 1); const v2 = sh.vx;
+  __check('#73 the X speed ACCELERATES by 0x18/256 each iteration',
+    v1 === 0x18 / 256 && v2 === 2 * 0x18 / 256, 'v1=' + v1 + ' v2=' + v2);
+  __check('#73 a left-drifting shell accelerates the other way', (() => {
+    tankShells.length = 0; tankShells.push({ x: 100, y: 0, vx: 0, left: true, timer: 5 });
+    iter2(midBossTick, 1); return tankShells[0].vx === -0x18 / 256;
+  })());
+  // On timeout it TRANSFORMS into ID_BIG_EXPLOSION rather than vanishing.
+  tankShells.length = 0; tankShells.push({ x: 100, y: 100, vx: 0, left: false, timer: 1 });
+  iter2(midBossTick, 1);
+  __check('#73 the shell becomes a lingering explosion (Timer 0x12), not removed',
+    tankShells.length === 1 && tankShells[0].explode === 0x12, JSON.stringify(tankShells[0]));
+  // ...and that explosion can still hit you: |dy-16| < 24, |dx| < 24, damage 0x10.
+  gameState = 'play'; snake.life = 24; snake.invulnTimer = 0;
+  snake.x = tankShells[0].x; snake.y = tankShells[0].y + 0x10;
+  iter2(midBossTick, 1);
+  __check('#73 standing on the impact point after the burst takes 0x10',
+    snake.life === 24 - 0x10, 'life=' + snake.life);
+  // it expires after 0x12 iterations
+  iter2(midBossTick, 0x14);
+  __check('#73 the explosion expires', tankShells.length === 0);
 })();
 `;
 

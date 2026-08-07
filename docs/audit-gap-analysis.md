@@ -105,6 +105,31 @@ The index is the only thing that forces a second look.
 
 ---
 
+## The sweep, run
+
+Action 4 below, carried out. The ROM dispatches every actor death through `KillActor` →
+`IdsKillLogic` (a nibble per actor id) → one of **8 kill logics**, covering all 66 actor slots.
+Each was read and diffed against the port:
+
+| # | Kill logic | Actors | Result |
+|---|---|---|---|
+| 0 | `DismissActor0` | 28 (bullets, gas, pitfalls, spawners, …) | plain removal — ok |
+| 1 | `KillEnemy` | 22 (guards, dogs, bosses, …) | Big Boss opens the ladders' door (`DoorOpenArray+6Ah`) — **ported** (`forceOpenDoor(107)`) |
+| 2 | `KillPrisoner2` | Ellen, Grey Fox, Madnar | `DowngradeRank` — **ported** |
+| 3 | `KillPrisoner` | Prisoner1, Prisoner6 | `DowngradeRank` ported; **Jennifer's brother path missing → #134** |
+| 4 | `KillJetpack` | 3 jetpack ids | 3-frame explosion then dismiss — **missing → #136** |
+| 5 | `ExplosionAnim` | Camera, Land mine, Laser camera | **cameras aren't damageable at all → #135** |
+| 6 | `BossDefeatedLogic` | Tank, Metal Gear, Bulldozer, Hind D | countdown, door 62h, SFX 53h, wreck tiles — **ported** |
+| 7 | `EraseBitmapActor` | Power switch | **was missing → #132, fixed** |
+
+Below that sits the `DismissActor3..9` drop chain, also checked: Arnold → CARD7 at (48,48),
+Coward Duck → CARD8 at (56,112), last Silencer → suppressor at (98,36), plus the Fire Trooper /
+Shot Gunner / MGK / Bulldozer / Big Boss status flags and their area-music restore — all present.
+
+**Yield: 3 new issues (#134, #135, #136) from 8 kill logics.** The method works because the
+dispatch table is an exhaustive list — every actor is in it exactly once, so nothing can be
+"not thought of". Contrast the grep-by-name approach that missed #132.
+
 ## Actions
 
 | # | Action | State |
@@ -112,7 +137,7 @@ The index is the only thing that forces a second look.
 | 1 | Report the main-bank gap in `rom-coverage.md` instead of omitting it | **done** |
 | 2 | Decode + port `DrawDestroyPowSw` | **done** (#132) |
 | 3 | Triage all 13 unregistered approximation claims — each is either a bug to file or a row to add | tracked in **#133** |
-| 4 | When auditing an actor, read its `Banks0123.asm` death/removal path, not just its `logic/actors/` file | convention |
+| 4 | When auditing an actor, read its `Banks0123.asm` death/removal path, not just its `logic/actors/` file | **done — see above** |
 | 5 | Treat any `VDP_Copy_*` from a non-save-buffer source as authored art to decode | convention |
 
 ### Checks worth running again

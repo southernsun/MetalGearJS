@@ -35,6 +35,7 @@ const sandbox = {
 };
 sandbox.globalThis = sandbox;
 sandbox.__doors = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'doors.json'), 'utf8'));
+sandbox.__dgfx = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'door-gfx.json'), 'utf8'));  // the walls' per-cell solid masks
 sandbox.__dtypes = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'door-types.json'), 'utf8'));
 sandbox.__texts = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'texts.json'), 'utf8'));
 sandbox.__items = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'items.json'), 'utf8'));
@@ -48,7 +49,7 @@ sandbox.__check = (name, cond, extra='') => results.push({ name, ok: !!cond, ext
 
 const test = `
 ;(function(){
-  doorsData = __doors; doorTypes = __dtypes; doorGfx = {}; textsData = __texts; itemsData = __items;
+  doorsData = __doors; doorTypes = __dtypes; doorGfx = __dgfx; textsData = __texts; itemsData = __items;
   actorsData = __actors;
   rooms.set(8,   { img: null, collision: __coll8 });
   rooms.set(165, { img: null, collision: __coll165 });

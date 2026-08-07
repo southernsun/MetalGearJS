@@ -27,7 +27,7 @@
 // is hand-maintained rather than injected. Bump it in the same commit as the change it describes:
 //   PATCH  fixes only          MINOR  new behaviour/systems          MAJOR  reserved for 1.0
 // APP_BUILD is the date of that bump — it is what tells you whether the server has the newest copy.
-const APP_VERSION = '0.10.0';
+const APP_VERSION = '0.10.1';
 const APP_BUILD = '2026-08-07';
 const APP_VERSION_FULL = `v${APP_VERSION} (${APP_BUILD})`;
 
@@ -3827,15 +3827,37 @@ function inOpenDoor(px, py) {
 // 165, 30 vs 25 in room 59 — so the cell wall could never be punched open (no prison escape) and
 // room 59's side lane could not be walked at all. `solid` comes from the ROM's own bitmap via
 // RoomViewer's SaveWallBlock. Issues #129, #130.
+const staleWallMaskWarned = new Set();
+function warnStaleWallMask(type) {
+  if (staleWallMaskWarned.has(type)) return;
+  staleWallMaskWarned.add(type);
+  try {
+    console.warn(`[${APP_VERSION_FULL}] door-gfx.json has no "solid" mask for wall type ${type} — ` +
+      'that asset is STALE. The whole wall block will block movement, which re-breaks the room-59 ' +
+      'lane and the room-165 cell wall (#129/#130). Hard-refresh, or re-run ' +
+      '`dotnet run --project Tools/RoomViewer -- --export-doors`.');
+  } catch (e) {}
+}
+// Is the point (already known to be inside d.rect) on a SOLID cell of the wall's tile block?
+// The single rule both blocking paths use — closedWallSolid (via blocked()) and
+// closedDoorBlocking (normalControl's earlier check). Having only the first one consult the mask
+// is what made the #129 fix inert in play.
+function wallCellSolid(d, px, py) {
+  const mask = (doorGfx[String(d.type)] || {}).solid;
+  // No mask -> fall back to the old whole-block-solid behaviour. That fallback is silent and
+  // looks EXACTLY like the bug this fix removed, so shout about it: door-gfx.json is a separate
+  // static file from game.js and is cached separately, so a stale copy of it re-breaks room 59 /
+  // room 165 on an otherwise up-to-date build. (Cost one round of user testing to find.)
+  if (!mask) { warnStaleWallMask(d.type); return true; }
+  const row = mask[(py - d.rect.y) >> 3];
+  return !!(row && row[(px - d.rect.x) >> 3]);
+}
 function closedWallSolid(px, py) {
   for (const d of activeDoors) {
     if (d.open || d.opening) continue;
     if (d.type < 7 || d.type > 19) continue;
     if (!pointInRect(d.rect, px, py)) continue;
-    const mask = (doorGfx[String(d.type)] || {}).solid;
-    if (!mask) return true;                       // no exported mask -> whole block solid
-    const row = mask[(py - d.rect.y) >> 3], col = row && row[(px - d.rect.x) >> 3];
-    if (col) return true;                         // this cell's tile is a solid one
+    if (wallCellSolid(d, px, py)) return true;     // this cell's tile is a solid one
   }
   return false;
 }
@@ -3924,23 +3946,32 @@ function transition(dir, neighborRoom) {
 
 // ---- Doors -----------------------------------------------------------------
 // A closed door Snake's probes would push into when moving to (x,y), else null.
+// This is the SECOND blocking path — normalControl consults it BEFORE blocked(), so a breakable
+// wall must answer here with the same per-cell mask closedWallSolid uses. It previously took the
+// door's whole rect (via doorBlockRect's one hardcoded exception for room 165's type-14 wall), so
+// room 59's type-9 wall still sealed its 8px lane even after the mask landed in closedWallSolid —
+// the #129 fix looked correct in isolation and did nothing in play. (User-reported after testing.)
 function closedDoorBlocking(x, y, dir) {
   for (const d of activeDoors) {
     if (d.open) continue;
+    const wall = d.type >= 7 && d.type <= 19;
     const r = doorBlockRect(d);
-    for (const [oy, ox] of PROBES[dir])
-      if (pointInRect(r, Math.round(x + ox), Math.round(y + oy))) return d;
+    for (const [oy, ox] of PROBES[dir]) {
+      const px = Math.round(x + ox), py = Math.round(y + oy);
+      if (!pointInRect(r, px, py)) continue;
+      if (wall && !wallCellSolid(d, px, py)) continue;   // a WALKABLE cell of the tile block
+      return d;
+    }
   }
   return null;
 }
-// The prison walls block by their DRAWN tiles' collision bits (the tileset CollTiles bitmap),
-// not their full footprint. Snake's cell wall (type 14, columns 0x14/0x33/0x35): the RIGHT
-// column 0x35 is WALKABLE — Snake steps 8px into the drawn wall and stops where ChkTouchDoor's
-// open area passes (PlayerX 56 - 32 = 24 < 26; with the full 24px solid his left probe would
-// park him at 64 and the punch could never connect). The other walls' tiles are fully solid
-// (type 15: 0x32/0x13; types 12/13: 0x17) and their open areas extend OUTSIDE the footprint.
+// The breakable walls block by their DRAWN tiles' collision bits (the tileset CollTiles bitmap),
+// not their full footprint — closedDoorBlocking applies wallCellSolid() inside this rect, so the
+// rect is only the outer bound. This used to carry a hand-written exception for room 165's type-14
+// wall (`{x, y, 16, 104}`, i.e. "the third column is walkable"); the exported mask says exactly
+// that ([1,1,0]) and says it for every wall type, so the exception is gone — which is what finally
+// freed room 59's type-9 lane too.
 function doorBlockRect(d) {
-  if (d.lock === 15 && d.type === 14) return { x: d.x, y: d.y, w: 16, h: 104 };
   return d.rect;
 }
 // PlayerDirection per facing (1=Up,2=Down,3=Left,4=Right); a door's render `type` equals the facing

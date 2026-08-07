@@ -19,6 +19,27 @@ Issue numbers link to [the tracker](https://github.com/southernsun/MetalGearJS/i
 
 ---
 
+## 0.10.1 — 2026-08-07
+
+### Fixed
+- **The #129 wall-lane fix was inert in play.** There are two independent blocking paths and
+  `normalControl` consults the *other* one first: `closedDoorBlocking` took the wall's whole rect
+  via `doorBlockRect`, which carried a hand-written exception for room 165's type-14 wall only.
+  So room 165 worked and **room 59's lane stayed sealed** — with the per-cell mask sitting right
+  there in `closedWallSolid`, unused on that path. Both paths now share one `wallCellSolid()` rule
+  and the hardcoded exception is gone (the exported mask says `[1,1,0]` — exactly what it encoded).
+  (#129, user-reported after testing 0.10.0.)
+- A missing `solid` mask now logs a **loud console warning** instead of silently falling back to
+  whole-block-solid. `door-gfx.json` is cached separately from `game.js`, so a stale copy reproduces
+  the original bug bit-for-bit on an otherwise current build.
+
+### Changed
+- `doors.headless.mjs` and `capture.headless.mjs` now assert through **`normalControl`** — holding a
+  direction and stepping until Snake stops — instead of only `freeAt`/`touchDoor`/`closedWallSolid`.
+  The static checks all passed while the game was still blocked; that is what let this ship.
+
+---
+
 ## 0.10.0 — 2026-08-07
 
 Breakable-wall collision taken from the ROM's own per-tile bitmap, and the basement dog spawner

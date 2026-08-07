@@ -182,6 +182,40 @@ const test = `
           freeAt(24, 60) === true && freeAt(24, 100) === true);
   __check('#129 and ChkTouchDoor passes there, so the wall sounds hollow',
           (snake.x = 24, snake.y = 100, touchDoor(w59)) === true);
+  // #129 REGRESSION: assert through the REAL movement path, not freeAt/touchDoor.
+  // normalControl consults closedDoorBlocking() BEFORE blocked(), and only the latter went through
+  // the mask -- so the first fix passed every static check here and did nothing in play. Drive the
+  // walk instead: hold a direction and step normalControl until Snake stops.
+  const walkUntilStuck = (dir, max) => {
+    held.clear(); held.add('dir:' + dir); pushRecency(dir);
+    for (let i = 0; i < max; i++) {
+      const bx = snake.x, by = snake.y;
+      normalControl();
+      if (snake.x === bx && snake.y === by) break;
+    }
+    held.clear();
+  };
+  assets.collision = __coll59; currentRoom = 59; buildDoors(59);
+  guards.length = 0; guard = null;
+  snake.anim = ANIM_NORMAL; snake.controlMod = CONTROL_NORMAL;
+  snake.x = 24; snake.y = 16; snake.dir = 'down';
+  walkUntilStuck('down', 200);
+  __check('#129 Snake WALKS the full height of the wall lane (normalControl, not freeAt)',
+          snake.y >= 135, 'stopped y=' + snake.y);
+  snake.x = 40; snake.y = 90; snake.dir = 'left';
+  walkUntilStuck('left', 120);
+  __check('#129 walking LEFT reaches x=24 beside the wall', snake.x === 24, 'x=' + snake.x);
+  const w59b = activeDoors.find((x) => x.lock === 16);
+  __check('#129 and ChkTouchDoor passes where the walk ends', touchDoor(w59b) === true);
+  __check('#129 the wall still BLOCKS — no walking through into the hidden room', snake.x > 15);
+  // The same drive for room 165, so the cell wall can never regress the other way.
+  assets.collision = __coll165; currentRoom = 165; buildDoors(165);
+  snake.x = 100; snake.y = 72; snake.dir = 'left';
+  walkUntilStuck('left', 120);
+  __check('#130 Snake WALKS up to x=56 at the cell wall', snake.x === 56, 'x=' + snake.x);
+  __check('#130 ChkTouchDoor passes where the walk ends',
+          touchDoor(activeDoors.find((x) => x.lock === 15)) === true);
+
   assets.collision = __coll60; currentRoom = 60; buildDoors(60);
 
   // --- in-room wall (dest === room): opening it does NOT teleport (ChkEnterDoor2's 0x20 bit) ---

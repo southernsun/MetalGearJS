@@ -32,6 +32,9 @@ Besides the interactive window, this tool exports the actor/sprite sheets for th
 - `--export-guard`, `--export-guard-bullet`, `--export-zzz`, `--export-prisoner`,
   `--export-elevator`, `--export-camera`, `--export-shots`, `--export-mgk`,
   `--export-bigboss`, `--export-sgunner` — the corresponding actor/projectile sheets.
+- `--export-target` — the binoculars reticle `target.png` + `target.json` (`SprTarget`,
+  `gfx/targetspr.asm`, unpacked to sprite patterns `10h/14h/18h/1Ch` by `LoadSprTarget`; the 2×2
+  32×32 layout and its (112,80) screen origin come from `BinocularSprAtt`).
 - `--export-actor <SprLabel> <out.png> [#A #B #overlap]` and
   `--export-actor-singles <SprLabel> <out.png> [#color]` — generic exporters for any sprite
   label (composited OR-pairs / individual sprites).

@@ -1,0 +1,8 @@
+{
+  "width": 32,
+  "height": 32,
+  "originX": 112,
+  "originY": 80,
+  "sprites": 4,
+  "source": "SprTarget (gfx/targetspr.asm) via LoadSprTarget; layout BinocularSprAtt (logic/menuequipment.asm:355)"
+}

@@ -81,7 +81,15 @@ Summary:
 | `konamilogo` | 1 | fg 13 | |
 | `doors` | 4 | raw block | `GfxDoorLeft/Right` = 1 tile wide |
 | `sprites` | 1 | sprite mode | RLE, 16×16 |
-| `targetspr` | 4 | raw | RLE (UnpackGfx) |
+| `targetspr` | 1 | sprite mode | RLE, 16×16 — see below |
+
+`targetspr` (the binocular reticle) was catalogued as **4bpp background graphics with the Room 0
+palette until 2026-08** — wrong. `LoadSprTarget` (`Banks0123.asm:3226-3232`) `UnpackGfx`'s it to
+`0F880h`, which is inside the **sprite pattern generator table** at `0F800h`: it is 128 bytes =
+patterns `10h/14h/18h/1Ch`, four 1bpp 16×16 hardware sprites that `BinocularSprAtt`
+(`logic/menuequipment.asm:355`) lays out 2×2 at (112,80)–(143,111), with every colour byte
+flood-filled `0Eh` (white). Corrected in `GfxCatalog.cs`; the browser port exports it with
+`dotnet run --project Tools/MetalGearSpriteMover -- --export-target` (issue #118).
 
 ## Notes / limitations
 

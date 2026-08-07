@@ -110,8 +110,15 @@ namespace MetalGearGfxViewer
             ["sprites.asm"] = new GfxSpec(1, compressed: true, spriteMode: true, foreground1bpp: 15,
                 tilesPerRow: 32, palette: "Sprite set 2", note: "Hardware sprites (RLE, 1bpp 16x16)"),
 
-            // Binocular target: RLE-compressed raw 4bpp (UnpackGfx).
-            ["targetspr.asm"] = new GfxSpec(4, compressed: true, palette: "Room 0", note: "Binocular target (RLE, 4bpp)"),
+            // Binocular target: RLE-compressed 1bpp 16x16 HARDWARE SPRITES, not background graphics.
+            // LoadSprTarget (Banks0123.asm:3226-3232) UnpackGfx's SprTarget to 0F880h — inside the
+            // sprite pattern generator table at 0F800h — i.e. patterns 10h/14h/18h/1Ch, the four
+            // sprites BinocularSprAtt (logic/menuequipment.asm:355) lays out 2x2. Every colour byte
+            // is flood-filled 0Eh (white, menuequipment.asm:343-347), so it renders monochrome.
+            // (Was catalogued as 4bpp/"Room 0" — wrong; corrected against the disassembly. The port
+            // exports it via MetalGearSpriteMover --export-target; see issue #118.)
+            ["targetspr.asm"] = new GfxSpec(1, compressed: true, spriteMode: true, foreground1bpp: 14,
+                tilesPerRow: 4, palette: "Sprite set 2", note: "Binocular target (RLE, 1bpp 16x16 sprites)"),
         };
 
         /// <summary>Find the spec for a label in a given file, or null if unknown.</summary>

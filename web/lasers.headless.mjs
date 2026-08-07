@@ -159,6 +159,35 @@ const test = `
   let g = 0;
   while (laserShots.length && g++ < 100) laserShotsTick();
   __check('a shot grows to 11 segments and shrinks away (~22 iterations)', g >= 20 && g <= 26, 'g='+g);
+
+  // ===== #66 LaserLenghts reach =====
+  // damagelaser.asm:72-83 is 1,1,2,3,4,5,6,7,8,9,0Ah,0Bh indexed by (grown - 1). The port stopped
+  // at 9, so a FULLY grown 11-segment beam reached 72px instead of the ROM's 80px.
+  __check('#66 the table carries the full ROM row',
+    JSON.stringify(LASER_LENGTHS) === JSON.stringify([1,1,2,3,4,5,6,7,8,9,10,11]));
+  // laserShotsTick increments segs BEFORE the damage test, so seed segs = grown-1 with a high max.
+  const farthestHit = (grown) => {
+    let hit = -1;
+    for (let dy = 0; dy < 260; dy++) {
+      laserShots.length = 0;
+      laserShots.push({ x: 100, y: 0, segs: grown - 1, max: 99, phase: 0, dead: false });
+      currentRoom = 115;   // NOT room 111 (its NumSprites=3 lasers cap the grown count at 7)
+      snake.x = 100; snake.y = dy; snake.life = 24; snake.invulnTimer = 0; gameState = 'play';
+      laserShotsTick();
+      if (snake.life < 24) hit = dy;
+    }
+    return hit;
+  };
+  // half = table[grown-1] * 8; damage while |shotY + half - playerY| < half -> 0 < y < 2*half.
+  __check('#66 a FULLY grown 11-segment beam reaches 80px half-span (farthest y 159, was 143)',
+    farthestHit(11) === 159, 'farthest=' + farthestHit(11));
+  __check('#66 a 10-segment beam reaches 72px (farthest y 143)',
+    farthestHit(10) === 143, 'farthest=' + farthestHit(10));
+  __check('#66 a 9-segment beam reaches 64px (farthest y 127)',
+    farthestHit(9) === 127, 'farthest=' + farthestHit(9));
+  // ChkLaserShot4 rejects a grown count of 0Ch BEFORE indexing, so 12 deals no damage at all.
+  __check('#66 a grown count of 12 deals NO damage (cp 0Ch / ret z)', farthestHit(12) === -1);
+  laserShots.length = 0;
 })();
 `;
 

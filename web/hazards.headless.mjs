@@ -27,6 +27,8 @@ const sandbox = {
 sandbox.globalThis = sandbox;
 sandbox.__actors = fs.readFileSync(path.join(dir, 'assets', 'actors.json'), 'utf8');
 sandbox.__respawn = fs.readFileSync(path.join(dir, 'assets', 'respawn.json'), 'utf8');
+// barrel.json is written by `--export-barrel` straight from RollBarrels1/2 + SprOffsets7 (#111).
+sandbox.__barrelMeta = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'barrel.json'), 'utf8'));
 
 let src = fs.readFileSync(path.join(dir, 'game.js'), 'utf8').replace(/\bmain\(\);\s*$/, '\n');
 const results = [];
@@ -48,18 +50,129 @@ const test = `
   iter2(gasCloudTick, 0x20);
   __check('the cloud hides again with a fresh random delay', g0.visible===false && g0.timer>0);
 
+  // ==== actors.json patrol-path integrity (#122) ====
+  // The ROM assigns a path only to guards that actually reach InitGuardPath/GetPathPoints:
+  // SLOW/MEDIUM/FAST, sentinels (look-direction lists) and lorry guards. ALERT/REDALERT and
+  // SILENCER guards have their own init routines with no path lookup. The exporter used to give
+  // every guard a slot, which ran past the end of a room's table and picked up the NEXT room's
+  // data — room 131's alert guards landed on Paths_139's sentinel look-direction lists.
+  {
+    let malformed = 0, alertWithPath = 0, pathed = 0;
+    for (const rn of Object.keys(actorsData))
+      for (const g of (actorsData[rn].guards || [])) {
+        if (!g.path) continue;
+        pathed++;
+        if (g.path.some(p => !Array.isArray(p) || p.length !== 2 ||
+                             !Number.isInteger(p[0]) || !Number.isInteger(p[1]))) malformed++;
+        if (g.alert || g.silencer) alertWithPath++;
+      }
+    __check('#122 no patrol path has a malformed/null point', malformed === 0, 'bad=' + malformed);
+    __check('#122 alert/silencer guards carry no patrol path', alertWithPath === 0, 'n=' + alertWithPath);
+    __check('#122 patrol paths still exist for real path guards', pathed > 50, 'pathed=' + pathed);
+    // Room 131 is the room the bug bit: four ID_GUARD_ALERT, a one-entry path table (Paths_119).
+    const r131 = actorsData[131].guards;
+    __check('#122 room 131 has 4 alert guards, none with a path',
+      r131.length === 4 && r131.every(g => g.alert && !g.path));
+    // ...and the alarm-end re-home must not produce NaN (it used to read (3, null)).
+    currentRoom = 131; buildGuard(131);
+    for (const g of guards) g.state = 'alert';
+    stopAlarm();                      // the path re-home lives here
+    __check('#122 alarm-end re-home keeps every room-131 guard on real coordinates',
+      guards.every(g => Number.isFinite(g.x) && Number.isFinite(g.y)),
+      guards.map(g => '(' + g.x + ',' + g.y + ')').join(' '));
+    // Room 4's two patrol guards keep the ROM's Path_003_01/02 (the fix must not shift real paths).
+    const r4 = actorsData[4].guards;
+    __check('#122 room 4 keeps its ROM patrol paths',
+      JSON.stringify(r4[0].path) === JSON.stringify([[56,136],[56,56],[136,56],[136,136]]) &&
+      JSON.stringify(r4[1].path) === JSON.stringify([[56,152],[56,232],[136,232],[136,152]]));
+    guards = []; guard = null;        // don't leak room 131's guards into the later blocks
+  }
+
+  // ==== SetDirToPoint (#123) ====
+  // Banks0123.asm:6965-7005 — b (Y) and c (X) are computed independently and OR'd, with the
+  // 0-based mapping 0=up 1=down 2=left 3=right (ChangeGuardSprDir: SpriteId = Direction*2).
+  __check('#123 pure vertical: up / down',
+    setDirToPoint(100,100,100,50) === 'up' && setDirToPoint(100,100,100,150) === 'down');
+  __check('#123 pure horizontal: left / right',
+    setDirToPoint(100,100,50,100) === 'left' && setDirToPoint(100,100,150,100) === 'right');
+  __check('#123 same point resolves to up (b=0,c=0)', setDirToPoint(100,100,100,100) === 'up');
+  // The X result dominates whenever X differs, and b|c makes down+left read as RIGHT.
+  __check('#123 up+left -> left (0|2)', setDirToPoint(100,100,50,50) === 'left');
+  __check('#123 up+right -> right (0|3)', setDirToPoint(100,100,150,50) === 'right');
+  __check('#123 down+right -> right (1|3)', setDirToPoint(100,100,150,150) === 'right');
+  __check('#123 ROM QUIRK down+left -> RIGHT (1|2 = 3), not left',
+    setDirToPoint(100,100,50,150) === 'right');
+  // Integration: room 4's two guards each sit directly below path point 0 -> both face up.
+  {
+    const d4 = guardDefsFor(4);
+    __check('#123 room 4 guards both face up on entry (spawn directly below p0)',
+      d4.length === 2 && d4.every(d => d.dir === 'up'), d4.map(d => d.dir).join(','));
+  }
+
   // ==== Rolling barrels (RollingBarrelLogic) ====
-  currentRoom=153; snake.x=40; snake.y=10; buildBarrels(153);
-  __check('room 153 places its barrel rolling AWAY from the player', barrels.length===1 && barrels[0].vx===0.5);
-  const b0=barrels[0]; b0.x=198; b0.vx=2;
-  iter2(barrelTick, 2);                                // move past 200, then the bounce check
-  __check('the right wall bounces it (X clamps, speed flips left)', b0.vx<0 && b0.x<200, 'x='+b0.x+' v='+b0.vx);
+  // #113: InitRollingBarrel reads PlayerX, and the ROM runs it AFTER LocatePlayerEntry
+  // (Banks0123.asm:11863 then :11925). buildBarrels therefore leaves the direction at 0 and
+  // flushRoomEntryInit()/initBarrelDirections() sets it once Snake is at the entry point.
+  currentRoom=153; buildBarrels(153);
+  __check('room 153 places its one barrel at the ROM spot (128,8)',
+    barrels.length===1 && barrels[0].x===128 && barrels[0].y===8);
+  __check('#113 buildBarrels does NOT read the (still stale) player X',
+    barrels[0].vx===0 && barrels[0].dir===0);
+  snake.x=40; snake.y=10; initBarrelDirections();       // player in the LEFT half
+  __check('#113 player left of centre -> barrel launched RIGHT (+0.5)', barrels[0].vx===0.5);
+  snake.x=200; initBarrelDirections();                  // player in the RIGHT half
+  __check('#113 player right of centre -> barrel launched LEFT (-0.5)', barrels[0].vx===-0.5);
+
+  // ROM QUIRK (RB_IncrementSpeed): InitRollingBarrel never sets ACTOR.Direction and SetupEnemyRoom
+  // zeroes the EnemyList, so bit 0 is clear on the first leg -> acceleration is LEFT regardless.
+  // A barrel launched rightward therefore decelerates, stops, and rolls back. 0.5 / (8/256) = 16.
+  const b0=barrels[0];
+  snake.x=40; initBarrelDirections();                   // relaunch rightward at +0.5, dir still 0
+  b0.x=128;
+  iter2(barrelTick, 16);
+  __check('#113 the first leg accelerates LEFT (Direction 0) — a rightward launch stops after 16 iters',
+    Math.abs(b0.vx) < 1e-9, 'v='+b0.vx);
+  iter2(barrelTick, 4);
+  __check('#113 ...and then rolls back leftward', b0.vx < 0, 'v='+b0.vx);
+
+  // ChkBarrelBounce: X >= 200 -> X=199, speed -80h, Direction=DIR_DOWN(2).
+  b0.x=198; b0.vx=2; b0.dir=ROM_DIR_LEFT;               // dir 3 = "moving right" -> accelerates right
+  iter2(barrelTick, 2);
+  __check('the right wall bounces it (X clamps to 199, speed flips to -0.5, dir=DOWN)',
+    b0.x < 200 && b0.vx < 0 && b0.dir===ROM_DIR_DOWN, 'x='+b0.x+' v='+b0.vx+' dir='+b0.dir);
   const sp = Math.abs(b0.vx);
   iter2(barrelTick, 4);
   __check('it accelerates every iteration (RB_IncrementSpeed)', Math.abs(b0.vx) > sp, 'v='+b0.vx);
-  snake.life=24; snake.invulnTimer=0; snake.x=Math.round(b0.x); snake.y=b0.y;
+  // ChkBarrelBounce: X < 56 -> X=57, speed +80h, Direction=DIR_LEFT(3). 56 itself must NOT bounce.
+  b0.x=56; b0.vx=-0.5; b0.dir=ROM_DIR_DOWN;
+  iter2(barrelTick, 1);
+  __check('X == 56 does NOT bounce (ROM tests X < 56)', b0.dir===ROM_DIR_DOWN && b0.x<56, 'x='+b0.x);
+  iter2(barrelTick, 1);
+  __check('the left wall bounces it (X=57, speed +0.5, dir=LEFT)',
+    b0.x>=56 && b0.vx>0 && b0.dir===ROM_DIR_LEFT, 'x='+b0.x+' v='+b0.vx);
+
+  // Touch box: ActorsShapeTouch[0x0E] = 0x10 -> ImpactAreasInfo row 16 = offY 0x48, distY 0x48,
+  // offX 0, distX 0x0C -> |dy-72| < 72 and |dx| < 12, i.e. exactly the 16x144 sprite column.
+  b0.x=128; b0.vx=0; b0.dir=0;
+  gameState='play'; snake.life=24; snake.invulnTimer=0;
+  snake.x=b0.x + 12; snake.y=b0.y + 0x48;               // |dx| == 12 -> just OUTSIDE
+  iter2(barrelTick, 1);
+  __check('|dx| == 12 is outside the touch box (strict <)', snake.life===24, 'life='+snake.life);
+  b0.x=128; b0.vx=0; b0.dir=0;
+  snake.x=b0.x; snake.y=b0.y;                            // |dy-72| == 72 -> just OUTSIDE (column top)
+  iter2(barrelTick, 1);
+  __check('the column top edge is outside the touch box', snake.life===24, 'life='+snake.life);
+  b0.x=128; b0.vx=0; b0.dir=0;
+  snake.x=b0.x; snake.y=b0.y + 0x48;                     // dead centre of the column
   iter2(barrelTick, 1);
   __check('the crush takes ALL life (damage 0xFF)', snake.life===0 || gameState==='dead');
+
+  // #111: the column is drawn from the EXPORTED SprRollingBarrel asset, not primitives.
+  __check('#111 barrel.json matches RollBarrels1/2 + SprOffsets7 (2 frames of 16x144 at -8,0)',
+    __barrelMeta.frames===2 && __barrelMeta.frameWidth===16 && __barrelMeta.frameHeight===144 &&
+    __barrelMeta.offsetX===-8 && __barrelMeta.offsetY===0 && __barrelMeta.rows===9,
+    JSON.stringify(__barrelMeta));
+  gameState='play'; snake.life=24; snake.invulnTimer=0;
 
   // ==== Electric floor + power switch ====
   gameState='play'; snake.life=24; snake.invulnTimer=0;
@@ -73,6 +186,23 @@ const test = `
   __check('standing on a live tile zaps 2 life + the 8-frame delay', snake.life===22 && snake.invulnTimer===8);
   chkElectricFloor();
   __check('the delay gates a second zap', snake.life===22);
+
+  // #112 PowerSwitchLogic's palette fade. InitPowerSwitch seeds BRIGHT=4 / DELTA=+1; every 4
+  // iterations BRIGHT += DELTA and ChkRevertFade ("cp 7 / call nc") rewrites it BEFORE the colour
+  // is read — so 7 is clamped to 6 (never displayed) and the fade-out runs through 0 to the 0xFF
+  // wrap, which clamps to 1. Expected displayed ramp from the seed:
+  const wantRamp = [5,6,6,5,4,3,2,1,0,1,2,3,4,5,6,6,5];
+  powerFadeBright=4; powerFadeDelta=1; powerSwitchOn=true;
+  const gotRamp=[];
+  for (let i=0;i<wantRamp.length;i++){ tickCounter=0; powerSwitchTick(); gotRamp.push(powerFadeBright); }
+  __check('#112 the BRIGHT ramp matches PowerSwitchLogic/ChkRevertFade exactly',
+    gotRamp.join(',')===wantRamp.join(','), 'got='+gotRamp.join(','));
+  __check('#112 the peak is 6, not a pure-white 7', Math.max(...gotRamp)===6);
+  __check('#112 the trough reaches 0 (full black)', Math.min(...gotRamp)===0);
+  // The fade only runs while the switch is on (PowerSwitchLogic is the ACTOR's logic).
+  powerSwitchOn=false; const frozen=powerFadeBright; tickCounter=0; powerSwitchTick();
+  __check('#112 a dead switch freezes the fade', powerFadeBright===frozen);
+  powerSwitchOn=true;
   // shooting the switch kills the floor — but ONLY the remote missile damages it (weapondamage.asm
   // row for ID_POWER_SWITCH is 0xFF for every weapon except the missile; issue #26).
   powerSwitch.x=60; powerSwitch.y=60;

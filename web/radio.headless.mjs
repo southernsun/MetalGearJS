@@ -227,6 +227,47 @@ const test = `
   // entering room 111 arms the switch-off flag (ChkSwitchMsxOff)
   switchOffMsx = false; rooms.set(111, { img: null, collision: __coll0 }); setRoom(111);
   __check('entering room 111 arms SwitchOffMSXF', switchOffMsx === true);
+
+  // ===== #76 a tune trigger clears ReplyRequested as well as AutoReplyDone =====
+  // ChgRadioFreq2 (Banks0123.asm:10923-10929): "ld (hl),0 / inc hl / ld (hl),0" zeroes both.
+  autoReplyDone = true; replyRequested = true; radioHoldWait = 0;
+  chgRadioFreq('right');
+  __check('#76 tuning clears BOTH latches (a pending SEND does not carry over)',
+    autoReplyDone === false && replyRequested === false,
+    'auto=' + autoReplyDone + ' reply=' + replyRequested);
+
+  // ===== #77 RadioIdle re-fires the hum when a SEND left a command pending =====
+  {
+    let noise = 0; const realNoise = playRadioNoise; playRadioNoise = () => { noise++; };
+    gameState = 'radio'; radioState = 1; radioCmd = 1; endingStatus = 0;
+    radioUpTrigger = false; radioDirTrigger = null; tickCounter = 0;
+    radioTick();
+    __check('#77 a pending command re-fires the radio hum in idle', noise === 1, 'n=' + noise);
+    noise = 0; radioCmd = 0; tickCounter = 0; radioTick();
+    __check('#77 with no pending command the hum is not re-fired', noise === 0, 'n=' + noise);
+    noise = 0; radioCmd = 1; endingStatus = 5; tickCounter = 0; radioTick();
+    __check('#77 the ending suppresses it (ld a,(EndingStatus) / call z)', noise === 0, 'n=' + noise);
+    endingStatus = 0; playRadioNoise = realNoise;
+  }
+
+  // ===== #43 the incoming ring is suppressed when the FIRST caller cannot answer =====
+  // ChkRadioCalls (Banks0123.asm:1689-1743) inspects RadioPersonsDat[0] only.
+  radiocallsData = {
+    900: [{ freq: 0x79, waitCall: true, autoTune: false, textId: 1 }],   // Schneider first
+    901: [{ freq: 0x48, waitCall: true, autoTune: false, textId: 1 }],   // Jennifer first
+    902: [{ freq: 0x85, waitCall: false, autoTune: true, textId: 1 }],   // Big Boss first
+  };
+  schneiderCaptured = false; snake.class = 0;
+  __check('#43 a free Schneider can ring', incomingCallPossible(900) === true);
+  schneiderCaptured = true;
+  __check('#43 a CAPTURED Schneider never rings', incomingCallPossible(900) === false);
+  schneiderCaptured = false;
+  __check('#43 Jennifer below Class 3 does not ring', incomingCallPossible(901) === false);
+  snake.class = 3;
+  __check('#43 Jennifer at Class 3 rings', incomingCallPossible(901) === true);
+  __check('#43 Big Boss is never gated', incomingCallPossible(902) === true);
+  __check('#43 a room with no caller list still rings', incomingCallPossible(903) === true);
+  snake.class = 0; radiocallsData = null;
 })();
 `;
 

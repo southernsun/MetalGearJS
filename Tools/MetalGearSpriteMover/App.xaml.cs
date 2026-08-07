@@ -55,7 +55,9 @@ namespace MetalGearSpriteMover
                 string.Equals(a, "--export-shots", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(a, "--export-mgk", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(a, "--export-bigboss", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(a, "--export-sgunner", StringComparison.OrdinalIgnoreCase));
+                string.Equals(a, "--export-sgunner", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a, "--export-target", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a, "--export-barrel", StringComparison.OrdinalIgnoreCase));
             if (idx >= 0)
             {
                 bool guard = string.Equals(e.Args[idx], "--export-guard", StringComparison.OrdinalIgnoreCase);
@@ -68,6 +70,8 @@ namespace MetalGearSpriteMover
                 bool mgk = string.Equals(e.Args[idx], "--export-mgk", StringComparison.OrdinalIgnoreCase);
                 bool bigboss = string.Equals(e.Args[idx], "--export-bigboss", StringComparison.OrdinalIgnoreCase);
                 bool sgunner = string.Equals(e.Args[idx], "--export-sgunner", StringComparison.OrdinalIgnoreCase);
+                bool target = string.Equals(e.Args[idx], "--export-target", StringComparison.OrdinalIgnoreCase);
+                bool barrel = string.Equals(e.Args[idx], "--export-barrel", StringComparison.OrdinalIgnoreCase);
                 string outDir = (idx + 1 < e.Args.Length && !e.Args[idx + 1].StartsWith("-"))
                     ? e.Args[idx + 1]
                     : WebExporter.DefaultOutDir();
@@ -85,6 +89,8 @@ namespace MetalGearSpriteMover
                     else if (mgk) WebExporter.ExportMgk(outDir);
                     else if (bigboss) WebExporter.ExportBigBoss(outDir);
                     else if (sgunner) WebExporter.ExportSgunner(outDir);
+                    else if (target) WebExporter.ExportTarget(outDir);
+                    else if (barrel) WebExporter.ExportBarrel(outDir);
                     else WebExporter.Export(outDir);
                 }
                 catch (Exception ex)

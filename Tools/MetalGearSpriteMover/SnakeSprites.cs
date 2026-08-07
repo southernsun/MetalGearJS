@@ -69,6 +69,62 @@ namespace MetalGearSpriteMover
         public static bool ReadPixel(byte[] data, int spriteIndex, int x, int y) =>
             SpritePixel(data, spriteIndex * 32, x, y);
 
+        /// <summary>
+        /// RLE-decompress a single labelled pattern block out of any gfx .asm file — for sprite
+        /// graphics that live outside gfx/sprites.asm (e.g. SprTarget in gfx/targetspr.asm, loaded
+        /// by LoadSprTarget, Banks0123.asm:3226-3232). Uses the same UnpackGfx stream format as
+        /// <see cref="Load"/>; the leading <c>dw</c> VRAM-address header is not a db line, so
+        /// <see cref="ParseDbSegments"/> never picks it up and the label's bytes are the stream.
+        /// Returns 32 bytes per 16x16 sprite, ready for <see cref="ReadPixel"/>.
+        /// </summary>
+        public static byte[] DecodeLabelFrom(string asmPath, string label)
+            => DecompressRLE(RawLabelFrom(asmPath, label), 0);
+
+        /// <summary>
+        /// The leading <c>dw</c> word of a packed gfx label — UnpackGfx (Banks0123.asm:3684-3690)
+        /// reads it as the destination VRAM address before decoding the stream. For sprite graphics
+        /// that address is inside the sprite pattern generator table at 0F800h, so the block's first
+        /// pattern number is <c>(word - 0F800h) / 8</c>.
+        /// </summary>
+        public static int HeaderWordFrom(string asmPath, string label)
+        {
+            bool inLabel = false;
+            foreach (var rawLine in File.ReadAllLines(asmPath))
+            {
+                var trimmed = rawLine.Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith(";"))
+                    continue;
+
+                var labelMatch = Regex.Match(trimmed, @"^([A-Za-z_]\w*):");
+                if (labelMatch.Success)
+                {
+                    inLabel = labelMatch.Groups[1].Value == label;
+                    trimmed = trimmed.Substring(labelMatch.Length).Trim();
+                }
+                if (!inLabel || trimmed.Length == 0)
+                    continue;
+
+                var dw = Regex.Match(trimmed, @"^dw\s+([0-9A-Fa-f]+)h\b", RegexOptions.IgnoreCase);
+                if (dw.Success)
+                    return int.Parse(dw.Groups[1].Value, NumberStyles.HexNumber);
+                if (Regex.IsMatch(trimmed, @"^db\b", RegexOptions.IgnoreCase))
+                    break;   // stream started without a dw header
+            }
+            throw new InvalidDataException("no dw header found for " + label + " in " + asmPath);
+        }
+
+        /// <summary>
+        /// The raw (undecompressed) <c>db</c> bytes under a label in any .asm file — for plain data
+        /// tables such as sprite-attribute lists (e.g. BinocularSprAtt, logic/menuequipment.asm:355).
+        /// </summary>
+        public static byte[] RawLabelFrom(string asmPath, string label)
+        {
+            var segments = ParseDbSegments(asmPath);
+            if (!segments.TryGetValue(label, out var raw))
+                throw new InvalidDataException(label + " not found in " + asmPath);
+            return raw;
+        }
+
         public static SnakeSprites Load(string spritesAsmPath, string playerSpriteAsmPath)
         {
             // 1. Decompress every labelled pattern block in sprites.asm.

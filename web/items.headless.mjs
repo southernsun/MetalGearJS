@@ -166,6 +166,11 @@ const test = `
   __check('only one spawned item per room', live().length===1 && roomItems[0].id===0x1E);
   reset(); roomItems=[{id:0x1E,y:10,x:10}, null, null]; spawnItem(0x23, 60, 60);
   __check('no spawn while slot 0 is occupied', live().length===1 && roomItems[0].id===0x1E);
+  // #67 SpawnItem2 (logic/spawnitem.asm:38-49) sets SpawnedItems BEFORE the slot-0 test, so that
+  // blocked roll still CONSUMES the one-per-room latch — clearing slot 0 later must not re-enable it.
+  __check('#67 the blocked roll still consumed the latch', spawnedItemLatch === true);
+  roomItems=[null,null,null]; spawnItem(0x23, 60, 60);
+  __check('#67 clearing slot 0 does NOT re-enable the drop', live().length===0);
   // Regression (reported in play): a stocked room blocks drops only until the SLOT-0 item is
   // collected — slots 1/2 staying full must NOT block the drop (slots never compact).
   reset(); itemsData={'5':[{id:1,y:100,x:100},{id:0x1E,y:100,x:140},{id:0x12,y:100,x:180}]};

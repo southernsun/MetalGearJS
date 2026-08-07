@@ -1,8 +1,11 @@
 // Decode the per-room actor lists (data/actorsinrooms.asm) + patrol paths (data/paths.asm)
 // into web/assets/actors.json: { "<room>": { guards: [{y,x,fast,path:[[y,x]..]}],
-// prisoners: [{y,x}] } }. Guards keep their actor-list order; the path index follows it
-// (GetPathPoints is indexed by the actor's position among path-using actors — guards and
-// cameras; prisoners/items don't consume path slots in these rooms).
+// prisoners: [{y,x}] } }. Guards keep their actor-list order.
+//
+// PATH INDEXING: the ROM has FOUR separate rules, not one running counter (see the per-room loop
+// below). Only guards that actually reach InitGuardPath/GetPathPoints get a path — regular
+// SLOW/MEDIUM/FAST guards, sentinels (look-direction lists) and lorry guards. ALERT/REDALERT,
+// SILENCER, SWITCH, ELEVATOR and the shooters have their own init routines with no path lookup.
 // Run: node Tools/export-actors.mjs
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,32 +18,51 @@ const pathsSrc = readRom('data/paths.asm');
 const num = (t) => (/h$/i.test(t) ? parseInt(t, 16) : parseInt(t, 10));
 
 const pLines = pathsSrc.split(/\r?\n/);
-const idx0 = pLines.findIndex((l) => l.startsWith('idxRoomPaths:'));
-const roomPathLabels = [];
-for (let i = idx0; i < pLines.length && roomPathLabels.length < 256; i++) {
-  const m = pLines[i].match(/dw\s+(\w+)/);
-  if (m) roomPathLabels.push(m[1]);
-  else if (i > idx0 && /^\w+:/.test(pLines[i])) break;
-}
-function pathFor(room, idx) {
-  const li = pLines.findIndex((l) => l.startsWith(roomPathLabels[room] + ':'));
-  if (li < 0) return null;
-  const ptrs = [];
-  for (let i = li; i < pLines.length; i++) {
-    const m = pLines[i].match(/dw\s+(\w+)/);
-    if (m) ptrs.push(m[1]);
-    else if (i > li && /^\w+:/.test(pLines[i])) break;
+// Collect `dw` operands from a table, stopping at the NEXT label. The label test must come FIRST:
+// in paths.asm a table's opening line carries both, e.g. `Paths_139:    dw Path_139_01`. Testing
+// `dw` first meant such a line never ended the scan, so a table silently absorbed every following
+// table's pointers — and a room whose actor index ran past its own table read another room's paths
+// (room 131's guards picked up Paths_139's sentinel look-direction lists). Issue #122.
+function dwListFrom(lines, startIdx, limit = Infinity) {
+  const outLabels = [];
+  for (let i = startIdx; i < lines.length && outLabels.length < limit; i++) {
+    if (i > startIdx && /^\w+:/.test(lines[i])) break;
+    const m = lines[i].match(/dw\s+(\w+)/);
+    if (m) outLabels.push(m[1]);
   }
-  if (idx >= ptrs.length) return null;
-  const pl = pLines.findIndex((l) => l.startsWith(ptrs[idx] + ':'));
-  if (pl < 0) return null;
+  return outLabels;
+}
+// The raw `db` bytes under a label, stopping at the next label.
+function dbBytesFrom(lines, startIdx) {
   const b = [];
-  for (let i = pl; i < pLines.length; i++) {
-    if (i > pl && /^\w+:/.test(pLines[i])) break;
-    const m = pLines[i].replace(/;.*$/, '').match(/\bdb\s+(.+)$/i);
+  for (let i = startIdx; i < lines.length; i++) {
+    if (i > startIdx && /^\w+:/.test(lines[i])) break;
+    const m = lines[i].replace(/;.*$/, '').match(/\bdb\s+(.+)$/i);
     if (m) for (const t of m[1].split(',').map((s) => s.trim()).filter(Boolean)) b.push(num(t));
   }
+  return b;
+}
+const idx0 = pLines.findIndex((l) => l.startsWith('idxRoomPaths:'));
+const roomPathLabels = dwListFrom(pLines, idx0, 256);
+// The room's path-pointer table (one `dw` per path-using actor), or [] if the room has none.
+function pathPtrs(room) {
+  const lbl = roomPathLabels[room];
+  if (!lbl) return [];
+  const li = pLines.findIndex((l) => l.startsWith(lbl + ':'));
+  return li < 0 ? [] : dwListFrom(pLines, li);
+}
+function pathBytes(room, idx) {
+  const ptrs = pathPtrs(room);
+  if (idx < 0 || idx >= ptrs.length) return null;
+  const pl = pLines.findIndex((l) => l.startsWith(ptrs[idx] + ':'));
+  return pl < 0 ? null : dbBytesFrom(pLines, pl);
+}
+function pathFor(room, idx) {
+  const b = pathBytes(room, idx);
+  if (!b) return null;
   const cnt = b[0], pts = [];
+  // A short block is a sentinel LOOK-DIRECTION list, not coordinates — never read it as points.
+  if (b.length < 1 + cnt * 2) return null;
   for (let i = 0; i < cnt; i++) pts.push([b[1 + i * 2], b[2 + i * 2]]);   // (Y, X) pairs
   return pts;
 }
@@ -49,33 +71,12 @@ function pathFor(room, idx) {
 // serves every plain one-prisoner room at (X 0x80, Y 0x60)).
 const aLines = actorsSrc.split(/\r?\n/);
 const ai0 = aLines.findIndex((l) => l.startsWith('idxActorsRooms:'));
-const roomActorLabels = [];
-for (let i = ai0; i < aLines.length && roomActorLabels.length < 256; i++) {
-  const m = aLines[i].match(/dw\s+(\w+)/);
-  if (m) roomActorLabels.push(m[1]);
-  else if (i > ai0 && /^\w+:/.test(aLines[i])) break;
-}
+const roomActorLabels = dwListFrom(aLines, ai0, 256);
 // A sentinel's path entry is a LOOK-DIRECTION list: cnt, then cnt single direction bytes
 // (1=Up 2=Down 3=Left 4=Right), not coordinate pairs.
 function dirBytesFor(room, idx) {
-  const li = pLines.findIndex((l) => l.startsWith(roomPathLabels[room] + ':'));
-  if (li < 0) return null;
-  const ptrs = [];
-  for (let i = li; i < pLines.length; i++) {
-    const m = pLines[i].match(/dw\s+(\w+)/);
-    if (m) ptrs.push(m[1]);
-    else if (i > li && /^\w+:/.test(pLines[i])) break;
-  }
-  if (idx >= ptrs.length) return null;
-  const pl = pLines.findIndex((l) => l.startsWith(ptrs[idx] + ':'));
-  if (pl < 0) return null;
-  const b = [];
-  for (let i = pl; i < pLines.length; i++) {
-    if (i > pl && /^\w+:/.test(pLines[i])) break;
-    const m = pLines[i].replace(/;.*$/, '').match(/\bdb\s+(.+)$/i);
-    if (m) for (const t of m[1].split(',').map((s) => s.trim()).filter(Boolean)) b.push(num(t));
-  }
-  return b.slice(1, 1 + b[0]);
+  const b = pathBytes(room, idx);
+  return b ? b.slice(1, 1 + b[0]) : null;
 }
 
 function actorBlock(label) {
@@ -110,7 +111,22 @@ for (let room = 0; room < roomActorLabels.length; room++) {
   const guards = [], prisoners = [], pitfalls = [], scorpions = [], gas = [], barrels = [],
         jetpacks = [], bridges = [], dogs = [], mines = [];
   let helpme = false, powerswitch = null, duck = null, fakemadnar = null;
-  let pathIdx = 0, lorryGuardN = 0;
+  // PATH-SLOT BOOKKEEPING (issue #122). The ROM does NOT use one running counter — each actor kind
+  // computes its own index from a CountEnemyType over a specific set, then GetPathPoints does
+  // `dec b` (index = count-so-far, including itself, minus 1). Four distinct rules:
+  //   - regular guards  InitGuardPath (Banks0123.asm:6852-6888): SLOW + CAMERA + SENTINEL +
+  //                     MEDIUM + FAST
+  //   - sentinels       GetSentinelLookDirs (Banks0123.asm:7188-7194): SENTINEL only
+  //   - cameras         InitCamera3 (logic/actors/camera.asm:66): its own IDX_SAME_ID (cameras only)
+  //   - lorry guards    InitGuardLorry (logic/actors/guardlorry.asm:8-22): SLOW + EXIT_LORRY
+  // Everything else takes NO path and consumes NO slot: ALERT/REDALERT (InitGuardAlert), SILENCER
+  // (InitGuardSilencer), SWITCH, ELEVATOR, SHOOTER and LORRY_SHOOTER — none of them reach
+  // InitGuardPath/GetPathPoints at all. Counting those (as this exporter used to) shifted later
+  // actors onto the wrong path and, past the end of a room's table, onto another room's data.
+  let guardSlot = 0;      // SLOW + CAMERA + SENTINEL + MEDIUM + FAST
+  let sentinelSlot = 0;   // SENTINEL only
+  let lorrySlot = 0;      // SLOW + EXIT_LORRY
+  let lorryGuardN = 0;
   for (const a of actors) {
     if (a.id === 'ID_GUARD_SLOW' || a.id === 'ID_GUARD_FAST' || a.id === 'ID_GUARD_MEDIUM' ||
         a.id === 'ID_GUARD_SILENCER' || a.id === 'ID_GUARD_ALERT' || a.id === 'ID_GUARD_REDALERT') {
@@ -119,6 +135,9 @@ for (let room = 0; room < roomActorLabels.length; room++) {
       // ITERATION. Port convention = ROM px/iter / 2 (1 px/frame@60Hz == 2 px/iter@30Hz) -> 0.5 /
       // 0.625 / 0.75 px/frame. ALERT/REDALERT spawn already chasing; SILENCER (slow) counts toward
       // the room-150 suppressor drop (DismissActor8).
+      // Only SLOW/MEDIUM/FAST run InitGuard -> InitGuardPath. ALERT/REDALERT and SILENCER have
+      // their own init routines with no path lookup, so they get neither a path nor a slot.
+      const paths = a.id === 'ID_GUARD_SLOW' || a.id === 'ID_GUARD_MEDIUM' || a.id === 'ID_GUARD_FAST';
       guards.push({
         y: a.y, x: a.x,
         fast: a.id === 'ID_GUARD_FAST',
@@ -126,9 +145,9 @@ for (let room = 0; room < roomActorLabels.length; room++) {
              : a.id === 'ID_GUARD_MEDIUM' ? 0.625 : 0.75,
         alert: a.id === 'ID_GUARD_ALERT' || a.id === 'ID_GUARD_REDALERT' || undefined,
         silencer: a.id === 'ID_GUARD_SILENCER' || undefined,
-        path: pathFor(room, pathIdx),
+        path: paths ? pathFor(room, guardSlot) : null,
       });
-      pathIdx++;
+      if (paths) { guardSlot++; if (a.id === 'ID_GUARD_SLOW') lorrySlot++; }
     } else if (a.id === 'ID_GUARD_EXIT_LORRY') {
       // InitGuardLorry (logic/actors/guardlorry.asm; rooms 5/7): a slow guard that emerges from
       // a parked lorry, patrols its InitGuardPath2 path, then returns. Ported as a patrol guard
@@ -137,9 +156,10 @@ for (let room = 0; room < roomActorLabels.length; room++) {
       // else later path-using actors in the room would read the wrong path.
       // Guard1/2/3ExitedLorry index: room 5's lorry guard is Guard1 (0); room 7's two are
       // Guard2 (1) and Guard3 (2), in actor-list order.
+      // Its index is its own count (SLOW + EXIT_LORRY), NOT the regular-guard slot.
       const lorryIdx = room === 5 ? 0 : (1 + lorryGuardN++);
-      guards.push({ y: a.y, x: a.x, speed: 0.5, lorry: true, lorryIdx, path: pathFor(room, pathIdx) });
-      pathIdx++;
+      guards.push({ y: a.y, x: a.x, speed: 0.5, lorry: true, lorryIdx, path: pathFor(room, lorrySlot) });
+      lorrySlot++;
     } else if (a.id === 'ID_LORRY_SHOOTER') {
       // The desert lorry ambush (room 104, lorryshooter.asm): a HIDDEN guard that pops out of the
       // lorry to shoot (aimed ID_BULLET) — think/show/walk-out/wait/walk-in — not an alert chaser.
@@ -170,8 +190,10 @@ for (let room = 0; room < roomActorLabels.length; room++) {
     } else if (a.id === 'ID_SENTINEL') {
       // Stationary look-cycling guards (SentinelLogic) — their "path" is a list of LOOK
       // DIRECTIONS (single bytes), not (Y,X) pairs.
-      guards.push({ y: a.y, x: a.x, sentinel: true, dirs: dirBytesFor(room, pathIdx), speed: 0 });
-      pathIdx++;
+      // GetSentinelLookDirs indexes by the SENTINEL count alone; a sentinel also occupies a slot
+      // in the regular guards' InitGuardPath count.
+      guards.push({ y: a.y, x: a.x, sentinel: true, dirs: dirBytesFor(room, sentinelSlot), speed: 0 });
+      sentinelSlot++; guardSlot++;
     } else if (a.id === 'ID_JETPACK_TAKEOFF') {
       jetpacks.push({ y: a.y, x: a.x, mode: 'takeoff' });   // rooms 44/48
     } else if (a.id === 'ID_BRIDGE') {
@@ -182,8 +204,10 @@ for (let room = 0; room < roomActorLabels.length; room++) {
       barrels.push({ y: a.y, x: a.x });            // RollingBarrelLogic
     } else if (a.id === 'ID_POWER_SWITCH' || a.id === 'ID_JETPACK_SWITCH') {
       powerswitch = { y: a.y, x: a.x, jetpack: a.id === 'ID_JETPACK_SWITCH' };
-    } else if (a.id === 'ID_CAMERA' || a.id === 'ID_CAMERA_LASER') {
-      pathIdx++;                                   // cameras consume a path slot
+    } else if (a.id === 'ID_CAMERA') {
+      guardSlot++;      // ID_CAMERA is in InitGuardPath's count (ID_CAMERA_LASER is NOT)
+    } else if (a.id === 'ID_CAMERA_LASER') {
+      /* no slot: InitGuardPath counts ID_CAMERA only, and laser cameras patrol from their own data */
     } else if (/^ID_PRISONER/.test(a.id) || a.id === 'ID_GREY_FOX' || a.id === 'ID_ELLEN' ||
                a.id === 'ID_MADNAR') {
       prisoners.push({ y: a.y, x: a.x });          // Madnar rescues like a prisoner (182)
@@ -214,7 +238,30 @@ for (let room = 0; room < roomActorLabels.length; room++) {
     out[room] = { guards, prisoners, pitfalls, helpme, scorpions, gas, barrels, powerswitch,
                   jetpacks, bridges, dogs, duck, fakemadnar, mines };
 }
+// --- Invariants (issue #122). These caught real bugs; keep them loud. ---
+for (const [room, r] of Object.entries(out)) {
+  for (const [i, g] of r.guards.entries()) {
+    const where = `room ${room} guard ${i}`;
+    if (g.path && g.path.some((p) => !Array.isArray(p) || p.length !== 2 ||
+                                     !Number.isInteger(p[0]) || !Number.isInteger(p[1])))
+      throw new Error(`${where}: malformed path point ${JSON.stringify(g.path)} — the path table was ` +
+                      `read past its end, or a sentinel look-direction list was parsed as coordinates`);
+    // Only SLOW/MEDIUM/FAST guards, sentinels (dirs) and lorry guards reach a path lookup.
+    if (g.path && (g.alert || g.silencer))
+      throw new Error(`${where}: ${g.alert ? 'alert' : 'silencer'} guards take no path in the ROM ` +
+                      `(no InitGuardPath/GetPathPoints call), but got ${JSON.stringify(g.path)}`);
+  }
+}
+// Positive anchor: room 4's two patrol guards and their ROM paths (Path_003_01/02, (Y,X) pairs).
+const r4 = out[4];
+if (!r4 || r4.guards.length !== 2 ||
+    JSON.stringify(r4.guards[0].path) !== JSON.stringify([[56, 136], [56, 56], [136, 56], [136, 136]]) ||
+    JSON.stringify(r4.guards[1].path) !== JSON.stringify([[56, 152], [56, 232], [136, 232], [136, 152]]))
+  throw new Error('room 4 path assignment changed: ' + JSON.stringify(r4 && r4.guards.map((g) => g.path)));
+
 fs.writeFileSync(path.join(root, 'web', 'assets', 'actors.json'), JSON.stringify(out) + '\n');
 const rooms = Object.keys(out);
+const pathed = rooms.reduce((n, r) => n + out[r].guards.filter((g) => g.path && g.path.length).length, 0);
 console.log('actors.json:', rooms.length, 'rooms;',
-  rooms.filter((r) => out[r].prisoners.length).length, 'with prisoners');
+  rooms.filter((r) => out[r].prisoners.length).length, 'with prisoners;',
+  pathed, 'guards on a patrol path');

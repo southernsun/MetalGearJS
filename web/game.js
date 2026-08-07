@@ -27,7 +27,10 @@ const TICK_MS = 1000 / TICK_HZ;
 // ---- Tunables (movement feel — see tasks 8.3) ------------------------------
 const SPEED        = 1.0;  // pixels per tick
 const WALK_TICKS   = 8;    // ticks between walk-frame swaps
-const PUNCH_TICKS  = 12;   // how long the punch frame holds (~0.2s)
+const PUNCH_TICKS  = 8;    // chkPunch (Banks0123.asm:8949): `ld a,8 / ld (PunchCnt),a` — control
+                           // stays in PUNCH for 8 iterations. (Was 12: a 50% longer lock, which also
+                           // broke prison/Grey-Fox walls faster because chkPunchOpenDoors decrements
+                           // wall life every PUNCH frame. #51)
 const SPAWN_X = 128, SPAWN_Y = 157; // Snake's start in room 0 — open floor, free to move all directions
 // Where Snake lands after a non-door room crossing, from the ROM's EntryRoomXY table
 // (logic/nextroom.asm SetRoomEntryXY: dw 0B800h,1200h,0F200h,0C00h indexed by NextRoomDirect
@@ -179,6 +182,17 @@ const PROBES = {
   left:  [[-4, -8], [ 3, -8]],
   right: [[-4,  7], [ 3,  7]],
 };
+// BoxColliderDat size/shape 2 (logic/collisions.asm:120-133) — a NARROWER box than shape 0.
+// ChkPlayerColl (Banks0123.asm:8998-9007) runs the normal shape-0 test, and then in ROOM 78 ONLY
+// runs a SECOND test with B=2, blocking if either collides. Room 78 is the ditch/water-channel
+// entrance, where the tighter box keeps Snake out of spots shape 0 alone would allow. (#49)
+const PROBES_SHAPE2 = {
+  up:    [[-5, -4], [-5,  3]],
+  down:  [[ 4, -4], [ 4,  3]],
+  left:  [[-4, -5], [ 3, -5]],
+  right: [[-4,  4], [ 3,  4]],
+};
+const ROOM_SECOND_SHAPE = 78;         // the only room with the extra ChkTileCollision_ pass
 const DELTA = {
   up:    { dx: 0, dy: -1 },
   down:  { dx: 0, dy:  1 },
@@ -263,6 +277,8 @@ let radioHoldWait = 8;        // ControlHoldWait for frequency tuning (8 then 2)
 let radioPersons = [];        // RadioPersonsDat: the current room's callers (UpdateRadio)
 let radiocallsData = null;    // radiocalls.json (idxRoomRadio flattened)
 let radioDirTrigger = null;   // latched left/right press for the next radio iteration
+let missileDirTrigger = null; // ControlsTrigger edge steering the remote missile (ControlMissile)
+let ladderDirTrigger = null;  // ControlsTrigger edge for ChkStartClimb / ChkExitLadders (#52)
 let radioUpTrigger = false;   // latched UP press (SEND)
 let radioNoiseSrc = null;     // looping radio-noise ambience (SFX 0x50; muted by 0x5C)
 let radioBgImg = null, snakePortraitImg = null, freqDigitsImg = null, ledOnImg = null,
@@ -282,6 +298,8 @@ let lasersData = null;        // lasers.json: room -> beams [{on,y,x,len,axis}] 
 let camerasData = null;       // cameras.json: room -> [{y,x,dir,laser,path}]
 let musicLoops = null;        // music-loops.json: trackKey -> {start,end} seconds (issue #16)
 let cameraImg = null;         // camera.png: 4 facings x 2 rows (normal blue / flash red)
+let targetImg = null;         // target.png: the binocular reticle (SprTarget, exported 32x32 white)
+let targetMeta = null;        // target.json: {width,height,originX,originY} from BinocularSprAtt
 let lasers = [];              // the active room's beams
 let laserRoomTimer = 0;       // LaserRoomTimer (room 72 cycle wait, 0xC0)
 let laserRoomCnt = 0;         // LaserRoomCnt (which LasersOnOff pattern; reset at game init)
@@ -290,6 +308,7 @@ let laserShots = [];          // live laser-camera shots
 // ---- Boot / title state (GS_KonamiLogo / MenuLogoLogic) -------------------------------------
 let titlePhase = null;        // 'konami-reveal'|'konami-hold'|'swoop'|'wipe'|'text-wait'|'ready'
 let titleCnt = 0;             // the active phase's counter (reveal ticks / WaitCounter / MenuCnt)
+const KONAMI_HOLD = 256;      // WaitCounter seeded 0 then decremented -> wraps to a 256 hold (#45)
 let konamiLogoImg = null;     // konami-logo.png (gfxKonamiLogo(2)/gfxKonami via KonamiLogoTiles)
 let metalImg = null, gearImg = null;   // gfxMetalGearLogo blocks (MetalTilesDat/GearTilesDat)
 let titleCanvas = null, titleCtx = null;   // offscreen surface the swoop ACCUMULATES on
@@ -371,7 +390,10 @@ async function loadAssets() {
   scorpionSheet = await loadImage('assets/scorpion.png').catch(() => null);
   scorpionMeta = await loadJSON('assets/scorpion.json').catch(() => null);
   gasSheet = await loadImage('assets/gas.png').catch(() => null);
-  barrelSheet = await loadImage('assets/barrel.png').catch(() => null);
+  [barrelSheet, barrelMeta] = await Promise.all([
+    loadImage('assets/barrel.png').catch(() => null),    // SprRollingBarrel column, 2 roll frames
+    loadJSON('assets/barrel.json').catch(() => null),
+  ]);
   respawnData = await loadJSON('assets/respawn.json').catch(() => null);
   guardPalettes = await loadJSON('assets/guard-palettes.json').catch(() => null);
   endExplodeImg = await loadImage('assets/ending-explosion.png').catch(() => null);            // EndingExplosion tiles (base palette)
@@ -404,6 +426,10 @@ async function loadAssets() {
   camerasData = await loadJSON('assets/cameras.json').catch(() => null);  // RoomsWithCamera + paths
   musicLoops = await loadJSON('assets/music-loops.json').catch(() => null);  // per-track loop points
   cameraImg = await loadImage('assets/camera.png').catch(() => null);     // SprCamera 4 dirs x 2 colours
+  [targetImg, targetMeta] = await Promise.all([
+    loadImage('assets/target.png').catch(() => null),                     // SprTarget binocular reticle
+    loadJSON('assets/target.json').catch(() => null),
+  ]);
   [shotsSheet, shotsMeta] = await Promise.all([
     loadImage('assets/shots.png').catch(() => null),                      // weapon projectiles/explosions
     loadJSON('assets/shots.json').catch(() => null),
@@ -457,13 +483,16 @@ async function loadAssets() {
   // goggles variant is the same room rendered with RoomPalette10 (ChkGogglesPal's grey
   // infrared palette — the per-room tile slots go grey, fixed slots stay).
   await Promise.all(manifest.rooms.map(async (n) => {
-    const [img, goggles, dark, collision] = await Promise.all([
+    const [img, goggles, dark, collision, electric] = await Promise.all([
       loadImage(`assets/rooms/${n}.png`),
       loadImage(`assets/rooms/${n}.goggles.png`).catch(() => null),
       DARK_ROOMS.has(n) ? loadImage(`assets/rooms/${n}.dark.png`).catch(() => null) : null,
       loadJSON(`assets/rooms/${n}.collision.json`),
+      // The electrified-floor stencil (PowerSwitchLogic's animated palette slot) — see
+      // drawPowerSwitchFloor. Only the five ChkElectricFloor rooms have one.
+      ELECTRIC_TILES[n] ? loadImage(`assets/rooms/${n}.electric.png`).catch(() => null) : null,
     ]);
-    rooms.set(n, { img, goggles, dark, collision });
+    rooms.set(n, { img, goggles, dark, collision, electric });
   }));
 
   setRoom(manifest.start);
@@ -472,6 +501,7 @@ async function loadAssets() {
 // ---- Room manager ----------------------------------------------------------
 let previousRoom = -1;        // PreviousRoom (some init logic keys on where Snake came from)
 let enterDir = 0;             // NextRoomDirect (1=Up/from-south 2=Down 3=Left 4=Right) on edge crossings
+let roomEntryInitPending = false;   // see flushRoomEntryInit (LocatePlayerEntry -> SetupEnemyRoom order)
 function setRoom(n) {
   const r = rooms.get(n);
   if (!r) { console.warn('Room not loaded:', n); return; }
@@ -497,7 +527,7 @@ function setRoom(n) {
   buildDesertSecurity(n);   // InitDesertSecurity (room 69's uniform-gated door)
   buildElevRelief(n);       // InitSpawnGuardElev (room 3's relieve ceremony)
   buildGasClouds(n);        // InitGas (the gas rooms' drifting clouds)
-  buildBarrels(n);          // InitRollingBarrel (141/153/191/205)
+  buildBarrels(n);          // InitRollingBarrel (141/153/191/205) — direction deferred, see below
   buildPowerSwitch(n);      // InitPowerSwitch / the electric floor (37/110/40)
   buildBridges(n);          // InitBridge (the moving walkways, 45/46)
   buildJetpacks(n);         // InitJetpackTakeoff / the room-40 switch event
@@ -518,6 +548,10 @@ function setRoom(n) {
     playAlert();
   }
   chkLorryMov(n);           // the moving-lorry ride (GameMode 5)
+  // Actor init that reads the PLAYER's position must wait until the caller has placed Snake at the
+  // room's entry point — the ROM's LocatePlayerEntry (:11863) runs BEFORE SetupEnemyRoom (:11925),
+  // but setRoom() runs first here. Flushed by flushRoomEntryInit() ahead of the first actor tick.
+  roomEntryInitPending = true;
   playerShots.length = 0;   // room change clears any in-flight player shots
   updateAreaMusic();        // SetAreaMusic6: the RoomsMusic nibble picks the track
 
@@ -529,7 +563,7 @@ function setRoom(n) {
   // the antenna for MapZone >= 5 — depend on systems outside this slice; every exported room
   // passes them, so they are not invented here.
   stopCallRing();
-  if (callRooms.has(n)) { incomingCallTimer = 32; radioCallFlag = 0; }
+  if (callRooms.has(n) && incomingCallPossible(n)) { incomingCallTimer = 32; radioCallFlag = 0; }
   else radioCallFlag = 2;
 
   // UpdateRadio (Banks0123.asm:2379): load the room's radio callers (radiocalls.json =
@@ -671,14 +705,20 @@ let passwordBuffer = '';
 const PASSWORDS = [
   // SetMaxClass djnz cascade (passwords.asm:156-164): DS 4 (c=0) → +1 class; ANTA WA ERAI (c=1)
   // → IncClassLv ×3 = max class (the header literally reads "ANTA WA ERAI: Max. class level"). (#38)
-  { code: 'DS4',        apply: () => incClassLv() },                                          // class +1
-  { code: 'ANTAWAERAI', apply: () => { incClassLv(); incClassLv(); incClassLv(); } },         // class +3 (max)
+  { code: 'DS 4',        apply: () => incClassLv() },                                          // class +1
+  { code: 'ANTA WA ERAI', apply: () => { incClassLv(); incClassLv(); incClassLv(); } },         // class +3 (max)
   { code: 'INTRUDER',   apply: () => { maxAmmoCheat = true; for (const w of weapons.keys()) weapons.set(w, 0x999); } },
   { code: 'ISOLATION',  apply: () => { maxRationsCheat = true; if (items.has(SELECTED_RATION)) items.set(SELECTED_RATION, 0x999); } },
-  { code: 'HIRAKEGOMA', apply: () => { for (let c = 0; c < 8; c++) if (!items.has(SELECTED_CARD1 + c)) items.set(SELECTED_CARD1 + c, 1); openedDoorIds.add(0x0B); } },
+  { code: 'HIRAKE GOMA', apply: () => { for (let c = 0; c < 8; c++) if (!items.has(SELECTED_CARD1 + c))
+      items.set(SELECTED_CARD1 + c, 0x31 + c);   // the card's identification number, as ItemTakeAmount stores it (#44)
+    openedDoorIds.add(0x0B); } },
 ];
-function passwordKey(k) {                       // ReadKeyboard/AddCharPassBuf: roll into a 12-char buffer
+// ReadKeyboard/AddCharPassBuf: roll into a 12-char buffer. The ROM's tables include the SPACE
+// code 0x47, so a space is a real buffer character that has to be typed ("DS 4", "ANTA WA ERAI",
+// "HIRAKE GOMA"). (The port accepted only [a-z0-9], matching the codes contiguously — #75.)
+function passwordKey(k) {
   if (/^[a-z0-9]$/i.test(k)) passwordBuffer = (passwordBuffer + k.toUpperCase()).slice(-12);
+  else if (k === ' ') passwordBuffer = (passwordBuffer + ' ').slice(-12);
 }
 function chkPasswords() {                       // ChkPasswords, on ExitPauseMode
   const b = passwordBuffer;
@@ -764,8 +804,12 @@ function chkDropItem(g) {
 function spawnItem(id, x, y) {
   // SpawnItem2 checks ONLY slot 0 of ItemsInTheRoom — a drop is possible while slots 1/2 still
   // hold items (picking up the slot-0 item frees it; slots never compact).
-  if (spawnedItemLatch || roomItems[0]) return;          // one spawn per room; slot 0 must be free
+  // SpawnItem2 (logic/spawnitem.asm:38-49) sets SpawnedItems BEFORE testing slot 0, so a rolled
+  // drop CONSUMES the one-per-room latch even when slot 0 was occupied and nothing spawned.
+  // (The port returned first, letting a later kill drop once slot 0 freed up — issue #67.)
+  if (spawnedItemLatch) return;
   spawnedItemLatch = true;
+  if (roomItems[0]) return;                              // slot 0 busy: latch spent, nothing spawns
   roomItems[0] = { id, y, x };
   playSpawn();                                           // SFX 0x25 "spawn item"
 }
@@ -880,9 +924,14 @@ function advanceTextPage(t) {
     // TextBoxExit (Banks0123.asm:8301-8324): READING certain radio texts sets event
     // flags — Jennifer's rocket promise (117), Jennifer opening the compass door (118),
     // and Schneider's discovery (138).
-    if (t.id === 117) jeniRocket = true;
-    else if (t.id === 118) jeniOpenDoor = true;
-    else if (t.id === 138) schneiderCaptured = true;
+    // TextBoxExit (:8305-8308) returns BEFORE any flag when SkipTextF is set: "Do not mark the
+    // next messages as read, so the player does not miss it accidentally". Mashing through the
+    // text must NOT arm the event. (#80)
+    if (!t.skipped) {
+      if (t.id === 117) jeniRocket = true;
+      else if (t.id === 118) jeniOpenDoor = true;
+      else if (t.id === 138) schneiderCaptured = true;
+    }
     textBox = null; gameState = textReturnState;
   }
 }
@@ -898,21 +947,51 @@ function updateTextBox() {
     // replaces the play logic with the light TextBoxLogic, so the ROM's TickInProgress skip
     // doesn't halve it — the mask runs at the FULL tick rate (~15 chars/s, user-verified
     // against the original; the page-wait timer below stays on the iteration domain).
-    if ((tickCounter & 3) !== 0) return;
+    // TW_PrintChar2 (Banks0123.asm:7986-7994) picks the mask from the text id: the STAFF roll
+    // (text 45) prints at mask 7 (half speed), everything else at mask 3. (#82)
+    if ((tickCounter & (t.id === 45 ? 7 : 3)) !== 0) return;
     const ch = textCharAt(t, t.shown++);
-    if (ch !== ' ') playBuf(assets.textBuf);                  // SFX 0x23 (spaces silent)
+    // TW_PrintChar6 (:8035-8043): the print SFX is suppressed during the ending staff roll
+    // (`ld a,(EndingStatus) / cp 10 / call nz`). Spaces are always silent. (#82)
+    if (ch !== ' ' && endingStatus !== 10) playBuf(assets.textBuf);   // SFX 0x23
     return;
   }
   if ((tickCounter & 1) !== 0) return;                        // ROM iteration boundary
-  // TW_Wait: text 10 and SkipTextMode-2 texts auto-advance on the 0x60-iteration timer
-  // (Banks0123.asm:8147/8175); everything else in mode 0 waits for M/Enter (dismissText).
-  if ((t.id === 10 || t.mode === 2) && --t.waitCnt <= 0) advanceTextPage(t);
+  // TW_Wait (Banks0123.asm:8143-8198), in the ROM's own branch order:
+  //   mode 2            -> timer only, keys ignored, no prompt
+  //   mode 1            -> keys accepted (dismissText) AND the timer; never a prompt (#79)
+  //   text 10           -> keys AND the timer
+  //   last page         -> keys only: no timer, no prompt
+  //   high nibble set   -> keys + the blinking prompt, no timer
+  //   otherwise         -> keys AND the timer (a mode-0 page with the nibble clear self-advances)
+  // (The port only auto-advanced text 10 and mode 2, so other mode-0 pages stalled. #44)
+  if (!textWaitAutoAdvances(t)) return;
+  if (--t.waitCnt <= 0) advanceTextPage(t);
+}
+// Does this page's wait run the 0x60 timer? See the TW_Wait branch order above.
+function textWaitAutoAdvances(t) {
+  if (t.mode === 2 || t.mode === 1) return true;
+  if (t.id === 10) return true;
+  if (t.page + 1 >= t.pages.length) return false;     // PendingTextFlag == 0: key only
+  return (t.cfg & 0xF0) === 0;                        // prompt shown -> key only; else timer
+}
+// The blinking enter prompt (DrawEnterIcon) is reached ONLY on the mode-0 path, for a non-last
+// page whose TextBoxType high nibble is set. Modes 1 and 2 branch to the timer before it, so a
+// prompt must never appear on them. (#44)
+function textShowsEnterIcon(t) {
+  return t.wait && t.mode !== 1 && t.mode !== 2 &&
+         t.id !== 10 && t.page + 1 < t.pages.length && (t.cfg & 0xF0) !== 0;
 }
 // M / Enter: mid-print = SkipText (jump to the next page); waiting = advance. Unskippable
-// texts (SkipTextMode 2) ignore the keys entirely (TW_PrintChar/TW_Wait mode checks).
+// texts (SkipTextMode 2) ignore the keys entirely (TW_PrintChar/TW_Wait mode checks);
+// mode 1 DOES accept them (SetTextUnskip2 checks the keys before branching to the timer). (#79)
 function dismissText() {
   const t = textBox;
   if (!t || t.mode === 2) return;
+  // SkipText (:8130) sets SkipTextF when a key cuts a page short — that latch is what TextBoxExit
+  // tests to withhold the event flags. Advancing a page that had ALREADY finished printing is the
+  // normal read-through, not a skip. (#80)
+  if (!t.wait) t.skipped = true;
   advanceTextPage(t);
 }
 function drawTextWindow() {
@@ -934,8 +1013,8 @@ function drawTextWindow() {
     }
     x = tx; y += 12;                                          // explicit newline (+12)
   }
-  // Blinking enter icon on key-paged texts with more pages (cfg high nibble, char 0x3F).
-  if (t.wait && t.page + 1 < t.pages.length && (t.cfg & 0xF0) && (tickCounter & 0x20))
+  // Blinking enter icon (DrawEnterIcon, char 0x3F) — mode-0 non-last pages with the high nibble.
+  if (textShowsEnterIcon(t) && (tickCounter & 0x20))
     drawText(String.fromCharCode(0x3F), px, py);
 }
 
@@ -1322,64 +1401,83 @@ function drawGasClouds() {
 let gasSheet = null;
 
 // ---- Rolling barrels (RollingBarrelLogic, logic/actors/rollingbarrels.asm) ----------------
-// Rooms 141/153/191/205: ONE barrel actor sits at the top-centre (x 128, y 8) and rolls
-// horizontally, accelerating ±8/256 px per iteration, bouncing between X 56 and 200 (SFX 0x1D),
-// starting AWAY from the player's side (InitRollingBarrel: PlayerX < 0x80 -> right, else left).
-// It is NOT a single barrel: the actor's sprite-attribute list RollBarrels1/2 draws a tall
-// 16-wide COLUMN of ~9 stacked barrel segments (D0/D4 cap + D8/DC ×7 + E0/E4 cap) that spans
-// almost the whole room height — a rolling wall you dodge through the bottom corridor. Touching
-// ANY of it = ALL LIFE (ActorTouchDamage[ID_ROLLING_BARREL-1] = 0xFF). 2 roll frames every 4
-// iterations. (Was a single, badly-drawn 16x16 barrel — issue #20.)
-const BARREL_W = 16;                                  // column width (the ROM sprite column is 16 wide)
-const BARREL_SEGS = 9, BARREL_SEG_H = 16;            // RollBarrels1: 9 stacked 16px segments
-const BARREL_H = BARREL_SEGS * BARREL_SEG_H;         // 144px — most of the 192px room height
+// Rooms 141/153/191/205 (the ROM aliases 153 and 191 to ActorsRoom141 through idxActorsRooms):
+// ONE barrel actor sits at the top-centre (x 128, y 8) and rolls horizontally, accelerating
+// ±8/256 px per iteration and bouncing between X 56 and 200 (SFX 0x1D).
+// It is NOT a single barrel: the actor draws 18 sprites as a 16-wide COLUMN of 9 stacked segments
+// spanning Y 8..152 — a rolling wall you dodge through the bottom corridor. Touching ANY of it =
+// ALL LIFE (ActorTouchDamage[ID_ROLLING_BARREL-1] = 0xFF).
+// The art is the REAL SprRollingBarrel, exported to assets/barrel.png +
+// barrel.json by `dotnet run --project Tools/MetalGearSpriteMover -- --export-barrel`
+// (RollBarrels1/2 OR-pairs laid out by SprOffsets7; colours 0Bh/0Ch OR-ing to 0Fh). It was a
+// single badly-drawn 16x16 blob (#20), then a procedural gradient cylinder (#111) — both wrong.
+const ROM_DIR_DOWN = 2, ROM_DIR_LEFT = 3;             // ACTOR.Direction values (1=Up 2=Down 3=Left 4=Right)
 let barrels = [];
 function buildBarrels(n) {
   const a = actorsData && actorsData[n];
-  barrels = ((a && a.barrels) || []).map((b) => ({
-    x: b.x, y: b.y, vx: snake.x < 0x80 ? 0.5 : -0.5, anim: 0,
-  }));
+  // dir mirrors ACTOR.Direction, which SetupEnemyRoom leaves ZERO for a fresh barrel — see the
+  // acceleration quirk in barrelTick. Only a wall bounce ever writes it.
+  barrels = ((a && a.barrels) || []).map((b) => ({ x: b.x, y: b.y, vx: 0, dir: 0, anim: 0 }));
+}
+// InitRollingBarrel reads PlayerX to pick the start direction, and the ROM runs it AFTER the player
+// has been placed: the room-change routine is LocatePlayerEntry (Banks0123.asm:11863) THEN
+// SetupEnemyRoom (:11925). Our setRoom() builds actors first and the caller positions Snake
+// afterwards, so reading snake.x inside buildBarrels saw the PREVIOUS room's X — the barrel then
+// started rolling straight at the door you had just come through. Deferred here instead and flushed
+// before the first actor tick, which is the ROM's order. (#113)
+// The deferred half of SetupEnemyRoom: actor init that depends on where the player ended up. Runs
+// once, before the first actor tick of the new room, so it sees the ENTRY position — the ROM's
+// LocatePlayerEntry -> SetupEnemyRoom order (Banks0123.asm:11863/11925). (#113)
+function flushRoomEntryInit() {
+  if (!roomEntryInitPending) return;
+  roomEntryInitPending = false;
+  initBarrelDirections();
+}
+function initBarrelDirections() {
+  // InitRollingBarrel (rollingbarrels.asm:115-128): DE = +80h (right) by default; PlayerX >= 80h
+  // switches it to -80h (left). 0x80 in 8.8 fixed point = 0.5 px/iteration, away from the player.
+  for (const b of barrels) b.vx = snake.x < 0x80 ? 0.5 : -0.5;
 }
 function barrelTick() {
   if ((tickCounter & 1) !== 0) return;             // ROM iteration boundary
   for (const b of barrels) {
-    b.anim = (b.anim + 1) & 0xff;
-    if (b.x >= 200) { b.x = 199; b.vx = -0.5; playBuf(assets.barrelHitBuf); }     // bounce
-    else if (b.x <= 56) { b.x = 57; b.vx = 0.5; playBuf(assets.barrelHitBuf); }
-    b.vx += b.vx < 0 ? -8 / 256 : 8 / 256;         // RB_IncrementSpeed
+    b.anim = (b.anim + 1) & 0xff;                  // Anim2FramesActor mask 3: 2 frames / 4 iterations
+    // ChkBarrelBounce (rollingbarrels.asm:82-107) runs BEFORE the acceleration. Right wall: X >= 200
+    // -> X = 199, speed -80h, Direction = DIR_DOWN; left wall: X < 56 -> X = 57, speed +80h,
+    // Direction = DIR_LEFT. (The ROM re-uses DIR_DOWN/DIR_LEFT as "moving left"/"moving right"
+    // markers here — they are never a real facing for this actor.) SFX 0x1D on either.
+    if (b.x >= 200) { b.x = 199; b.vx = -0.5; b.dir = ROM_DIR_DOWN; playBuf(assets.barrelHitBuf); }
+    else if (b.x < 56) { b.x = 57; b.vx = 0.5; b.dir = ROM_DIR_LEFT; playBuf(assets.barrelHitBuf); }
+    // RB_IncrementSpeed (rollingbarrels.asm:64-73): `ld a,(Direction); rra` — carry = bit 0 — picks
+    // +8 (accelerate right) or -8 (accelerate left), in 8.8 fixed point.
+    // ROM QUIRK, reproduced deliberately: InitRollingBarrel never sets Direction, and SetupEnemyRoom
+    // (Banks0123.asm:6128-6132) zeroes the whole EnemyList first, so Direction is 0 on the FIRST leg
+    // -> bit 0 clear -> the barrel always accelerates LEFT until its first wall bounce sets a real
+    // marker. So a barrel launched rightward (player in the left half) decelerates over ~16
+    // iterations, stops, and rolls back left. (The port used to accelerate along the current
+    // direction of travel, which never turned it around.) #113
+    b.vx += (b.dir & 1) ? 8 / 256 : -8 / 256;
     b.x += b.vx;
-    // The crush: touching ANY part of the rolling column is fatal (damage 0xFF = all life; the
-    // normal damage delay applies). The column spans [b.y, b.y + BARREL_H] at the rolling X.
-    if (Math.abs(snake.x - b.x) < 12 && snake.y > b.y - 8 && snake.y < b.y + BARREL_H &&
+    // The crush: ActorTouchDamage[ID_ROLLING_BARREL-1] = 0xFF = all life. The touch box is
+    // ActorsShapeTouch[0x0E] = 0x10 -> ImpactAreasInfo row 16 (data/shapes.asm): offY 0x48,
+    // distY 0x48, offX 0, distX 0x0C — i.e. |dy - 72| < 72 and |dx| < 12, which is exactly the
+    // 16x144 sprite column (Y from actor.Y to actor.Y+144). The normal damage delay applies.
+    if (Math.abs(snake.x - b.x) < 0x0C && Math.abs(snake.y - (b.y + 0x48)) < 0x48 &&
         snake.invulnTimer === 0)
       damage(0xFF);
   }
 }
 function drawBarrels() {
-  for (const b of barrels) drawBarrelColumn(Math.round(b.x), Math.round(b.y), b.anim);
+  if (!barrelSheet || !barrelMeta) return;
+  const { frameWidth: fw, frameHeight: fh, offsetX, offsetY } = barrelMeta;
+  for (const b of barrels) {
+    // Anim2FramesActor with mask 3 (RollingBarrelLogic:9) — 2 frames, swapped every 4 iterations.
+    const f = (b.anim >> 2) & 1;
+    ctx.drawImage(barrelSheet, f * fw, 0, fw, fh,
+                  Math.round(b.x) + offsetX, Math.round(b.y) + offsetY, fw, fh);
+  }
 }
-// One rolling cylinder: a 16-wide column of BARREL_SEGS stacked barrel segments. Round shading
-// across the width + horizontal joint rings + vertical staves that slide between the 2 roll frames
-// so it reads as rotating as it crosses the room.
-function drawBarrelColumn(cx, y0, anim) {
-  const x0 = cx - (BARREL_W >> 1), w = BARREL_W, h = BARREL_H;
-  const grad = ctx.createLinearGradient(x0, 0, x0 + w, 0);   // dark edges -> light centre (round)
-  grad.addColorStop(0, '#4a2f15'); grad.addColorStop(0.35, '#a8702f');
-  grad.addColorStop(0.5, '#e0ad5c'); grad.addColorStop(0.65, '#a8702f');
-  grad.addColorStop(1, '#4a2f15');
-  ctx.fillStyle = grad;
-  ctx.fillRect(x0, y0, w, h);
-  ctx.fillStyle = '#2e1d0c';                                 // segment joint rings (stacked barrels)
-  for (let s = 0; s <= BARREL_SEGS; s++) ctx.fillRect(x0, y0 + Math.min(s * BARREL_SEG_H, h - 1), w, 1);
-  const f = (Math.floor(anim / 4) & 1);                      // 2 roll frames every 4 iterations
-  ctx.fillStyle = 'rgba(46,29,12,0.85)';                     // dark staves slide sideways = rolling
-  for (const sx of (f ? [3, 8, 13] : [1, 6, 11])) ctx.fillRect(x0 + sx, y0, 1, h);
-  ctx.fillStyle = 'rgba(255,235,190,0.45)';                  // highlight staves (opposite phase)
-  for (const sx of (f ? [5, 10, 15] : [3, 8, 13])) ctx.fillRect(x0 + sx, y0, 1, h);
-  ctx.strokeStyle = '#241606'; ctx.lineWidth = 1;
-  ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
-}
-let barrelSheet = null;
+let barrelSheet = null, barrelMeta = null;
 
 // ---- Power switches + the electric floor (powerswitch.asm / damageelectric.asm) -----------
 // Rooms with electrified floor tiles (ChkElectricFloor): 16/37/110 use tiles 0x60/0x61,
@@ -1427,34 +1525,54 @@ function powerSwitchTick() {
     powerSwitch = null;
     powerSwitchOn = false;
   }
-  // PowerSwitchLogic (powerswitch.asm:24): every 4 iterations BRIGHT += BRIGHT_DELTA, oscillating
-  // 1<->7 (ChkRevertFade). The tile colour is built R=G=B=BRIGHT, so it ramps grey -> pure WHITE
-  // at 7. 4 iterations ~= 8 of our 60Hz ticks. (Was a fixed yellow sine pulse — issue #24.)
+  // PowerSwitchLogic (powerswitch.asm:24-58): every 4 iterations (ANIM_CNT & 3) BRIGHT += DELTA,
+  // then the palette entry becomes rgb(BRIGHT,BRIGHT,BRIGHT) — D = BRIGHT<<4|BRIGHT (R,B),
+  // E = BRIGHT (G). 4 iterations = 8 of our 60Hz ticks.
+  //
+  // ChkRevertFade is `cp 7 / call nc` — it fires on BRIGHT >= 7 INCLUDING the 0xFF wrap when the
+  // fade-out runs past zero, and it rewrites BRIGHT *before* the colour is read:
+  //   BRIGHT hits 7   -> clamped to 6, DELTA = -1   (so 7 is never displayed; the peak is 6)
+  //   BRIGHT hits 0xFF-> clamped to 1, DELTA = +1   (0 IS displayed on the way down — full black)
+  // Displayed ramp: ...5,6,6,5,4,3,2,1,0,1,2,3,4,5,6,6,... (The port used to clamp to 1..7 with a
+  // pure-white peak at 7 — wrong at both ends. Earlier still it was a yellow sine pulse — #24.)
   if (powerSwitchOn && (tickCounter & 7) === 0) {
-    powerFadeBright += powerFadeDelta;
-    if (powerFadeBright >= 7) { powerFadeBright = 7; powerFadeDelta = -1; }
-    else if (powerFadeBright <= 1) { powerFadeBright = 1; powerFadeDelta = 1; }
+    powerFadeBright = (powerFadeBright + powerFadeDelta) & 0xFF;
+    if (powerFadeBright >= 7) {                       // cp 7 -> carry clear
+      if (((powerFadeBright + 1) & 0xFF) === 0) powerFadeBright = 1;   // the 0xFF wrap
+      else powerFadeBright = 6;
+      powerFadeDelta = powerFadeDelta === 1 ? -1 : 1;
+    }
   }
 }
+// PowerSwitchLogic doesn't repaint tiles — it rewrites ONE palette entry (slot 9, or slot 5 in
+// rooms 40/116) to rgb(BRIGHT,BRIGHT,BRIGHT), so exactly the pixels drawn through that slot pulse
+// and every other pixel in those tiles is untouched. Our rooms are flat PNGs with no palette left,
+// so RoomViewer exports a STENCIL of that slot per electric room (<n>.electric.png, written by
+// --export-web); we recolour just those pixels. (Was a 'lighten' blend over the whole 8x8 tile,
+// which washed out the entire floor slab instead of its live conductor pixels — issue #112.)
+// The tinted stencils are cached per BRIGHT level (only 0..6 ever occur).
+const electricTintCache = new Map();
+function electricTint(img, bright) {
+  const key = `${currentRoom}:${bright}`;
+  let cv = electricTintCache.get(key);
+  if (cv) return cv;
+  cv = document.createElement('canvas');
+  cv.width = img.width; cv.height = img.height;
+  const c2 = cv.getContext('2d');
+  const v = Math.round((bright & 7) * 255 / 7);        // RGB component 0..7 -> 0..255
+  c2.fillStyle = `rgb(${v},${v},${v})`;
+  c2.fillRect(0, 0, cv.width, cv.height);
+  c2.globalCompositeOperation = 'destination-in';      // keep only the stencil's pixels
+  c2.drawImage(img, 0, 0);
+  electricTintCache.set(key, cv);
+  return cv;
+}
 function drawPowerSwitchFloor() {
-  // The ROM swaps the electric tiles' palette slot to a pulsing grey that peaks at white
-  // (PowerSwitchLogic). We can't swap a palette index over the room PNG, so 'lighten'-blend the
-  // live tiles toward rgb(BRIGHT) — at peak BRIGHT=7 they go white; at the dim end they're left
-  // alone. (Deliberate divergence: tint vs palette swap — matches the visible grey->white pulse.)
   if (!powerSwitchOn) return;
-  const pair = ELECTRIC_TILES[currentRoom];
-  const c = assets.collision;
-  if (!pair || !c || !c.tiles) return;
-  const v = Math.round((powerFadeBright / 7) * 255);   // BRIGHT 1..7 -> 0..255 grey
-  const prevOp = ctx.globalCompositeOperation;
-  ctx.globalCompositeOperation = 'lighten';
-  ctx.fillStyle = `rgb(${v},${v},${v})`;
-  for (let ty = 0; ty < c.height; ty++)
-    for (let tx = 0; tx < c.width; tx++) {
-      const t = c.tiles[ty * c.width + tx];
-      if (t === pair[0] || t === pair[1]) ctx.fillRect(tx * 8, ty * 8, 8, 8);
-    }
-  ctx.globalCompositeOperation = prevOp;
+  const r = rooms.get(currentRoom);
+  const stencil = r && r.electric;
+  if (!stencil) return;
+  ctx.drawImage(electricTint(stencil, powerFadeBright), 0, 0);
 }
 
 // ---- The roof: bridges, the air flow, the parachute, the jetpack event --------------------
@@ -2097,7 +2215,7 @@ function midBossTick() {
       switch (b.status) {
         case 0:                                             // the intro (text 108)
           if (--b.wait <= 0) {
-            if (!ftSpeechDone) { ftSpeechDone = true; setText(108, 2); }
+            if (!ftSpeechDone) { ftSpeechDone = true; setText(108, 1); }   // SetTextUnskip2: mode 1 (#79)
             b.status = 1;
           }
           break;
@@ -2552,7 +2670,7 @@ function bigBossTick() {
     case 0:                                               // BigBossSpeech
       if (--b.wait > 0) return;
       b.status = 1; b.wait = bbRandWait();
-      if (!bigBossSpeechDone) { bigBossSpeechDone = true; setText(147, 2); }
+      if (!bigBossSpeechDone) { bigBossSpeechDone = true; setText(147, 1); }   // mode 1 (#79)
       return;
     case 1:                                               // BigBossThink
       if (bbNear(b)) { b.status = 2; b.moving = 1; bbCalcAway(b); return; }
@@ -2923,12 +3041,23 @@ async function loadSounds() {
   if (!assets.propellerBuf)     assets.propellerBuf     = await decode('assets/propeller.wav');      // SFX 2
   if (!assets.lorryBuf)         assets.lorryBuf         = await decode('assets/lorry-moving.wav');   // SFX 0x1F
 }
+// Live one-shot SFX sources, so SFX 0x28 ("stop SFXs", GoToMenu) can silence them (#84). Entries
+// drop themselves on end, so the set stays small.
+const liveSfx = new Set();
 function playBuf(buf) {
   if (!audioCtx || !buf) return;
   const src = audioCtx.createBufferSource();
   src.buffer = buf;
   src.connect(audioOut());
+  src.onended = () => liveSfx.delete(src);
+  liveSfx.add(src);
   src.start();
+}
+// SFX 0x28 = "stop sounds": cut every one-shot SFX currently playing. Music/ring have their own
+// stop paths (stopAreaMusic / stopCallRing) and are untouched.
+function stopSfx() {
+  for (const src of liveSfx) { try { src.stop(); } catch (e) {} }
+  liveSfx.clear();
 }
 const playPunch = () => playBuf(assets.punchBuf);
 const playDoor  = () => playBuf(assets.doorBuf);
@@ -3064,7 +3193,12 @@ window.addEventListener('keydown', (e) => {
   if (PUNCH_KEYS.has(e.key)) { e.preventDefault(); if (!e.repeat) punchQueued = true; }
   if (FIRE_KEYS.has(e.key)) { e.preventDefault(); if (!e.repeat) fireQueued = true; held.add('fire'); }
   const dir = DIR_KEYS[e.key];
-  if (dir) { e.preventDefault(); held.add('dir:' + dir); pushRecency(dir); }
+  if (dir) {
+    e.preventDefault(); held.add('dir:' + dir); pushRecency(dir);
+    // ControlsTrigger edge for ControlMissile — the in-flight missile re-aims on a fresh press
+    // only, never on a held direction (#64).
+    if (!e.repeat) { missileDirTrigger = dir; ladderDirTrigger = dir; }
+  }
 });
 window.addEventListener('keyup', (e) => {
   const dir = DIR_KEYS[e.key];
@@ -3441,6 +3575,14 @@ const cycleItem = () => {
 // stepping toward a connected edge, so Snake can reach and cross a doorway —
 // in-room solids still block, so a wall beside the doorway is honored).
 function blocked(x, y, dir, allowOff = false, probes = PROBES) {
+  if (blockedShape(x, y, dir, allowOff, probes)) return true;
+  // ChkPlayerColl's room-78 second pass: shape 2 as well, blocking if EITHER shape collides.
+  // Only for the player's own shape-0 probe — callers passing an explicit shape opt out. (#49)
+  if (currentRoom === ROOM_SECOND_SHAPE && probes === PROBES)
+    return blockedShape(x, y, dir, allowOff, PROBES_SHAPE2);
+  return false;
+}
+function blockedShape(x, y, dir, allowOff, probes) {
   for (const [oy, ox] of probes[dir]) {
     const px = Math.round(x + ox), py = Math.round(y + oy);
     if (inOpenDoor(px, py)) continue;       // an open doorway is passable, even over wall tiles
@@ -3818,7 +3960,10 @@ function titleTick() {
   if ((tickCounter & 1) !== 0) return;            // ROM iteration boundary
   switch (titlePhase) {
     case 'konami-reveal':                         // one line per two iterations
-      if (++titleCnt >= KONAMI_LINES * 2) { titlePhase = 'konami-hold'; titleCnt = 0x20; }
+      // GS_KonamiLogo (Banks0123.asm:10104-10105) ends with `xor a / jp NextSubstatusT`, seeding
+      // WaitCounter = 0; GS_LoadIntroGfx then does `dec (hl) / ret nz`, which WRAPS 0 -> 0FFh, so the
+      // hold is 256 iterations, not 0x20. (Was 32 — the logo flashed by, #45.)
+      if (++titleCnt >= KONAMI_LINES * 2) { titlePhase = 'konami-hold'; titleCnt = KONAMI_HOLD; }
       return;
     case 'konami-hold':                           // WaitCounter 0x20
       if (--titleCnt <= 0) {
@@ -3853,6 +3998,7 @@ function titleSkip() {
   titleClear();
   drawLogoParked();
   titlePhase = 'ready';
+  stopSfx();                                      // GoToMenu (Banks0123.asm:10652): SFX 0x28 = stop SFXs (#84)
   playBuf(assets.logoStopBuf);                    // SFX 0x4A "Metal Gear logo end"
 }
 // GS_PlayStart (Banks0123.asm:10270): pressing Fire on the title first blinks
@@ -3890,6 +4036,7 @@ const DEMO_SCENES = [
 ];
 const DEMO_IDLE = 256;        // GS_WaitMenu idle iterations before GS_DemoPlay
 let demoActive = false, demoSceneIdx = 0, demoData = null, demoPtr = 0, demoHold = 0, demoPrevCtrl = 0;
+let demoMusic = false;        // SetDemoPlay3 pins AreaMusic 2Ch for the attract gameplay demo (#45)
 let titleIdle = 0;            // idle counter while the title sits in the 'ready' phase
 
 function applyDemoControl(ctrl) {
@@ -3902,6 +4049,10 @@ function applyDemoControl(ctrl) {
   const newly = ctrl & ~demoPrevCtrl;        // ControlsTrigger: bits newly pressed this iteration
   if (newly & 0x10) fireQueued = true;       // Fire edge
   if (newly & 0x20) punchQueued = true;      // Fire2 / punch edge
+  // direction edges also steer a flying missile (#64) and drive ladder mount/dismount (#52)
+  const edgeDir = (newly & 1) ? 'up' : (newly & 2) ? 'down' : (newly & 4) ? 'left'
+                : (newly & 8) ? 'right' : null;
+  if (edgeDir) { missileDirTrigger = edgeDir; ladderDirTrigger = edgeDir; }
   demoPrevCtrl = ctrl;
 }
 function demoControlTick() {                  // DemoControler — one ROM iteration of replay
@@ -3918,13 +4069,18 @@ function startDemo() {
   weapons.clear(); items.clear(); selectedItem = 0; selectedWeapon = 0;
   alertMode = false; redAlertFlag = false; transmiTaken = false; poisoned = false;
   bullets.length = 0; playerShots.length = 0;
-  held.clear(); fireQueued = false; punchQueued = false;
+  held.clear(); fireQueued = false; punchQueued = false; missileDirTrigger = null; ladderDirTrigger = null;
   snake.life = snake.maxLife;
   if (s.tutorial) { startTutorialDemo(); return; }          // SetTutorialDemo (radio)
   demoData = s.data; demoPtr = 1; demoHold = demoData[0]; demoPrevCtrl = 0;
   selectedWeapon = s.weapon || 0; if (s.weapon) weapons.set(s.weapon, 30);
   gameState = 'play';
   setRoom(s.room);
+  // SetDemoPlay3 (logic/gamedemo.asm:92-101): the attract GAMEPLAY demo sets AreaMusic = 2Ch
+  // (Theme of Tara) unless the F5 music-off flag is set. (The demo ran silent — #45.)
+  demoMusic = true;
+  stopAreaMusic();
+  startAreaMusic();
   snake.x = s.x; snake.y = s.y; snake.dir = 'left';
   snake.controlMod = CONTROL_NORMAL; snake.anim = ANIM_NORMAL; snake.invulnTimer = 0;
   snake.state = 'idle';
@@ -3948,9 +4104,10 @@ function demoTutorialTick() {         // GameDemoLogic tutorial: LED climb -> te
   endDemo();                         // text 36 closed (back to radio) -> demo over
 }
 function endDemo() {
+  demoMusic = false;          // release the SetDemoPlay3 music override (#45)
   demoActive = false;
   demoSceneIdx = (demoSceneIdx + 1) % DEMO_SCENES.length;   // SetupDemoPlay cycles the scene
-  held.clear(); fireQueued = false; punchQueued = false;
+  held.clear(); fireQueued = false; punchQueued = false; missileDirTrigger = null; ladderDirTrigger = null;
   stopAreaMusic(); stopAlert(); stopBossMusic(); stopRadioNoise();
   alertMode = false; redAlertFlag = false;
   gameState = 'title'; titlePhase = 'ready'; titleIdle = 0;
@@ -4076,7 +4233,7 @@ function introTick() {
       }
       introMove('up', 2);
       return;
-    case 10:                                    // IntroScene11: climb (speed 0x188 ≈ 1.5px)
+    case 10:                                    // IntroScene11: climb (PlayerMovSpeed 0x0100 = 1px)
       if (--introCnt <= 0) {                    // 11b: over the top
         snake.y = 0x66;
         snake.anim = ANIM_NORMAL; snake.dir = 'up'; snake.state = 'idle';
@@ -4084,7 +4241,9 @@ function introTick() {
         return;
       }
       snake.dir = 'up';
-      snake.y -= 1.5;                           // the ROM 0x0188 climb speed, per iteration
+      // IntroScene10b (logic/introscene.asm:288-292) sets PlayerMovSpeed via `ld h,1` on HL, i.e.
+      // 0x0100 = 1.0 px per iteration. The old 1.5 cited an 0x0188 that does not exist. (#83)
+      snake.y -= 1;
       snake.state = 'walk';
       if (++snake.animTimer >= WALK_TICKS / 2) { snake.animTimer = 0; snake.walkPhase ^= 1; }
       return;
@@ -4334,12 +4493,19 @@ function laserShotsTick() {
     if (Math.abs(snake.x - sh.x) >= 8) continue;
     let g = sh.segs;
     if (currentRoom === 111 && g >= 8) g = 7;
-    const half = LASER_LENGTHS[Math.min(g, LASER_LENGTHS.length) - 1] * 8;
+    // ChkLaserShot4 bails out BEFORE indexing when the grown count is 0Ch (`cp 0Ch / ret z`), so
+    // a fully-grown 12 deals NO damage and the table's last entry (0Bh) is dead data.
+    if (g >= 0x0C || g <= 0) continue;
+    const half = LASER_LENGTHS[g - 1] * 8;
     if (Math.abs(sh.y + half - snake.y) < half) damage(LASER_SHOT_DAMAGE);
   }
   laserShots = laserShots.filter((sh) => !sh.dead);
 }
-const LASER_LENGTHS = [1, 1, 2, 3, 4, 5, 6, 7, 8, 9];   // LaserLenghts (damagelaser.asm:72)
+// LaserLenghts (damagelaser.asm:72-83) is twelve bytes 1,1,2,3,4,5,6,7,8,9,0Ah,0Bh, indexed by
+// (grown count - 1). Only indices 0..10 are reachable — index 11 needs a count of 12, which
+// ChkLaserShot4 rejects first. The port stopped at 9, so a fully-grown beam reached 72px instead of
+// the ROM's 80px. (#66)
+const LASER_LENGTHS = [1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0x0A, 0x0B];
 const LASER_SHOT_DAMAGE = 0x10;   // ActorTouchDamage[ID_LASER_SHOT-1] (data/shapes.asm:39)
 
 function drawCameras() {
@@ -4422,10 +4588,13 @@ function captureTick() {
       captureTimer = 0x1E;
       captureStatus = 5;
       return;
-    case 5:                                         // CaptureWaitText then CaptureSetup (mute)
+    case 5:                                         // CaptureWaitText -> CaptureSetup
       if (--captureTimer > 0) return;
-      stopAlert();
-      stopCallRing();
+      // CaptureSetup (logic/capturescene.asm:38-49) queues MusicToSet = 5Ch — a music FADE, not a
+      // stop — and leaves AlertMode alone; the alarm is cleared later, by PutInPrison. (The port
+      // hard-stopped the alert track and the ring here. #86)
+      fadeOutMusic();
+      stopCallRing();                               // the ring is a separate SFX source, still cut
       captureTimer = 0x3C;
       captureStatus = 6;
       return;
@@ -4576,8 +4745,12 @@ function elevatorTick() {
   if ((tickCounter & 1) !== 0) return;         // ROM iteration boundary
   if (elevatorStatus === 1) {                  // floor reached
     gameState = 'play';
-    const d = currentDir();
-    if (d === 'left' || d === 'right') snake.dir = d;
+    // ElevatorRoomLogic (elevatorroom.asm:15-27): `and 0Ch / and 4 / ld a,3 / jr z / inc a` —
+    // holding LEFT (bit 2 set) falls through to `inc a` and yields DIR_RIGHT(4); holding only
+    // RIGHT takes the branch and yields DIR_LEFT(3). The facing is INVERTED, and with neither
+    // held A stays 0 (no change). Left wins when both are held. (#85)
+    if (held.has('dir:left')) snake.dir = 'right';
+    else if (held.has('dir:right')) snake.dir = 'left';
     return;
   }
   if (elevatorStatus >= 2) { elevatorShaftExit(); return; }
@@ -4586,16 +4759,16 @@ function elevatorTick() {
   elevatorY += up ? -1 : 1;
   snake.y += up ? -1 : 1;
   if (up ? elevatorY < 24 : elevatorY >= 208) { elevatorStatus = 2; return; }
-  const held = currentDir();
+  const heldDir = currentDir();
   if (up) {                                    // MoveElevator's up path
-    if (currentRoom >= 248 && currentRoom <= 250 && held === 'up') return;   // ChkDoNotStop
+    if (currentRoom >= 248 && currentRoom <= 250 && heldDir === 'up') return;   // ChkDoNotStop
     if (elevatorY === 0x38) { elevatorStatus = 1; return; }
-    if (currentRoom === 247 && held === 'up') return;
+    if (currentRoom === 247 && heldDir === 'up') return;
     if (elevatorY === 0x78 || elevatorY === 0xB8) elevatorStatus = 1;
   } else {                                     // ElevatorDown
-    if (currentRoom >= 247 && currentRoom <= 249 && held === 'down') return; // ChkDoNotStop2
+    if (currentRoom >= 247 && currentRoom <= 249 && heldDir === 'down') return; // ChkDoNotStop2
     if (elevatorY === 0xB8) { elevatorStatus = 1; return; }
-    if (currentRoom === 250 && held === 'up') return;          // ElevatorDown3 room 0xFA: `rra` tests the Up bit (#99)
+    if (currentRoom === 250 && heldDir === 'up') return;          // ElevatorDown3 room 0xFA: `rra` tests the Up bit (#99)
     if (elevatorY === 0x78 || elevatorY === 0x38) elevatorStatus = 1;
   }
 }
@@ -4710,6 +4883,10 @@ function radioTick() {
   const trig = radioDirTrigger; radioDirTrigger = null;
   switch (radioState) {
     case 1: {                                     // RadioIdle (Banks0123.asm:10742)
+      // RadioIdle's first act: if RadioCmd != 0 (a SEND happened) re-fire SFX 0x50, the radio hum
+      // — unless the ending is running. Without it a SEND that draws no reply left the radio
+      // silent until you exited. (#77)
+      if (radioCmd !== 0 && endingStatus === 0) playRadioNoise();
       if (up) {                                   // SetRadioSend: SEND + "your reply, please"
         radioCmd = 1;
         replyRequested = true;
@@ -4751,7 +4928,11 @@ function radioTick() {
 function chgRadioFreq(trig) {
   let dir = null;
   if (trig === 'left' || trig === 'right') {
+    // ChgRadioFreq2 (Banks0123.asm:10923-10929) clears AutoReplyDone AND the byte after it,
+    // ReplyRequested (`ld (hl),0 / inc hl / ld (hl),0`) — so tuning away cancels a pending SEND
+    // and the next contact needs its own SEND. (#76)
     autoReplyDone = false;
+    replyRequested = false;
     radioHoldWait = 8;
     dir = trig;
   } else {
@@ -4792,6 +4973,21 @@ function chkRadioReceiv() {
 // overridden) text id, or null for no reply. Divergences: the MapZone>=5 ANTENNA gate, Jennifer's
 // dead-brother gate, and the Madnar/text-15 gate reference systems not modelled here (they pass).
 const FREQ_BIGBOSS = 0x85, FREQ_BIGBOSS_B2 = 0x13, FREQ_SCHNEIDER = 0x79, FREQ_SCHNEIDER_B2 = 0x26, FREQ_JENIFFER = 0x48;
+// ChkRadioCalls (Banks0123.asm:1689-1743) decides whether the room's incoming call RINGS at all,
+// and it looks only at the FIRST caller in the room's list (RadioPersonsDat): a captured Schneider
+// never calls, and Jennifer needs Class 3 and a living brother. Without this the ring fired for
+// contacts that could not answer — a phantom ring leading nowhere. (#43)
+// The ROM also gates on MapZone >= 5 needing the antenna, and on JennifBrotherDead; neither system
+// is modelled here (tracked in #78 / the deferred list), so those pass.
+function incomingCallPossible(room) {
+  const first = (radiocallsData && radiocallsData[room] && radiocallsData[room][0]) || null;
+  if (!first) return true;
+  const f = first.freq;
+  if ((f === FREQ_SCHNEIDER || f === FREQ_SCHNEIDER_B2) && schneiderCaptured) return false;
+  // `cp 3 / jr nz` — exactly Class 3. Class caps at 3 (IncClassLv `cp 3 / ret z`), so >= is the same.
+  if (f === FREQ_JENIFFER && snake.class < 3) return false;
+  return true;
+}
 function radioReplyGate(p) {
   const f = p.freq;
   if (f === FREQ_BIGBOSS || f === FREQ_BIGBOSS_B2) {
@@ -4991,6 +5187,23 @@ function makeGuard(g) {
 // The room's guard DEFINITIONS — pure (no globals touched, no enterAlert side effect). Shared by
 // buildGuardRaw (play) and the binoculars peek (binocSnapshot). Returns null for room 3 (its
 // elevator-ceremony pair are owned by elevRelief and are not normal patrols).
+// SetDirToPoint (Banks0123.asm:6965-7005) — the ROM's "which way do I face to reach this point".
+// It compares each axis independently and ORs the two results:
+//   b = 0 if Y >= destY (up or level), 1 if Y < destY (down)
+//   c = 0 if X == destX, 2 if X > destX (left), 3 if X < destX (right)
+//   Direction = b | c
+// Those values are 0-BASED here, not the DIR_UP=1..DIR_RIGHT=4 enum — ChangeGuardSprDir
+// (logic/actors/guard.asm:7-17) does `SpriteId = Direction*2`, and idxSprites runs
+// 0 GuardWalkUp1 / 2 GuardWalkDown1 / 4 GuardWalkLeft1 / 6 GuardWalkRight1. (The "1=Up, 2=Down..."
+// comment on that store is inherited from the enum and does not describe this routine.)
+// Because c is 2 or 3 whenever X differs, the X result dominates — and the OR yields a quirk:
+// down+left = 1|2 = 3 = RIGHT. Reproduced deliberately. (#123)
+const ROM_DIR_NAMES = ['up', 'down', 'left', 'right'];
+function setDirToPoint(x, y, destX, destY) {
+  const b = y < destY ? 1 : 0;
+  const c = x === destX ? 0 : (x > destX ? 2 : 3);
+  return ROM_DIR_NAMES[b | c];
+}
 function guardDefsFor(n) {
   const demo = guardsData[String(n)];
   if (demo) return [demo];
@@ -5004,12 +5217,11 @@ function guardDefsFor(n) {
         // GetPathPoint -> SetDirToPoint (Banks0123.asm:6956): the guard's INITIAL facing is set
         // from its spawn position toward path point 0 (the first destination) — NOT from p0->p1.
         // (A guard facing the wrong way on entry caused instant false alerts — issue #18.)
-        let dx = path[0][0] - r.x, dy = path[0][1] - r.y;
-        if (dx === 0 && dy === 0 && path.length > 1) {                // spawn == p0: use the next leg
-          dx = path[1][0] - path[0][0]; dy = path[1][1] - path[0][1];
+        let fromX = r.x, fromY = r.y, toX = path[0][0], toY = path[0][1];
+        if (toX === fromX && toY === fromY && path.length > 1) {      // spawn == p0: use the next leg
+          fromX = path[0][0]; fromY = path[0][1]; toX = path[1][0]; toY = path[1][1];
         }
-        if (dx !== 0 || dy !== 0)
-          dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+        if (toX !== fromX || toY !== fromY) dir = setDirToPoint(fromX, fromY, toX, toY);
       }
       defs.push({
         x: r.x, y: r.y, dir,
@@ -5351,9 +5563,8 @@ function updateGuardOne(guard) {
     guard.x = t[0]; guard.y = t[1];
     guard.target = (guard.target + 1) % guard.path.length;
     // SetDirToPoint: face the NEW destination, so the look (if any) holds that facing first.
-    const nt = guard.path[guard.target], ndx = nt[0] - guard.x, ndy = nt[1] - guard.y;
-    if (ndx !== 0 || ndy !== 0)
-      guard.dir = Math.abs(ndx) >= Math.abs(ndy) ? (ndx < 0 ? 'left' : 'right') : (ndy < 0 ? 'up' : 'down');
+    const nt = guard.path[guard.target];
+    if (nt[0] !== guard.x || nt[1] !== guard.y) guard.dir = setDirToPoint(guard.x, guard.y, nt[0], nt[1]);
     // ChkWaitPathPoint (`ld a,r; rra; ret nc`): ~50% chance to NOT stop and keep walking; else stop+look.
     if (Math.random() < 0.5) { guard.lookPhase = 1; guard.waitTimer = GUARD_LOOK_TICKS; }
     return;
@@ -5572,7 +5783,14 @@ const SIN_TABLE = [
 ];
 // Returns the PER-ITERATION (30Hz) velocity: axisSpeed = shotSpeed * sin(degree) * 8
 // >> 8, as 8.8 fixed -> shotSpeed*sin/8192 px/iteration; cos uses index 0x3F-degree.
+// CalcShot2 scales the linear speed by difficulty: ShotSpeed = (Dificulty << 3) + param. Metal Gear
+// MSX never raises Dificulty above 0 in normal play and the port models no difficulty system, so
+// this is 0 today — expressed as the ROM's formula rather than the baked literal so the hook is
+// obvious if difficulty is ever added. (#60 — latent by design, NOT a behaviour change.)
+const DIFFICULTY = 0;                                   // Dificulty (Variables.asm)
+const shotSpeedFor = (param) => (DIFFICULTY << 3) + param;
 function calcShot(srcX, srcY, shotSpeed) {
+  shotSpeed = shotSpeedFor(shotSpeed);
   const rdy = Math.round(snake.y) - Math.round(srcY);
   const rdx = Math.round(snake.x) - Math.round(srcX);
   const sy = rdy < 0 ? -1 : 1, sx = rdx < 0 ? -1 : 1;        // ShotDirectionV / H
@@ -6082,6 +6300,7 @@ function tryPunchGuard() {
     if (Math.abs(g.x + area.xoff - snake.x) >= PUNCH_RADIUS) continue;   // out of X range
     if (Math.abs(g.y + area.yoff - snake.y) >= PUNCH_RADIUS) continue;   // out of Y range
     if (g.stunnedCnt >= GUARD_REPUNCH_LOCK) continue;                    // can't punch too fast
+    playPunch();                          // SFX 8 "punch guard" (ChkPunchEnemy4) — only on contact (#55)
     if (++g.punchesCnt >= GUARD_PUNCHES_TO_KILL) {
       chkDropItem(g);                                                    // ChkKillPunching -> ChkDropItem (punch kills only)
       killGuard(g);
@@ -6195,7 +6414,7 @@ function areaTrackFor(n) {
 function startAreaMusic() {
   if (!audioCtx || !assets.taraBuf || areaMusicSrc) return;
   if (alertPlaying || bossMusicSrc) return;        // those tracks replace the area music
-  areaMusicBuf = areaTrackFor(currentRoom);
+  areaMusicBuf = demoMusic ? assets.taraBuf : areaTrackFor(currentRoom);   // SetDemoPlay3 forces 2Ch (#45)
   if (!areaMusicBuf) return;
   areaMusicSrc = audioCtx.createBufferSource();
   areaMusicSrc.buffer = areaMusicBuf;
@@ -6203,12 +6422,30 @@ function startAreaMusic() {
   areaMusicSrc.connect(audioOut());
   areaMusicSrc.start();
 }
+// SFX 5Ch = "mute music": the ROM queues it in MusicToSet so the driver FADES the current track
+// out rather than cutting it (CaptureSetup, logic/capturescene.asm:45-46). Web Audio has no driver
+// fade, so ramp the master area-music gain down and stop at the end — audibly the same. (#86)
+function fadeOutMusic(seconds = 1.0) {
+  if (!areaMusicSrc || !audioCtx) { stopAreaMusic(); stopAlert(); return; }
+  const src = areaMusicSrc, buf = areaMusicBuf;
+  areaMusicSrc = null; areaMusicBuf = null;          // release the slot so a new track can start
+  try {
+    const g = audioCtx.createGain();
+    src.disconnect(); src.connect(g); g.connect(audioOut());
+    g.gain.setValueAtTime(1, audioCtx.currentTime);
+    g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + seconds);
+    setTimeout(() => { try { src.stop(); } catch (e) {} }, seconds * 1000 + 50);
+  } catch (e) { try { src.stop(); } catch (e2) {} }
+  stopAlert();                                       // the alert TRACK fades with it
+  return buf;
+}
 function stopAreaMusic() {
   if (areaMusicSrc) { try { areaMusicSrc.stop(); } catch (e) {} areaMusicSrc = null; areaMusicBuf = null; }
 }
 // Re-tune on room changes / the countdown arming: restart only when the track differs.
 function updateAreaMusic() {
   if (!areaMusicSrc) return;
+  if (demoMusic) return;                          // the attract demo pins Theme of Tara (#45)
   if (areaMusicBuf !== areaTrackFor(currentRoom)) { stopAreaMusic(); startAreaMusic(); }
 }
 
@@ -6496,8 +6733,16 @@ function drawGuardFallback(g) {
 // established literal-pixel convention (geometry exact, flight time 2x the 30Hz ROM);
 // stationary fuses/explosions run at x2 tick counts so their REAL durations match the ROM.
 const LAND_MINE = 6, MISSILE = 7;        // Enums.asm weapon ids (PLASTIC_BOMB declared above)
-const WEAPON_MAX = [0, 6, 6, 2, 1, 1, 3, 1];   // data/weapondamage.asm headers (+ the
-                                               //   slot-0-only rules for rocket/bomb/missile)
+// The byte BEFORE each damage table (data/weapondamage.asm) is NOT a spawn cap — GetEmptyShotDat
+// (weaponuse.asm:52-73) always scans all 6 slots with a hardcoded `ld b,6`. GetWeaponDamages
+// (Banks0123.asm:1081-1094) fetches this byte for exactly one purpose: the djnz bound in
+// ChkPlayerShots (damagetoenemy.asm:27-42), i.e. HOW MANY SLOTS ARE SCANNED FOR HITS. A grenade in
+// slot 4 still flies and draws; it just can't damage anything.
+// ROM quirk kept: the count comes from WeaponInUse, which is written alongside SelectedWeapon
+// (Banks0123.asm:11493, logic/items.asm:260) — the weapon you have SELECTED, not the type of the
+// shot being tested. (Was applied as a per-type spawn cap, capping grenades at 2 and mines at 3 on
+// screen — issue #61.)
+const WEAPON_SHOT_SLOTS = [0, 6, 6, 2, 1, 1, 3, 1];
 const WEAPON_DMG = [0, 2, 2, 5, 0x0A, 5, 5, 5];   // damage vs guards (weapondamage.asm)
 // ActorShapeExpl=1 -> ImpactAreasInfo row 1 (0,14h,0,14h): grenade/bomb/mine hits use a
 // +-20px box; bullets/rocket/missile keep the projectile shape (GUARD_SHAPE).
@@ -6510,7 +6755,13 @@ function weaponDamage(t, type) {
 }
 // SMG_BulletSpeeds (logic/weapon/smg.asm:139, 8.8 fixed-point): the 8-step burst fan —
 // straight, +-1.5, +-3 px drift across the facing axis.
+// Decoding the table (4 dirs x 8 ranges x [speedY word, speedX word], 8.8 fixed): up/down carry
+// the X drift {0,-1.5,-3,-1.5,0,+1.5,+3,+1.5}, while left/right carry the Y drift in the NEGATED
+// order {0,+1.5,+3,+1.5,0,-1.5,-3,-1.5} — consistent rotational handedness. Applying the up/down
+// order to every direction mirrored horizontal bursts. (#62)
 const SMG_DRIFT = [0, -1.5, -3, -1.5, 0, 1.5, 3, 1.5];
+const smgDrift = (burst, dir) =>
+  (dir === 'left' || dir === 'right' ? -1 : 1) * SMG_DRIFT[burst - 1];
 // GrenadeYOffsets (grenade.asm:131): the visual parabola indexed by the remaining timer.
 const GRENADE_ARC = [16, 8, 0, -4, -8, -12, -16, -20, -24, -28, -32, -36, -38, -40,
                      -38, -36, -32, -28, -24, -20, -16, -12, -8, -4, 0];
@@ -6520,6 +6771,19 @@ let smgTimer = 0, smgBurst = 0;   // SubMachGunTimer / BurstCnt
 let shotsSheet = null, shotsMeta = null;   // shots.png / shots.json
 
 const activeShotsOf = (t) => playerShots.filter((s) => (s.type || HAND_GUN) === t).length;
+// GetEmptyShotDat (weaponuse.asm:52-73): the 6 shot structures are FIXED SLOTS and spawning takes
+// the FIRST empty one. Our playerShots array compacts on removal, so each shot carries the slot it
+// holds; only allocation and the slot-0 queries below depend on it. Returns -1 when the pool is full.
+function allocShotSlot() {
+  for (let s = 0; s < PLAYER_SHOT_MAX; s++)
+    if (!playerShots.some((p) => p.slot === s)) return s;
+  return -1;
+}
+// Rocket / plastic bomb / missile hard-wire themselves to slot 0 and refuse to fire unless it is
+// free — `ld a,(PlayerShotsList) / and a / ret nz` (rocket.asm:23, plasticbomb.asm:22, missile.asm:23).
+// So a lingering handgun bullet or grenade in slot 0 blocks them. (Was gated on "no shot of my own
+// type exists" — issue #63.)
+const shotSlot0Free = () => !playerShots.some((p) => p.slot === 0);
 
 // ChkWeaponShot (weaponuse.asm:8): the per-frame fire dispatch. No weapons in elevators
 // (rooms >= 224), water, or the box; fireQueued = ControlsTrigger, held 'fire' = ControlsHold.
@@ -6539,24 +6803,26 @@ function chkWeaponShot() {
   }
 }
 
-// Common ammo/pool gate: returns true when one unit was consumed and a slot is free.
+// Common ammo/pool gate. Returns the SLOT the new shot occupies, or -1 if it can't fire — the pool
+// is the shared 6 slots (GetEmptyShotDat), with no per-weapon spawn cap (#61).
 function takeAmmo(id, consumable) {
   const ammo = weapons.get(id) || 0;
-  if (ammo <= 0) { if (id <= SUB_MACHINE_GUN) playClick(); return false; }  // click only for guns
-  if (activeShotsOf(id) >= WEAPON_MAX[id]) return false;
-  if (playerShots.length >= PLAYER_SHOT_MAX) return false;
+  if (ammo <= 0) { if (id <= SUB_MACHINE_GUN) playClick(); return -1; }  // click only for guns
+  const slot = allocShotSlot();
+  if (slot < 0) return -1;
   weapons.set(id, ammo - 1);                          // DecItemUnits
   if (consumable && ammo - 1 <= 0) weapons.delete(id);   // use type 1: removed when empty
-  return true;
+  return slot;
 }
 
 // ChkHandGunShot / chkSMGShot's shared bullet (range 0x10, kills by contact, suppressor SFX).
 function fireBullet(id, drift) {
-  if (!takeAmmo(id, false)) return;
+  const slot = takeAmmo(id, false);
+  if (slot < 0) return;
   const d = DELTA[snake.dir];
   const vertical = snake.dir === 'up' || snake.dir === 'down';
   playerShots.push({
-    type: id, status: 0, dir: snake.dir,
+    type: id, status: 0, dir: snake.dir, slot,
     x: snake.x, y: snake.y - PLAYER_SHOT_GUN_Y,
     yAlt: snake.y,                       // "Player shots use two Ys (Y and Y - 14)"
     vx: vertical ? drift : d.dx * PLAYER_SHOT_SPEED,
@@ -6576,16 +6842,17 @@ function chkSmgShot() {
   if (++smgTimer < 2) return;
   smgTimer = 0;
   smgBurst = (smgBurst % 8) + 1;
-  fireBullet(SUB_MACHINE_GUN, SMG_DRIFT[smgBurst - 1]);
+  fireBullet(SUB_MACHINE_GUN, smgDrift(smgBurst, snake.dir));
 }
 
 // ChkGrenadeShot (grenade.asm:8): a lobbed grenade — the REAL position (yAlt) moves at +-3
 // on the facing axis; the DRAWN Y adds the GrenadeYOffsets parabola; flies over tiles.
 function fireGrenade() {
-  if (!takeAmmo(GRENADE_LAUNCHER, false)) return;
+  const slot = takeAmmo(GRENADE_LAUNCHER, false);
+  if (slot < 0) return;
   const d = DELTA[snake.dir];
   playerShots.push({
-    type: GRENADE_LAUNCHER, status: 0, timer: 0x18,
+    type: GRENADE_LAUNCHER, status: 0, timer: 0x18, slot,
     x: snake.x, y: snake.y - 16, yAlt: snake.y - 16,
     vx: d.dx * 3, vy: d.dy * 3,
   });
@@ -6594,11 +6861,12 @@ function fireGrenade() {
 
 // ChkFireRocket (rocket.asm:8): one at a time, +-5 straight, kills by contact in flight.
 function fireRocket() {
-  if (activeShotsOf(ROCKET_LAUNCHER) > 0) return;     // "already a rocket in the room"
-  if (!takeAmmo(ROCKET_LAUNCHER, false)) return;
+  if (!shotSlot0Free()) return;                       // ld a,(PlayerShotsList) / and a / ret nz
+  const slot = takeAmmo(ROCKET_LAUNCHER, false);
+  if (slot < 0) return;
   const d = DELTA[snake.dir];
   playerShots.push({
-    type: ROCKET_LAUNCHER, status: 0, dir: snake.dir,
+    type: ROCKET_LAUNCHER, status: 0, dir: snake.dir, slot,
     x: snake.x, y: snake.y - 16, yAlt: snake.y,
     vx: d.dx * 5, vy: d.dy * 5,
   });
@@ -6607,11 +6875,12 @@ function fireRocket() {
 
 // ChkPBombShot (plasticbomb.asm:7): placed one step ahead, fused 0x30 iterations.
 function placeBomb() {
-  if (activeShotsOf(PLASTIC_BOMB) > 0) return;        // only one set at a time
-  if (!takeAmmo(PLASTIC_BOMB, true)) return;
+  if (!shotSlot0Free()) return;                       // slot 0 only (plasticbomb.asm:22)
+  const slot = takeAmmo(PLASTIC_BOMB, true);
+  if (slot < 0) return;
   const o = PBOMB_OFFSET[snake.dir];
   playerShots.push({
-    type: PLASTIC_BOMB, status: 0, timer: 0x30,       // the ROM's 0x30-iteration fuse
+    type: PLASTIC_BOMB, status: 0, timer: 0x30, slot, // the ROM's 0x30-iteration fuse
     x: snake.x + o[0], y: snake.y + o[1], vx: 0, vy: 0,
   });
   playBuf(assets.bombSetBuf);                         // SFX 0x17
@@ -6619,19 +6888,21 @@ function placeBomb() {
 
 // ChkLMineShot (mine.asm:7): armed at Snake's spot, passive, kills by contact (max 3).
 function placeMine() {
-  if (!takeAmmo(LAND_MINE, true)) return;
-  playerShots.push({ type: LAND_MINE, status: 0, x: snake.x, y: snake.y, vx: 0, vy: 0 });
+  const slot = takeAmmo(LAND_MINE, true);
+  if (slot < 0) return;
+  playerShots.push({ type: LAND_MINE, status: 0, slot, x: snake.x, y: snake.y, vx: 0, vy: 0 });
   playBuf(assets.bombSetBuf);                         // SFX 0x17 (shared set sound)
 }
 
 // ChkMissileShot (missile.asm:8): one remote missile; the direction keys steer it
 // (ControlMissile) and Snake FREEZES while it flies (NormalCtrl returns on shot ID 7).
 function fireMissile() {
-  if (activeShotsOf(MISSILE) > 0) return;
-  if (!takeAmmo(MISSILE, true)) return;
+  if (!shotSlot0Free()) return;                       // slot 0 only (missile.asm:23)
+  const slot = takeAmmo(MISSILE, true);
+  if (slot < 0) return;
   const d = DELTA[snake.dir];
   playerShots.push({
-    type: MISSILE, status: 0, dir: snake.dir,
+    type: MISSILE, status: 0, dir: snake.dir, slot,
     x: snake.x, y: snake.y - 0x10, yAlt: snake.y,
     vx: d.dx * 4, vy: d.dy * 4,
   });
@@ -6642,8 +6913,17 @@ function fireMissile() {
 // |actorY+offY−shotY| < distY then the X test, both strict). `explosion` picks the
 // ActorShapeExpl shapes (guards/prisoners shape 1 = ±20; MGK shape 0x1B = ±20/±16) vs the
 // projectile shape 0 box.
+// ChkPlayerShots (damagetoenemy.asm:7-42) only scans the FIRST N shot slots for hits, where N is
+// the header byte of the weapon in use — and bails out entirely when no weapon is in use
+// (`ld a,(WeaponInUse) / and a / ret z`). A shot parked in a higher slot still flies and draws, it
+// just can't damage anything. (#61)
+function shotCanDamage(b) {
+  if (b.slot == null) return true;                 // room actors / synthetic shots aren't pooled
+  return b.slot < (selectedWeapon ? WEAPON_SHOT_SLOTS[selectedWeapon] : 0);
+}
 function shotTargetsAll(b, explosion) {
   const out = [];
+  if (!shotCanDamage(b)) return out;
   for (const t of [...guards, prisoner, boss, ...scorpions, powerSwitch,
                    ...jetpacks, ...dogs, duck, ...midBosses, hindD, bigBoss]) {
     if (!t) continue;
@@ -6912,6 +7192,7 @@ function update() {
     return;
   }
 
+  flushRoomEntryInit();   // SetupEnemyRoom, now that Snake sits at the room's entry point (#113)
   updateDoors();   // advance door open animations + refresh the enter latch
   if (snake.invulnTimer > 0) snake.invulnTimer--;   // post-hit i-frames (DamageDelayTimer)
 
@@ -6983,6 +7264,11 @@ function update() {
   // and missiles).
   if ((tickCounter & 1) === 0) updatePlayerShots();
   takePendingCheckpoint();   // snapshot once the entry position has settled (StoreGameStat)
+  // ControlsTrigger is rebuilt from the input EDGE every iteration, so an unconsumed trigger does
+  // not survive into the next one. Clearing here keeps these latches true one-frame edges —
+  // otherwise a stale 'up' from seconds ago would mount the next ladder you walked onto. (#52/#64)
+  missileDirTrigger = null;
+  ladderDirTrigger = null;
 }
 
 // PunchLogic (control mode 1): hold the punch frame, then return to walk. Presses are ignored
@@ -7049,7 +7335,9 @@ function normalControl() {
   // pool), player controls are IGNORED — the direction keys steer the missile instead
   // (ControlMissile); Snake stands frozen until it explodes.
   if (playerShots.some((s) => s.type === MISSILE && s.status === 0)) {
-    const dir = currentDir();
+    // ControlMissile (missile.asm:112-132) reads ControlsTrigger — the missile re-aims only on a
+    // FRESH direction press, not on the held direction. (#64)
+    const dir = missileDirTrigger; missileDirTrigger = null;
     if (dir) steerMissile(dir);
     punchQueued = false;
     snake.state = 'idle';
@@ -7071,7 +7359,9 @@ function normalControl() {
       snake.controlMod = CONTROL_PUNCH;
       snake.anim = ANIM_PUNCH;       // punch overrides the box/walk animation (chkPunch sets it)
       snake.punchTimer = PUNCH_TICKS;
-      playPunch();
+      // chkPunch itself plays NO sound — an air punch is SILENT. The only punch sounds are
+      // SFX 9 "punch wall" from ChkPunchColl (below) and SFX 8 "punch guard" from
+      // ChkPunchEnemy4, played inside tryPunchGuard when a swing actually connects. (#55)
       // ChkPunchColl (Banks0123.asm:9017): probe the tile one cell ahead in the facing direction;
       // on a solid tile play SFX 9 "punch wall" (distinct from the 0x0A breakable-wall sound). (#108)
       if (blocked(snake.x, snake.y, snake.dir)) playBuf(assets.punchWallBuf);
@@ -7148,7 +7438,10 @@ function laddersWalk() {
 // PlayerX (no X snap).
 function chkStartClimb() {
   const tx = (snake.x - 4) >> 3, ty = snake.y >> 3;
-  if (!isLadder(tx, ty) || !held.has('dir:up')) return;
+  // ChkStartClimb (Banks0123.asm:9338): `ld a,(ControlsTrigger) / rra / ret nc` — a FRESH Up press
+  // mounts the ladder, not a held Up. (#52)
+  if (!isLadder(tx, ty) || ladderDirTrigger !== 'up') return;
+  ladderDirTrigger = null;
   snake.y = LADDER_CLIMB_FLOOR_Y;       // ROM snaps PlayerY to 0x99 on mount (X unchanged)
   snake.controlMod = CONTROL_LADDER_CLIMB;
   snake.anim = ANIM_LADDER;
@@ -7177,8 +7470,11 @@ function laddersClimb() {
 // clamp pins it exactly to the floor.)
 function chkExitLadders() {
   if (currentRoom !== 224 || snake.y < LADDER_CLIMB_FLOOR_Y) return;
-  const d = currentDir();
+  // ChkExitLadders (Banks0123.asm:9378): `and 1100b` on ControlsTrigger — a FRESH Left/Right
+  // press steps off at the floor, not a held one. (#52)
+  const d = ladderDirTrigger;
   if (d !== 'left' && d !== 'right') return;
+  ladderDirTrigger = null;
   snake.dir = d;
   snake.y = LADDER_WALK_FLOOR_Y;
   snake.controlMod = CONTROL_LADDER_WALK;
@@ -7362,8 +7658,18 @@ function openMenu(mode) {
   // arrays keep their contents for the bag recovery (DrawWeaponMenu/DrawEquipMenu,
   // Banks0123.asm:1974/2171; MenuWeaponMove :11469).
   menuEntries = equipRemoved ? [] : (mode === 'weapon' ? ownedWeaponIds() : [...items.keys()]);
-  const i = menuEntries.indexOf(mode === 'weapon' ? selectedWeapon : selectedItem);
-  selectIdx = i >= 0 ? i + 1 : 1;
+  // GetMenuCursor (Banks0123.asm:11571-11604): with something selected the cursor lands on it;
+  // with NOTHING selected (`and a / jr z, GetMenuCursor4`) it walks the slots and stops at the
+  // first EMPTY one, falling back to slot 1 if every slot is full. (Was always slot 1 — #89.)
+  const sel = mode === 'weapon' ? selectedWeapon : selectedItem;
+  const i = menuEntries.indexOf(sel);
+  if (i >= 0) selectIdx = i + 1;
+  else {
+    const slots = mode === 'weapon' ? 7 : 25;              // the menu grids the ROM walks
+    let empty = 0;
+    for (let k = 0; k < slots; k++) if (!menuEntries[k]) { empty = k + 1; break; }
+    selectIdx = empty || 1;
+  }
   menuHoldWait = 8;
   menuDirTrigger = null; menuFireTrigger = false;
 }
@@ -7508,8 +7814,8 @@ function chkUseItem() {
 //   - The ROM saves/restores EnemyList/power/radio/alert because DrawBinocRoom overwrites the shared
 //     room RAM; this port renders from a transient snapshot and never mutates play state, so there
 //     is nothing to back up.
-// The crosshair sprite art (LoadSprTarget/SprTarget) isn't an exported asset, so it is reproduced
-// pixel-exact inline from the decoded ROM pattern (see BINOC_RETICLE / drawBinocReticle).
+// The crosshair sprite art (LoadSprTarget/SprTarget) IS an exported asset — assets/target.png +
+// target.json, written by MetalGearSpriteMover --export-target (see drawBinocReticle).
 const TIMER_BINOC = 0x80;          // TimerBinocular: iterations an adjacent room is shown (128)
 let binoc = null;                  // null = not active; else { home, mode:'idle'|'show', timer, lookDir, snap }
 let binocDirTrigger = null;        // ControlsTrigger edge: a direction pressed this frame (idle only)
@@ -7577,71 +7883,50 @@ function drawBinoculars() {
   if (s.img) ctx.drawImage(s.img, 0, 0, VIEW_W, VIEW_H);
   const sd = activeDoors, si = roomItems, sg = guards;
   activeDoors = s.doors; roomItems = s.items; guards = s.guards;
-  drawRoomItems(); drawDoors(); drawGuard();
+  drawRoomItems(); drawDoors();
+  // DrawBinocRoom (Banks0123.asm:12572-12580): after SetupEnemyRoom, if BinocularDir == 1 (the
+  // PLAYER'S OWN room) every enemy sprite attribute is overwritten with 0xE0 — the off-screen Y —
+  // so the idle view shows NO actors; they draw only while peeking a neighbour. The room image,
+  // items and doors are NOT wiped (RenderRoom/AddRoomItems/DrawDoors run before the erase), so
+  // only the guard pass is gated here. (Was: home-room guards visible in the idle view — issue #87.)
+  if (binoc.mode === 'show') drawGuard();
   activeDoors = sd; roomItems = si; guards = sg;
-  drawBinocReticle(VIEW_W >> 1, VIEW_H >> 1);
+  drawBinocReticle();
   // txtTelescope 0C420h -> X=0x20 (32), Y=0xC4 (196): the banner sits in the bottom strip, not the
   // room view (PrintTextXY; word is 0xYYXX, calibrated against txtLife 0xC110 -> (16,193)).
   drawText('TELESCOPE MODE', 32, 196);
   if (binoc.mode === 'show' && binoc.lookDir) drawBinocArrow(binoc.lookDir);   // ArrowsChars
 }
-// Centre target reticle — the ROM's LoadSprTarget crosshair (SprTarget, gfx/targetspr.asm), a 32x32
-// WHITE (BinocularSprCol = colour 0x0E) target laid out 2x2 (patterns 10h/14h/18h/1Ch). This is the
-// EXACT art, decoded from the UnpackGfx (Banks0123.asm:3684) RLE: four corner brackets, a continuous
-// centred plus with diamond bulges, and four tick marks. (Was a green circle — issue #14; the
-// hand-drawn approximation that replaced it diverged from the real art — issue #118.)
-const BINOC_RETICLE = [
-  '.#######................#######.',
-  '########................########',
-  '###..........................###',
-  '##............................##',
-  '##............................##',
-  '##............................##',
-  '##.............##.............##',
-  '##...........######...........##',
-  '...............##...............',
-  '...............##...............',
-  '.............######.............',
-  '...............##...............',
-  '...............##...............',
-  '.......#..#....##....#..#.......',
-  '.......#..#....##....#..#.......',
-  '......####################......',
-  '......####################......',
-  '.......#..#....##....#..#.......',
-  '.......#..#....##....#..#.......',
-  '...............##...............',
-  '...............##...............',
-  '.............######.............',
-  '...............##...............',
-  '...............##...............',
-  '##...........######...........##',
-  '##.............##.............##',
-  '##............................##',
-  '##............................##',
-  '##............................##',
-  '###..........................###',
-  '########................########',
-  '.#######................#######.',
-];
-function drawBinocReticle(cx, cy) {
-  ctx.save();
-  ctx.fillStyle = '#ffffff';
-  const x0 = Math.round(cx) - 16, y0 = Math.round(cy) - 16;   // 32x32 centred (ROM sprites X 112-143, Y 80-111)
-  for (let r = 0; r < BINOC_RETICLE.length; r++) {
-    const row = BINOC_RETICLE[r];
-    for (let c = 0; c < row.length; c++) if (row[c] === '#') ctx.fillRect(x0 + c, y0 + r, 1, 1);
-  }
-  ctx.restore();
+// Centre target reticle — the ROM's LoadSprTarget crosshair (SprTarget, gfx/targetspr.asm,
+// Banks0123.asm:3226): UnpackGfx expands it into the sprite pattern table at 0F880h = patterns
+// 10h/14h/18h/1Ch, four 16x16 hardware sprites laid out 2x2 by BinocularSprAtt
+// (logic/menuequipment.asm:355-360) at (112,80)-(143,111), every colour byte flood-filled 0Eh =
+// WHITE (menuequipment.asm:343-347). Exported byte-exact to assets/target.png by
+// `dotnet run --project Tools/MetalGearSpriteMover -- --export-target`; target.json carries the
+// ROM screen origin so nothing about the geometry is hand-written here.
+// (Was a green circle — issue #14; then a hand-drawn approximation, then an inline decoded
+// bitmap — issue #118, now a proper exported asset.)
+// Fallback origin if target.json is missing: the BinocularSprAtt top-left sprite (X 70h, Y 50h).
+const BINOC_RETICLE_XY = { x: 0x70, y: 0x50 };
+function drawBinocReticle() {
+  if (!targetImg) return;
+  const x = targetMeta ? targetMeta.originX : BINOC_RETICLE_XY.x;
+  const y = targetMeta ? targetMeta.originY : BINOC_RETICLE_XY.y;
+  ctx.drawImage(targetImg, x, y);
 }
 // ArrowsChars (Banks0123.asm:12586-12603): the peek-direction indicator is a single FONT glyph
-// (up 9Ah / down 9Bh / left 99h / right 3Ch) drawn with DrawChar in the standard text colour at
-// XY 0C0C4h -> X=0xC4 (196), Y=0xC0 (192) — bottom strip, NOT a tinted shape near the reticle.
+// (up 9Ah / down 9Bh / left 99h / right 3Ch) drawn with DrawChar in the standard text colour.
+// COORDINATE ORDER: `ld de, 0C0C4h` is an IMMEDIATE, so D = 0C0h and E = 0C4h directly — no
+// endianness. DrawChar hands `de` straight to VDP_Copy_Byte, which takes D = X, E = Y (see
+// DrawItemHUD's own `ld de,0E0C2h ; DX,DY`). So this is X=192, Y=196 — the same line as the
+// txtTelescope banner at (32,196). A `dw` word is the other way round only because
+// PrintTextGetXY reads it low-byte-first into D; applying that rule to this immediate shipped a
+// transposed (196,192) in #115.
 const BINOC_ARROW_GLYPH = { up: 0x9A, down: 0x9B, left: 0x99, right: 0x3C };
 function drawBinocArrow(dir) {
   const g = BINOC_ARROW_GLYPH[dir];
   if (g == null) return;
-  drawText(String.fromCharCode(g), 196, 192);
+  drawText(String.fromCharCode(g), 192, 196);
 }
 
 // The equipment-screen consume path of DecItemUnits (Banks0123.asm:1824, type C=2): count -1;
@@ -7905,11 +8190,26 @@ function renderHud() {
 
   // WEAPON (DrawWeaponHUD): box (159,193,58x18) + weapon icon (160,194) + 3-digit ammo (192,200).
   drawHudBox(159, 193, 58, 18);
-  drawHudIcon('w', selectedWeapon, 160, 194);
+  // DrawWeaponHUD (Banks0123.asm:2110-2120): the icon lands at `ld de,0A0C2h` = (160,194) for a
+  // 32x16 weapon; a 16x16 one (ids 5-7) adds +8 to X to centre it in the same box -> 168. (#81)
+  drawHudIcon('w', selectedWeapon, selectedWeapon >= 5 ? 168 : 160, 194);
   if (weapons.has(selectedWeapon)) drawText(ammo3(weapons.get(selectedWeapon)), 192, 200);
   // ITEM (DrawItemHUD): box (222,193,27x18) + item icon (224,194).
   drawHudBox(222, 193, 27, 18);
   drawHudIcon('i', selectedItem, 224, 194);
+  drawCardNumber();
+}
+// DrawItemHUD's tail (Banks0123.asm:2296-2311): for a KEYCARD (SELECTED_CARD1 <= item <
+// SELECTED_RATION) it draws the card's "identification number" — the item's stored amount — as a
+// single character at `ld de,0F0C8h`. That is an IMMEDIATE, so D = 0F0h = X = 240 and E = 0C8h =
+// Y = 200 (DrawChar hands `de` to VDP_Copy_Byte, which is D=X/E=Y). (#44)
+// The stored amount is BCD in the ROM (31h..38h for cards 1-8) and a raw integer here, so take the
+// low nibble — that is the digit the ROM's DrawChar receives. The wider BCD gap stays open as #68.
+function drawCardNumber() {
+  if (selectedItem < SELECTED_CARD1 || selectedItem >= SELECTED_RATION) return;
+  const amount = items.get(selectedItem);
+  if (!amount) return;
+  drawText(String(amount & 0x0F), 240, 200);
 }
 
 // The blinking CALL sign (DrawCallTimer, logic/hud.asm:25-55): drawn only while a call rings

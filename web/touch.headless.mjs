@@ -115,6 +115,90 @@ const test = `
   __check('#107 H non-water + L deep -> DEEP (L consulted)', snake.anim===ANIM_DEEP_WATER);
   setT(hcol,0x6D); setT(lcol,0x75); snake.anim=ANIM_NORMAL; snake.invulnTimer=0; chkWater();
   __check('#107 H brick + L deep -> DEEP (brick checked last)', snake.anim===ANIM_DEEP_WATER);
+
+  // ===== #51 punch duration =====
+  // chkPunch (Banks0123.asm:8949): "ld a,8 / ld (PunchCnt),a".
+  __check('#51 PUNCH_TICKS is the ROM PunchCnt of 8', PUNCH_TICKS === 8);
+  reset(); currentRoom=0; selectedItem=0; snake.x=200; snake.y=150; snake.state='idle';
+  snake.controlMod=CONTROL_NORMAL; punchQueued=true; normalControl();
+  __check('#51 a swing locks control in PUNCH for 8 iterations',
+    snake.controlMod===CONTROL_PUNCH && snake.punchTimer===8, 't='+snake.punchTimer);
+  let n=0; while (snake.controlMod===CONTROL_PUNCH && n<30) { punchControl(); n++; }
+  __check('#51 ...and releases after exactly 8', n===8, 'n='+n);
+
+  // ===== #55 punch SFX only on contact =====
+  // chkPunch plays nothing; SFX 9 comes from ChkPunchColl on a solid probe, SFX 8 from
+  // ChkPunchEnemy4 on a landed hit. An air punch is silent.
+  const sfx=[]; const realPlayBuf=playBuf; playBuf=(b)=>{ if(b) sfx.push(b); };
+  assets.punchBuf='SFX8'; assets.punchWallBuf='SFX9';
+  reset(); currentRoom=0; guards=[]; guard=null;        // nothing to hit, open ground
+  snake.x=200; snake.y=150; snake.state='idle'; snake.controlMod=CONTROL_NORMAL;
+  sfx.length=0; punchQueued=true; normalControl();
+  __check('#55 an AIR punch is silent', sfx.length===0, 'sfx='+JSON.stringify(sfx));
+  // facing a solid tile -> SFX 9 only
+  reset(); currentRoom=0; guards=[]; guard=null;
+  snake.x=200; snake.y=150; snake.dir='right'; snake.state='idle'; snake.controlMod=CONTROL_NORMAL;
+  const W2=assets.collision.width;
+  assets.collision.solid[(150>>3)*W2 + ((200+7)>>3)] = 1;
+  sfx.length=0; punchQueued=true; normalControl();
+  __check('#55 punching a WALL plays SFX 9 only', sfx.length===1 && sfx[0]==='SFX9',
+    JSON.stringify(sfx));
+  // connecting with a guard -> SFX 8
+  reset(); currentRoom=0; snake.x=200; snake.y=150; snake.dir='left';
+  snake.state='idle'; snake.controlMod=CONTROL_NORMAL;
+  guards=[makeGuard({x:190,y:150,dir:'right',path:[[190,150]]})]; guard=guards[0];
+  sfx.length=0; punchQueued=true; normalControl();
+  __check('#55 a CONNECTING punch plays SFX 8', sfx.includes('SFX8'), JSON.stringify(sfx));
+  playBuf=realPlayBuf;
+
+  // ===== #52 ladder mount/dismount need a fresh press =====
+  // ChkStartClimb (:9338) reads the Up TRIGGER; ChkExitLadders (:9378) the Left/Right trigger.
+  reset(); currentRoom=224; snake.controlMod=CONTROL_NORMAL;
+  snake.x=0xD8; snake.y=LADDER_CLIMB_FLOOR_Y;
+  const lt=(snake.y>>3)*assets.collision.width + ((snake.x-4)>>3);
+  assets.collision.tiles[lt]=0x08;          // isLadder tile
+  held.add('dir:up'); ladderDirTrigger=null;            // HELD up, no fresh press
+  chkStartClimb();
+  __check('#52 a HELD Up does not mount the ladder', snake.controlMod===CONTROL_NORMAL);
+  ladderDirTrigger='up';
+  chkStartClimb();
+  __check('#52 a fresh Up press mounts it', snake.controlMod===CONTROL_LADDER_CLIMB);
+  __check('#52 the mount consumes the trigger', ladderDirTrigger===null);
+  // dismount
+  snake.y=LADDER_CLIMB_FLOOR_Y; ladderDirTrigger=null; held.add('dir:left');
+  chkExitLadders();
+  __check('#52 a HELD Left does not step off', snake.controlMod===CONTROL_LADDER_CLIMB);
+  ladderDirTrigger='left'; chkExitLadders();
+  __check('#52 a fresh Left press steps off onto the floor',
+    snake.controlMod===CONTROL_LADDER_WALK && snake.y===LADDER_WALK_FLOOR_Y);
+  held.clear();
+
+  // ===== #49 room 78's second collision shape =====
+  __check('#49 shape 2 matches BoxColliderDat (narrower than shape 0)',
+    JSON.stringify(PROBES_SHAPE2.up)===JSON.stringify([[-5,-4],[-5,3]]) &&
+    JSON.stringify(PROBES_SHAPE2.left)===JSON.stringify([[-4,-5],[3,-5]]) &&
+    JSON.stringify(PROBES_SHAPE2.right)===JSON.stringify([[-4,4],[3,4]]));
+  reset();
+  const W3=assets.collision.width;
+  // Pick an X where the two shapes probe DIFFERENT tile columns: shape 2's right probe is x+4,
+  // shape 0's is x+7. At x=105 that is column 13 vs 14, so each can be isolated.
+  const PX=105, PY=100;
+  const colS2=(PX+4)>>3, colS0=(PX+7)>>3;
+  __check('#49 fixture isolates the two shapes (different tile columns)', colS2 !== colS0,
+    'shape2 col='+colS2+' shape0 col='+colS0);
+  assets.collision.solid.fill(0); assets.collision.solid[(PY>>3)*W3 + colS2]=1;
+  currentRoom=0;  const base = blocked(PX,PY,'right');
+  currentRoom=78; const r78  = blocked(PX,PY,'right');
+  __check('#49 a shape-2-only obstacle blocks ONLY in room 78',
+    base === false && r78 === true, 'room0=' + base + ' room78=' + r78);
+  assets.collision.solid.fill(0); assets.collision.solid[(PY>>3)*W3 + colS0]=1;
+  currentRoom=0;  const s0a = blocked(PX,PY,'right');
+  currentRoom=78; const s0b = blocked(PX,PY,'right');
+  __check('#49 a shape-0 obstacle still blocks in BOTH rooms', s0a===true && s0b===true);
+  assets.collision.solid.fill(0);
+  currentRoom=78;
+  __check('#49 open ground is still passable in room 78', blocked(PX,PY,'right')===false);
+  currentRoom=0;
 })();
 `;
 

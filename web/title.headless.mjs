@@ -73,13 +73,19 @@ const test = `
     !!whiteFill && partial && partial.a[4] === 10 && partial.a[5] === 0x28 && partial.a[6] === 0x40,
     partial ? 'lines='+partial.a[4] : 'none');
   iter(49 * 2 - 20);
-  __check('after 98 iterations: the hold (WaitCounter 0x20)', titlePhase === 'konami-hold' && titleCnt === 0x20);
+  // #45: GS_KonamiLogo ends "xor a / jp NextSubstatusT", seeding WaitCounter = 0; GS_LoadIntroGfx
+  // "dec (hl) / ret nz" then wraps 0 -> 0FFh, so the hold is 256 iterations (was 0x20 = 8x short).
+  __check('#45 after 98 iterations: the hold, seeded to the ROM 256 (WaitCounter wrap)',
+    titlePhase === 'konami-hold' && titleCnt === 256 && KONAMI_HOLD === 256, 'cnt='+titleCnt);
   __calls.length = 0; drawTitle();
   const full = __calls.find((c) => c.m === 'drawImage' && c.a[0].__konami);
   __check('hold shows all 49 lines', full && full.a[4] === 49);
 
   // --- the swoop: SFX 0x47, 11 accumulated draw steps (no clears between), then the wipe ---
   iter(0x20);
+  __check('#45 the logo is STILL held after 0x20 iterations (the old, too-short value)',
+    titlePhase === 'konami-hold', 'phase='+titlePhase);
+  iter(256 - 0x20);
   __check('hold elapses into the swoop with SFX 0x47', titlePhase === 'swoop' && titleCnt === 12 && sfx.includes('SFX47'));
   __tcalls.length = 0;
   iter(11);

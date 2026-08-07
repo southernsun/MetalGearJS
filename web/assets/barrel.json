@@ -1,5 +1,9 @@
 {
   "frameWidth": 16,
-  "frameHeight": 16,
-  "frames": 6
+  "frameHeight": 144,
+  "frames": 2,
+  "offsetX": -8,
+  "offsetY": 0,
+  "rows": 9,
+  "source": "SprRollingBarrel (gfx/sprites.asm); layout RollBarrels1/2 + SprOffsets7 (data/actorspriteattr.asm)"
 }

@@ -107,6 +107,33 @@ const test = `
     const stars = __calls.filter(c => c.m === 'drawImage' && c.a[0] === fontImg && c.a[1] === fontMeta.starX).length;
     __check('class ' + cls + ' -> ' + (cls+1) + ' stars', stars === cls + 1, 'stars=' + stars);
   }
+
+  // ===== #81 small weapon icons sit +8 in the HUD box =====
+  // DrawWeaponHUD (Banks0123.asm:2110-2120): base "ld de,0A0C2h" = (160,194); a 16x16 weapon
+  // (ids 5-7) does "ld a,8 / add a,d" -> X = 168.
+  const iconX = (wid) => {
+    selectedWeapon = wid; weapons.set(wid, 5); __calls.length = 0; renderHud();
+    const c = __calls.find((c) => c.m === 'drawImage' && c.a[0] === hudIcons && c.a[6] === 194);
+    return c ? c.a[5] : null;
+  };
+  __check('#81 a 32x16 weapon icon draws at x=160', iconX(1) === 160, 'x=' + iconX(1));
+  __check('#81 a 16x16 weapon (id 5) draws at x=168', iconX(5) === 168, 'x=' + iconX(5));
+  __check('#81 ids 6 and 7 are offset too', iconX(6) === 168 && iconX(7) === 168);
+
+  // ===== #44 the keycard identification number in the item box =====
+  // DrawItemHUD's tail: DrawChar at "ld de,0F0C8h" — an IMMEDIATE, so D=0F0h=X=240, E=0C8h=Y=200.
+  // The stored amount is the card's id number (ItemTakeAmount 31h..38h); the digit is its low nibble.
+  const cardDigitAt = (item, amount) => {
+    selectedItem = item; if (amount != null) items.set(item, amount);
+    __calls.length = 0; renderHud();
+    return __calls.filter((c) => c.m === 'drawImage' && c.a[0] === fontImg && c.a[5] === 240 && c.a[6] === 200);
+  };
+  __check('#44 CARD1 draws its number at (240,200)', cardDigitAt(SELECTED_CARD1, 0x31).length === 1);
+  __check('#44 CARD4 draws too', cardDigitAt(SELECTED_CARD1 + 3, 0x34).length === 1);
+  items.set(SELECTED_RATION, 3);
+  __check('#44 a NON-card item draws no number', cardDigitAt(SELECTED_RATION, 3).length === 0);
+  selectedItem = 0;
+  __check('#44 no item selected draws no number', cardDigitAt(0, null).length === 0);
 })();
 `;
 

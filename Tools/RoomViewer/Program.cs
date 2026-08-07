@@ -1,5 +1,6 @@
 ﻿using MetalGear.RoomViewer.Game;
 using MetalGear.RoomViewer.UI;
+using MetalGear.RoomViewer.Render;
 
 namespace MetalGear.RoomViewer;
 
@@ -235,6 +236,47 @@ internal static class Program
     }
 
     /// <summary>
+    /// The ELECTRIFIED-FLOOR rooms and the palette slot PowerSwitchLogic animates
+    /// (logic/actors/powerswitch.asm:46-58): slot 9 normally, slot 5 in rooms 40 and 116.
+    /// ChkElectricFloor (logic/damageelectric.asm:8-26) lists the same five rooms.
+    /// </summary>
+    private static readonly Dictionary<int, int> ElectricFloorSlot = new()
+    {
+        [16] = 9, [37] = 9, [110] = 9, [40] = 5, [116] = 5,
+    };
+
+    /// <summary>
+    /// A 1-bit stencil of the pixels a room draws through one palette slot.
+    ///
+    /// PowerSwitchLogic doesn't repaint tiles — it rewrites a single PALETTE ENTRY to
+    /// rgb(BRIGHT,BRIGHT,BRIGHT), so every pixel using that slot pulses and everything else is
+    /// untouched. The browser port renders rooms from a flat PNG with no palette indices left, so
+    /// we export where that slot lands and let the port tint just those pixels.
+    ///
+    /// Derived, not hand-authored: render the room twice with the slot forced to two different
+    /// colours and keep the pixels that differ. A palette block is `db slot, b1, b2, ... 0FFh`
+    /// with b1 = R&lt;&lt;4 | B and b2 = G (see SetPalette / data/palettes.asm).
+    /// </summary>
+    private static Bitmap RenderElectricStencil(RoomRenderer renderer, int room, int slot)
+    {
+        var probeA = new byte[] { (byte)slot, 0x70, 0x00, 0xFF };   // R7 G0 B0
+        var probeB = new byte[] { (byte)slot, 0x07, 0x07, 0xFF };   // R0 G7 B7
+        using var a = renderer.DrawRoom(room, probeA);
+        using var b = renderer.DrawRoom(room, probeB);
+        var mask = new Bitmap(a.Width, a.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        int lit = 0;
+        for (int y = 0; y < a.Height; y++)
+            for (int x = 0; x < a.Width; x++)
+                if (a.GetPixel(x, y).ToArgb() != b.GetPixel(x, y).ToArgb())
+                {
+                    mask.SetPixel(x, y, Color.White);   // tinted at draw time; alpha is the stencil
+                    lit++;
+                }
+        Console.WriteLine($"  room {room}: electric stencil slot {slot} -> {lit} px");
+        return mask;
+    }
+
+    /// <summary>
     /// Web export: render a connected cluster of rooms (each a 256x192 PNG plus a
     /// 32x24 collision JSON under rooms/), plus connections.json and manifest.json.
     /// Every file is derived from the same data tables the in-game routines use, so
@@ -308,6 +350,9 @@ internal static class Program
             if (darkRooms.Contains(room))
                 using (var bmp = renderer.DrawRoom(room, darkPal))
                     bmp.Save(Path.Combine(roomsDir, $"{room}.dark.png"), System.Drawing.Imaging.ImageFormat.Png);
+            if (ElectricFloorSlot.ContainsKey(room))
+                using (var bmp = RenderElectricStencil(renderer, room, ElectricFloorSlot[room]))
+                    bmp.Save(Path.Combine(roomsDir, $"{room}.electric.png"), System.Drawing.Imaging.ImageFormat.Png);
             int[] tiles = renderer.UnpackTileNumbers(room);
             WriteCollisionJson(Path.Combine(roomsDir, $"{room}.collision.json"), 32, 24, ComputeSolid(data, room, tiles), tiles);
         }

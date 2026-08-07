@@ -7,7 +7,9 @@
 //   - #116 "TELESCOPE MODE" banner at txtTelescope 0C420h -> (32,196)
 //   - #115 direction arrow as the ROM ArrowsChars font glyph (right 3Ch) at 0C0C4h -> (196,192)
 //   - #117 full 212-line clear + black HUD-strip backdrop (no stale HUD bleed-through)
-//   - #118 reticle blitted from the decoded SprTarget bitmap (white 1x1 pixels = '#' count)
+//   - #118 reticle blitted from the EXPORTED SprTarget asset (target.png/target.json) at the
+//     BinocularSprAtt origin (112,80), 32x32 — no hand-written geometry in game.js
+//   - #87 the own-room (idle) view hides actors; only a peeked neighbour draws them
 // Run: node web/binoc.headless.mjs
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -16,6 +18,9 @@ import { fileURLToPath } from 'node:url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const fontMetaJson = JSON.parse(fs.readFileSync(path.join(dir, 'assets/font.json'), 'utf8'));
+// target.json is written by `dotnet run --project Tools/MetalGearSpriteMover -- --export-target`
+// straight from SprTarget + BinocularSprAtt, so these numbers ARE the ROM's (#118).
+const targetMetaJson = JSON.parse(fs.readFileSync(path.join(dir, 'assets/target.json'), 'utf8'));
 
 const calls = [];
 function makeCtx() {
@@ -53,16 +58,20 @@ function check(name, cond, extra='') { results.push({ name, ok: !!cond, extra })
 sandbox.__check = check;
 sandbox.__calls = calls;
 sandbox.__fontMeta = fontMetaJson;
+sandbox.__targetMeta = targetMetaJson;
 
 const test = `
 ;(function(){
   fontImg = {}; fontMeta = __fontMeta;
+  targetImg = { __asset: 'target.png' }; targetMeta = __targetMeta;
   // A transient snapshot stub so we never touch the room/door/item/guard build machinery.
   const fakeSnap = (n) => ({ room: n, img: null, doors: [], items: [null,null,null], guards: [] });
   binocSnapshot = fakeSnap;
   // Draw helpers irrelevant to the binoculars-specific overlays — neutralise so the draw test only
-  // sees the clear / strip / banner / arrow / reticle calls.
-  drawRoomItems = () => {}; drawDoors = () => {}; drawGuard = () => {};
+  // sees the clear / strip / banner / arrow / reticle calls, but COUNT the guard pass (#87).
+  let guardDraws = 0, itemDraws = 0, doorDraws = 0;
+  drawRoomItems = () => { itemDraws++; }; drawDoors = () => { doorDraws++; };
+  drawGuard = () => { guardDraws++; };
 
   // --- enter (ExitEquipMenu -> GAME_MODE_BINOCULARS, BinoculStatus 0 / BinocularDir 1) ---
   currentRoom = 10; gameState = 'play';
@@ -118,24 +127,51 @@ const test = `
   // #116 banner first glyph at (32,196)
   __check('#116 TELESCOPE MODE banner first glyph at (32,196)',
     __calls.some(c => c.m === 'drawImage' && c.a[0] === fontImg && c.a[5] === 32 && c.a[6] === 196));
-  // #115 arrow = ROM glyph 3Ch (right), source-x (3Ch-first)*charW, drawn at (196,192)
+  // #115 arrow = ROM glyph 3Ch (right) at ArrowsChars' "ld de,0C0C4h". That is an IMMEDIATE, so
+  // D = 0C0h = X = 192 and E = 0C4h = Y = 196 (DrawChar -> VDP_Copy_Byte takes D=X, E=Y). The
+  // low-byte-is-X rule applies only to "dw" table words, which PrintTextGetXY reads little-endian.
+  // Applying it to this immediate shipped a transposed (196,192).
   const arrowSX = (0x3C - fontMeta.first) * fontMeta.charW;
-  __check('#115 right arrow glyph (3Ch) drawn at (196,192)',
-    __calls.some(c => c.m === 'drawImage' && c.a[0] === fontImg && c.a[1] === arrowSX && c.a[5] === 196 && c.a[6] === 192),
+  __check('#115 right arrow glyph (3Ch) drawn at (192,196)',
+    __calls.some(c => c.m === 'drawImage' && c.a[0] === fontImg && c.a[1] === arrowSX && c.a[5] === 192 && c.a[6] === 196),
     'sx='+arrowSX);
-  // #118 reticle: white 1x1 pixels, count == '#' in the decoded bitmap, centred at (112,80)
-  const hashCount = BINOC_RETICLE.join('').split('').filter(ch => ch === '#').length;
-  const whitePx = __calls.filter(c => c.m === 'fillRect' && c.fillStyle === '#ffffff' && c.a[2] === 1 && c.a[3] === 1);
-  __check('#118 reticle pixel count matches the decoded SprTarget bitmap',
-    whitePx.length === hashCount, 'drawn='+whitePx.length+' expected='+hashCount);
-  __check('#118 reticle is centred (top-left pixel of row0 at x0=112,y0=80)',
-    whitePx.some(c => c.a[0] === 112 + 1 && c.a[1] === 80));   // row0 = '.#######...' -> first '#' at col 1
+  // Corroboration: the banner (a "dw" word) and the arrow (an immediate) share the line Y=196.
+  __check('#115 banner and arrow sit on the same HUD line (Y=196)',
+    __calls.some(c => c.m === 'drawImage' && c.a[0] === fontImg && c.a[5] === 32 && c.a[6] === 196) &&
+    __calls.some(c => c.m === 'drawImage' && c.a[0] === fontImg && c.a[5] === 192 && c.a[6] === 196));
+  // #118 reticle: blitted from the EXPORTED asset at the BinocularSprAtt origin — no primitives.
+  __check('#118 reticle blitted from the exported target.png asset',
+    __calls.some(c => c.m === 'drawImage' && c.a[0] === targetImg));
+  __check('#118 reticle drawn at the BinocularSprAtt origin (112,80)',
+    __calls.some(c => c.m === 'drawImage' && c.a[0] === targetImg && c.a[1] === 112 && c.a[2] === 80),
+    'meta origin='+targetMeta.originX+','+targetMeta.originY);
+  // The exported metadata IS the ROM geometry: 4 sprites of 16x16 laid out 2x2 at (112,80).
+  __check('#118 target.json matches BinocularSprAtt: 32x32 at (112,80), 4 sprites',
+    targetMeta.width === 32 && targetMeta.height === 32 &&
+    targetMeta.originX === 0x70 && targetMeta.originY === 0x50 && targetMeta.sprites === 4,
+    JSON.stringify(targetMeta));
+  // ...and it is centred on the 256x192 view, as the ROM attribute table places it.
+  __check('#118 reticle is centred on the view',
+    targetMeta.originX + targetMeta.width / 2 === VW / 2 &&
+    targetMeta.originY + targetMeta.height / 2 === VH / 2);
+  __check('#118 no hand-drawn reticle primitives remain',
+    !__calls.some(c => c.m === 'fillRect' && c.a[2] === 1 && c.a[3] === 1));
+  // #87 a peeked NEIGHBOUR draws its actors
+  __check('#87 peeked neighbour draws its guards', guardDraws === 1, 'guardDraws='+guardDraws);
 
-  // arrow only while peeking: idle draw has no arrow glyph
+  // --- idle (own room) draw: no arrow glyph, and #87 no actors ---
   binoc.mode = 'idle'; binoc.lookDir = null; binoc.snap = fakeSnap(10);
-  __calls.length = 0; drawBinoculars();
+  __calls.length = 0; guardDraws = 0; itemDraws = 0; doorDraws = 0; drawBinoculars();
   __check('arrow not drawn when idle (own room)',
-    !__calls.some(c => c.m === 'drawImage' && c.a[0] === fontImg && c.a[5] === 196 && c.a[6] === 192));
+    !__calls.some(c => c.m === 'drawImage' && c.a[0] === fontImg && c.a[5] === 192 && c.a[6] === 196));
+  // DrawBinocRoom (Banks0123.asm:12572-12580): BinocularDir==1 overwrites EnemySprAttRAM with 0E0h
+  __check('#87 own-room idle view draws NO actors', guardDraws === 0, 'guardDraws='+guardDraws);
+  // ...but ONLY the enemy sprites are wiped — RenderRoom/AddRoomItems/DrawDoors still run.
+  __check('#87 the idle view still draws items and doors',
+    itemDraws === 1 && doorDraws === 1, 'items='+itemDraws+' doors='+doorDraws);
+  __check('#87 the idle view still draws the reticle + banner',
+    __calls.some(c => c.m === 'drawImage' && c.a[0] === targetImg) &&
+    __calls.some(c => c.m === 'drawImage' && c.a[0] === fontImg && c.a[5] === 32 && c.a[6] === 196));
 })();
 `;
 

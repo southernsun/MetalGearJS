@@ -121,6 +121,74 @@ const test = `
   const ys = [...new Set(__calls.filter(c => c.m === 'drawImage' && c.a[0] === fontImg).map(c => c.a[6]))];
   __check('long line wraps onto +12px rows', ys.length >= 2 && ys[1] - ys[0] === 12, JSON.stringify(ys));
   dismissText();
+
+  // ===== TW_Wait branch order (#44, #79) =====
+  // mode 2: timer only, no keys, no prompt.  mode 1: keys AND timer, never a prompt.
+  // mode 0: keys; text 10 or a nibble-clear non-last page also runs the timer; a nibble-SET
+  // non-last page shows the prompt and waits for a key; the last page waits for a key only.
+  const mk = (over) => Object.assign({ id: 1, mode: 0, cfg: 0x00, page: 0,
+                                       pages: [['a'], ['b']], wait: true }, over);
+  __check('#79 mode 1 auto-advances on the timer', textWaitAutoAdvances(mk({ mode: 1 })));
+  __check('#79 mode 1 NEVER shows the enter prompt',
+    !textShowsEnterIcon(mk({ mode: 1, cfg: 0xF0 })));
+  __check('#44 mode 2 auto-advances and shows no prompt',
+    textWaitAutoAdvances(mk({ mode: 2 })) && !textShowsEnterIcon(mk({ mode: 2, cfg: 0xF0 })));
+  __check('#44 mode 0, nibble CLEAR, non-last page -> auto-advances (was stalling)',
+    textWaitAutoAdvances(mk({ cfg: 0x00 })));
+  __check('#44 mode 0, nibble SET, non-last page -> prompt, no timer',
+    !textWaitAutoAdvances(mk({ cfg: 0xF0 })) && textShowsEnterIcon(mk({ cfg: 0xF0 })));
+  __check('#44 the LAST page never auto-advances and shows no prompt',
+    !textWaitAutoAdvances(mk({ cfg: 0xF0, page: 1 })) &&
+    !textShowsEnterIcon(mk({ cfg: 0xF0, page: 1 })));
+  __check('#44 text 10 auto-advances regardless of the nibble',
+    textWaitAutoAdvances(mk({ id: 10, cfg: 0xF0 })));
+
+  // ===== #79 mode 1 accepts keys, mode 2 does not =====
+  setText(1, 1); textBox.wait = true; textBox.pages = [['a'], ['b']]; textBox.page = 0;
+  dismissText();
+  __check('#79 mode 1 advances on a key press', textBox && textBox.page === 1);
+  setText(1, 2); textBox.wait = true; textBox.pages = [['a'], ['b']]; textBox.page = 0;
+  dismissText();
+  __check('#79 mode 2 still ignores keys', textBox && textBox.page === 0);
+  textBox = null; gameState = 'play';
+
+  // ===== #80 a SKIPPED text must not set its event flag =====
+  jeniRocket = false;
+  setText(117); textBox.shown = 0; textBox.wait = false;   // mid-print
+  dismissText();                                           // SkipText -> sets SkipTextF
+  while (textBox) dismissText();
+  __check('#80 mashing through text 117 does NOT set JeniRocketF', jeniRocket === false);
+  jeniRocket = false;
+  setText(117); textBox.wait = true; textBox.shown = pageChars(textBox);
+  while (textBox) { textBox.wait = true; dismissText(); }
+  __check('#80 reading text 117 through DOES set JeniRocketF', jeniRocket === true);
+  jeniRocket = false; textBox = null; gameState = 'play';
+
+  // ===== #82 STAFF roll print speed + silence =====
+  { // #82 measure the actual print RATE: mask 7 must yield half the characters of mask 3
+    const realPlay = playBuf; playBuf = () => {};
+    const printed = (id) => {
+      endingStatus = 0; setText(id); textBox.pages = [['ABCDEFGHIJKLMNOP']];
+      textBox.shown = 0; textBox.wait = false; tickCounter = 0;
+      for (let k = 0; k < 64; k++) { tickCounter = (tickCounter + 1) & 0xff; updateTextBox(); }
+      const n = textBox.shown; textBox = null; gameState = 'play'; return n;
+    };
+    const fast = printed(1), staff = printed(45);
+    __check('#82 the STAFF roll (text 45) prints at HALF speed (mask 7 vs 3)',
+      staff * 2 === fast, 'normal=' + fast + ' staff=' + staff);
+    playBuf = realPlay;
+  }
+  { // drive the printer and count SFX per tick-mask
+    const realPlay = playBuf; let blips = 0; playBuf = () => { blips++; };
+    endingStatus = 10; setText(45); textBox.pages = [['ABCD']]; textBox.shown = 0; textBox.wait = false;
+    for (let k = 0; k < 64; k++) { tickCounter = (tickCounter + 1) & 0xff; updateTextBox(); }
+    __check('#82 the ending staff roll prints SILENTLY (EndingStatus 10)', blips === 0, 'blips='+blips);
+    endingStatus = 0; blips = 0;
+    setText(1); textBox.pages = [['ABCD']]; textBox.shown = 0; textBox.wait = false;
+    for (let k = 0; k < 64; k++) { tickCounter = (tickCounter + 1) & 0xff; updateTextBox(); }
+    __check('#82 a normal text still blips per character', blips > 0, 'blips='+blips);
+    playBuf = realPlay; textBox = null; gameState = 'play';
+  }
 })();
 `;
 

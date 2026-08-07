@@ -193,14 +193,84 @@ const test = `
   const mis = playerShots[0];
   __check('missile: fired facing right', mis && mis.type === MISSILE && mis.vx === 4 && mis.vy === 0);
   const sx = snake.x;
-  held.add('dir:up'); pushRecency('up');
+  // #64 ControlMissile reads ControlsTrigger: a HELD direction must NOT re-aim the missile.
+  held.add('dir:up'); pushRecency('up'); missileDirTrigger = null;
   normalControl();
   __check('missile: Snake is FROZEN while it flies (NormalCtrl shot-7 gate)', snake.x === sx && snake.state === 'idle');
-  __check('missile: the direction key STEERED it instead (up)', mis.vy === -4 && mis.vx === 0 && mis.dir === 'up');
+  __check('#64 missile: a HELD direction does NOT steer it',
+    mis.vx === 4 && mis.vy === 0 && mis.dir === 'right', 'v=' + mis.vx + ',' + mis.vy);
+  // ...only a fresh press (the ControlsTrigger edge) does.
+  missileDirTrigger = 'up';
+  normalControl();
+  __check('#64 missile: a fresh direction PRESS steers it (up)',
+    mis.vy === -4 && mis.vx === 0 && mis.dir === 'up');
+  __check('#64 the steer trigger is consumed (one re-aim per press)', missileDirTrigger === null);
   held.delete('dir:up');
   while (playerShots[0] && playerShots[0].status !== 2) updatePlayerShots();   // exits top -> wall? boundary removes it
   normalControl();
   __check('missile: gone -> Snake moves again', playerShots.length === 0 || playerShots[0].status === 2);
+
+  // ===== #61 the shared 6-slot pool =====
+  // GetEmptyShotDat always scans 6 slots ("ld b,6"); the weapondamage header byte is only the
+  // ChkPlayerShots scan bound, never a spawn cap.
+  reset(); arm(GRENADE_LAUNCHER, 20); snake.dir = 'right';
+  for (let i = 0; i < 8; i++) { fireQueued = true; chkWeaponShot(); }
+  __check('#61 grenades fill all SIX pool slots (not the old cap of 2)',
+    playerShots.length === 6, 'n=' + playerShots.length);
+  __check('#61 the pool then refuses a 7th', playerShots.length === 6);
+  __check('#61 slots are 0..5, each used once',
+    JSON.stringify(playerShots.map(s => s.slot).sort()) === '[0,1,2,3,4,5]',
+    playerShots.map(s => s.slot).join(','));
+  reset(); arm(LAND_MINE, 20);
+  for (let i = 0; i < 8; i++) { fireQueued = true; chkWeaponShot(); snake.x += 20; }
+  __check('#61 mines also fill six slots (not the old cap of 3)', playerShots.length === 6,
+    'n=' + playerShots.length);
+
+  // The damage bound: only slots < header byte may hit. Grenade launcher's byte is 2.
+  reset(); arm(GRENADE_LAUNCHER, 20);
+  __check('#61 the header bytes are the ChkPlayerShots bounds, not caps',
+    WEAPON_SHOT_SLOTS[GRENADE_LAUNCHER] === 2 && WEAPON_SHOT_SLOTS[HAND_GUN] === 6 &&
+    WEAPON_SHOT_SLOTS[LAND_MINE] === 3);
+  __check('#61 a shot in slot 0/1 can damage; slot 2+ cannot (grenade bound 2)',
+    shotCanDamage({slot:0}) && shotCanDamage({slot:1}) && !shotCanDamage({slot:2}));
+  selectedWeapon = HAND_GUN;
+  __check('#61 selecting the handgun raises the bound to 6 (WeaponInUse quirk)',
+    shotCanDamage({slot:5}));
+  selectedWeapon = 0;
+  __check('#61 no weapon in use -> ChkPlayerShots returns, nothing can hit',
+    !shotCanDamage({slot:0}));
+
+  // ===== #63 rocket / bomb / missile need SLOT 0 free =====
+  reset(); arm(HAND_GUN, 20); snake.dir = 'right';
+  fireQueued = true; chkWeaponShot();                       // a bullet takes slot 0
+  __check('#63 setup: the handgun bullet holds slot 0',
+    playerShots.length === 1 && playerShots[0].slot === 0);
+  arm(ROCKET_LAUNCHER, 5);
+  fireQueued = true; chkWeaponShot();
+  __check('#63 a rocket is BLOCKED while slot 0 is occupied',
+    !playerShots.some(s => s.type === ROCKET_LAUNCHER), 'n=' + playerShots.length);
+  playerShots.length = 0;                                    // free slot 0
+  fireQueued = true; chkWeaponShot();
+  __check('#63 with slot 0 free the rocket fires, into slot 0',
+    playerShots.length === 1 && playerShots[0].type === ROCKET_LAUNCHER && playerShots[0].slot === 0);
+  reset(); arm(HAND_GUN, 20); snake.dir = 'right'; fireQueued = true; chkWeaponShot();
+  arm(MISSILE, 5); fireQueued = true; chkWeaponShot();
+  __check('#63 the missile is blocked the same way', !playerShots.some(s => s.type === MISSILE));
+  reset(); arm(HAND_GUN, 20); snake.dir = 'right'; fireQueued = true; chkWeaponShot();
+  arm(PLASTIC_BOMB, 5); fireQueued = true; chkWeaponShot();
+  __check('#63 the plastic bomb is blocked the same way', !playerShots.some(s => s.type === PLASTIC_BOMB));
+
+  // ===== #62 SMG burst drift handedness =====
+  __check('#62 vertical bursts keep the SMG_BulletSpeeds X order',
+    [1,2,3,4,5,6,7,8].map(b => smgDrift(b, 'up')).join(',') === '0,-1.5,-3,-1.5,0,1.5,3,1.5');
+  __check('#62 horizontal bursts use the NEGATED order',
+    [1,2,3,4,5,6,7,8].map(b => smgDrift(b, 'left')).join(',') === '0,1.5,3,1.5,0,-1.5,-3,-1.5');
+  __check('#62 down matches up, right matches left',
+    smgDrift(2, 'down') === smgDrift(2, 'up') && smgDrift(2, 'right') === smgDrift(2, 'left'));
+
+  // ===== #60 the difficulty addend (latent: Dificulty = 0 -> no change) =====
+  __check('#60 shot speed = (Dificulty << 3) + param, and is 0x90 at difficulty 0',
+    shotSpeedFor(0x90) === 0x90 && DIFFICULTY === 0);
 })();
 `;
 

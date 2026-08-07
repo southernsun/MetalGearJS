@@ -342,6 +342,30 @@ const test = `
   Math.random = _rnd;
 
   actorsData = null;
+
+  // ===== #12 the alert LEVEL for the reported room 128 =====
+  // GuardSetAlarm (chkdiscover.asm:327-336): only rooms < 128 have a predefined level; every room
+  // from 128 up is forced to a LOW alert (no reinforcements). The bit table is MSB-first per byte.
+  __check('#12 rooms >= 128 are always LOW alert (the ROM boundary)',
+    !redAlertBit(128) && !redAlertBit(129) && !redAlertBit(150) && !redAlertBit(200));
+  __check('#12 room 127 is still read from the table (boundary is < 128, not <= 128)',
+    redAlertBit(127) === true);
+  reset(128); raiseAlarm(128);
+  __check('#12 a guard sighting in room 128 raises a LOW alert with NO reinforcements',
+    alertMode && !redAlertFlag && !redAlertMusic && alertRespawnTimer === 0,
+    'red=' + redAlertFlag + ' timer=' + alertRespawnTimer);
+  reset(128); raiseAlarm(128, false, 0x5A);
+  __check('#12 gunfire in room 128 still seeds 0x5A but stays a LOW alert (#28 seeds are per-source)',
+    !redAlertFlag && alertRespawnTimer === 0x5A);
+  reset(128); raiseAlarm(128, true);
+  __check('#12 a camera/laser in room 128 DOES force red (SetAlertMode5 overrides the table)',
+    redAlertFlag && redAlertMusic);
+  // A LOW alert raised elsewhere must not follow you in: ChkAlarmEnd clears it on leaving.
+  reset(5); currentRoom = 5; raiseAlarm(5);
+  __check('#12 room 5 raises a LOW alert', alertMode && !redAlertFlag);
+  currentRoom = 128; chkAlarmEnd();
+  __check('#12 that low alert ENDS on entering 128 (it cannot look like a wrong level there)',
+    !alertMode && !redAlertFlag);
 })();
 `;
 

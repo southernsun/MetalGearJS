@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Media;
@@ -985,6 +986,166 @@ namespace MetalGearSpriteMover
             File.WriteAllText(Path.Combine(outDir, "zzz.json"),
                 $"{{\n  \"frameWidth\": {cw},\n  \"frameHeight\": {ch},\n  \"frames\": {frames}\n}}\n");
             Console.WriteLine($"Wrote zzz.png ({sheetW}x{ch}) + zzz.json — {frames} Zzz frames (SprZzz has {n} sub-sprites)");
+        }
+
+        // The ROLLING BARREL column (ID_ROLLING_BARREL, rooms 141/153/191/205). This is not a single
+        // barrel: the actor draws 18 hardware sprites as a 16x144 COLUMN of 9 stacked segments.
+        //
+        //   RollBarrels1/2 (data/actorspriteattr.asm:361/371) each start with 97h. UpdateActorSprDat
+        //   (Banks0123.asm:5881-5889) treats a first byte in 91h..0A5h as "use a shared offsets
+        //   table": 97h-91h = 6 -> idxSprOffsets[6] = SprOffsets7, which is 18 (Yoff,Xoff) pairs —
+        //   Y = 0,0,10h,10h,...,80h,80h and X = 0F8h (-8) throughout. So 9 rows of an OR-PAIR of two
+        //   16x16 sprites at the same spot, 16 wide by 144 tall, anchored at (actorX-8, actorY).
+        //   The 18 remaining bytes of each list are the sprite patterns; SprSetRolBarrel
+        //   (data/spritesets.asm:184) loads SprRollingBarrel at pattern base 0D0h, so the sub-sprite
+        //   index is (pattern - 0D0h)/4. Frame 1 = D0/D4 cap, D8/DC x7, E0/E4 cap; frame 2 = E8/EC,
+        //   F0/F4 x7, F8/FC. RollingBarrelLogic animates the two frames every 4 iterations.
+        //
+        //   Colours: ActorSprColors7 = {0Bh, 4Ch} x9 — plane A = colour 0Bh, plane B = 4Ch (bit 6 =
+        //   the CC/OR-combine flag, colour 0Ch), so an overlapping pixel reads 0Bh|0Ch = 0Fh. All
+        //   four barrel rooms use spriteset 19 (SprSetRolBarrel) whose SprsetPal19 does not override
+        //   0Bh/0Ch/0Fh, and no non-dark RoomPalette touches them either, so these come from the base
+        //   palette: 0Bh from DefaultPalette (Banks0123.asm:3946, 64h/6 = R6 G6 B4) and 0Ch/0Fh from
+        //   the PalMenuWeapon overlay (data/palettes.asm:7/9 — 33h/3 = grey, 0/0 = black).
+        public static void ExportBarrel(string outDir)
+        {
+            string attrAsm = LocateRepoFile("data", "actorspriteattr.asm");
+            byte[] patterns = SnakeSprites.DecodeLabelFrom(LocateRepoFile("gfx", "sprites.asm"), "SprRollingBarrel");
+            byte[] offsets = SnakeSprites.RawLabelFrom(attrAsm, "SprOffsets7");
+            var frames = new[] { SnakeSprites.RawLabelFrom(attrAsm, "RollBarrels1"),
+                                 SnakeSprites.RawLabelFrom(attrAsm, "RollBarrels2") };
+            const int basePattern = 0xD0;    // SprSetRolBarrel's load address for SprRollingBarrel
+
+            // Each frame list: [shared-offsets selector][18 patterns]; SprOffsets7: 18 (Y,X) pairs.
+            int sprites = offsets.Length / 2;
+            foreach (var f in frames)
+                if (f.Length - 1 != sprites)
+                    throw new InvalidDataException($"RollBarrels list has {f.Length - 1} patterns, SprOffsets7 has {sprites}");
+
+            // UpdateActorSpr6 does an 8-bit `add a,(ix+ACTOR.Y)` / `add a,(ix+ACTOR.X)`, so an offset
+            // is only "negative" in the sense that it wraps. In SprOffsets7 the Y column is a plain
+            // DOWNWARD ramp 0,0,10h,10h,...,80h,80h (9 rows, 16 apart — read 80h as +128, not -128;
+            // the barrel actor sits at Y=8 so the column occupies Y 8..152) while the X column is
+            // 0F8h = -8, centring the 16-wide column on the actor. Hence unsigned Y, signed X.
+            int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+            for (int i = 0; i < sprites; i++)
+            {
+                int oy = offsets[i * 2], ox = (sbyte)offsets[i * 2 + 1];
+                minX = Math.Min(minX, ox); minY = Math.Min(minY, oy);
+                maxX = Math.Max(maxX, ox + 16); maxY = Math.Max(maxY, oy + 16);
+            }
+            int cw = maxX - minX, chh = maxY - minY, sheetW = cw * frames.Length;
+
+            var planeA = Color.FromRgb(219, 219, 146);   // 0Bh — DefaultPalette 64h/6 (R6 G6 B4)
+            var planeB = Color.FromRgb(109, 109, 109);   // 0Ch — PalMenuWeapon 33h/3 (R3 G3 B3)
+            var overlap = Color.FromRgb(0, 0, 0);        // 0Bh|0Ch = 0Fh — PalMenuWeapon 0/0 (black)
+
+            var px = new byte[sheetW * chh * 4];
+            for (int f = 0; f < frames.Length; f++)
+                for (int i = 0; i < sprites; i += 2)     // step 2: consecutive entries are an OR-pair
+                {
+                    int oy = offsets[i * 2] - minY, ox = (sbyte)offsets[i * 2 + 1] - minX;
+                    int sa = (frames[f][1 + i] - basePattern) / 4, sb = (frames[f][2 + i] - basePattern) / 4;
+                    for (int y = 0; y < 16; y++)
+                        for (int x = 0; x < 16; x++)
+                        {
+                            bool a = SnakeSprites.ReadPixel(patterns, sa, x, y);
+                            bool b = SnakeSprites.ReadPixel(patterns, sb, x, y);
+                            if (!a && !b) continue;
+                            Color col = a && b ? overlap : (a ? planeA : planeB);
+                            int o = ((oy + y) * sheetW + f * cw + ox + x) * 4;
+                            px[o] = col.B; px[o + 1] = col.G; px[o + 2] = col.R; px[o + 3] = 255;
+                        }
+                }
+
+            var bmp = new WriteableBitmap(sheetW, chh, 96, 96, PixelFormats.Bgra32, null);
+            bmp.WritePixels(new Int32Rect(0, 0, sheetW, chh), px, sheetW * 4, 0);
+            Directory.CreateDirectory(outDir);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(bmp));
+            using (var fs = File.Create(Path.Combine(outDir, "barrel.png"))) enc.Save(fs);
+            File.WriteAllText(Path.Combine(outDir, "barrel.json"),
+                "{\n" +
+                $"  \"frameWidth\": {cw},\n  \"frameHeight\": {chh},\n  \"frames\": {frames.Length},\n" +
+                $"  \"offsetX\": {minX},\n  \"offsetY\": {minY},\n  \"rows\": {sprites / 2},\n" +
+                "  \"source\": \"SprRollingBarrel (gfx/sprites.asm); layout RollBarrels1/2 + SprOffsets7 (data/actorspriteattr.asm)\"\n" +
+                "}\n");
+
+            int lit = 0;
+            for (int o = 3; o < px.Length; o += 4) if (px[o] != 0) lit++;
+            Console.WriteLine($"Wrote barrel.png ({sheetW}x{chh}, {frames.Length} frames of {cw}x{chh} at " +
+                              $"offset {minX},{minY}) + barrel.json — {sprites / 2} OR-pair rows, " +
+                              $"{patterns.Length / 32} sub-sprites, {lit} lit pixels");
+        }
+
+        // The binoculars/telescope target reticle. LoadSprTarget (Banks0123.asm:3226-3232) UnpackGfx's
+        // SprTarget (gfx/targetspr.asm) into the SPRITE PATTERN table at 0F880h = pattern 10h (base
+        // 0F800h + 10h*8), giving 128 bytes = 4 x 16x16 monochrome hardware sprites (patterns
+        // 10h/14h/18h/1Ch). NOTE: this is 1bpp SPRITE data, not the 4bpp background graphics that
+        // MetalGearGfxViewer's catalogue used to claim — the disassembly wins (see GfxCatalog.cs).
+        //
+        // The 2x2 layout is read from BinocularSprAtt (logic/menuequipment.asm:355-360) rather than
+        // hardcoded: rows are (Y, X, pattern, colour), terminated by the 0E0h off-screen placeholders.
+        // It spans (112,80)-(143,111) = 32x32 centred on the 256x192 view. Every sprite colour byte is
+        // flood-filled 0Eh (menuequipment.asm:343-347) = white, so the reticle is monochrome.
+        public static void ExportTarget(string outDir)
+        {
+            string targetAsm = LocateRepoFile("gfx", "targetspr.asm");
+            byte[] patterns = SnakeSprites.DecodeLabelFrom(targetAsm, "SprTarget");
+            byte[] att = SnakeSprites.RawLabelFrom(
+                LocateRepoFile("logic", "menuequipment.asm"), "BinocularSprAtt");
+
+            // The decoded block is relative to its own start, so pattern numbers in the attribute
+            // table must be rebased on the block's FIRST pattern, taken from the UnpackGfx dw header
+            // (0F880h) against the sprite pattern generator base 0F800h -> pattern 10h.
+            const int SprPatternTableBase = 0xF800;
+            int basePattern = (SnakeSprites.HeaderWordFrom(targetAsm, "SprTarget") - SprPatternTableBase) / 8;
+
+            // Rows of 4 bytes: Y, X, pattern, colour. Y == 0E0h parks a sprite off-screen (unused slot).
+            var rows = new List<(int Y, int X, int Pattern)>();
+            for (int i = 0; i + 3 < att.Length; i += 4)
+            {
+                if (att[i] == 0xE0) break;
+                rows.Add((att[i], att[i + 1], att[i + 2]));
+            }
+            if (rows.Count == 0)
+                throw new InvalidDataException("BinocularSprAtt has no visible sprite rows");
+
+            int minX = rows.Min(r => r.X), minY = rows.Min(r => r.Y);
+            int w = rows.Max(r => r.X) - minX + 16, h = rows.Max(r => r.Y) - minY + 16;
+
+            var px = new byte[w * h * 4];
+            foreach (var r in rows)
+            {
+                int sprite = (r.Pattern - basePattern) / 4;   // 4 patterns (8 bytes each) per 16x16 sprite
+                int ox = r.X - minX, oy = r.Y - minY;
+                for (int y = 0; y < 16; y++)
+                    for (int x = 0; x < 16; x++)
+                        if (SnakeSprites.ReadPixel(patterns, sprite, x, y))
+                        {
+                            int o = ((oy + y) * w + ox + x) * 4;
+                            px[o] = 255; px[o + 1] = 255; px[o + 2] = 255; px[o + 3] = 255;   // colour 0Eh
+                        }
+            }
+
+            var bmp = new WriteableBitmap(w, h, 96, 96, PixelFormats.Bgra32, null);
+            bmp.WritePixels(new Int32Rect(0, 0, w, h), px, w * 4, 0);
+            Directory.CreateDirectory(outDir);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(bmp));
+            using (var fs = File.Create(Path.Combine(outDir, "target.png"))) enc.Save(fs);
+            File.WriteAllText(Path.Combine(outDir, "target.json"),
+                "{\n" +
+                $"  \"width\": {w},\n  \"height\": {h},\n" +
+                $"  \"originX\": {minX},\n  \"originY\": {minY},\n" +
+                $"  \"sprites\": {rows.Count},\n" +
+                "  \"source\": \"SprTarget (gfx/targetspr.asm) via LoadSprTarget; layout BinocularSprAtt (logic/menuequipment.asm:355)\"\n" +
+                "}\n");
+
+            int lit = 0;
+            for (int o = 3; o < px.Length; o += 4) if (px[o] != 0) lit++;
+            Console.WriteLine($"Wrote target.png ({w}x{h} at screen {minX},{minY}) + target.json — " +
+                              $"{rows.Count} sprites, {patterns.Length} pattern bytes, {lit} lit pixels");
         }
 
         // Default output directory: <thisRepo>\web\assets (NOT derived from the disassembly path —

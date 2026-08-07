@@ -159,15 +159,29 @@ const test = `
   __check('item down clamped at slot 25', selectIdx === 25, 'idx='+selectIdx);
   closeMenu();
 
+  // --- #89 cursor seed: GetMenuCursor lands on the selected entry, or (nothing selected) on the
+  // FIRST EMPTY slot. CompactEquipment/CompactWeapons run first, so the owned entries are dense
+  // and "first empty" is one past the last owned one. Slot 1 only when every slot is full.
+  selectedItem = 0; gameState='play'; openMenu('item');
+  const owned = menuEntries.length;
+  __check('#89 nothing selected -> cursor seeds the FIRST EMPTY slot, not slot 1',
+    selectIdx === owned + 1, 'idx='+selectIdx+' owned='+owned);
+  closeMenu();
+  selectedItem = SELECTED_RATION; gameState='play'; openMenu('item');
+  __check('#89 with an item selected the cursor still lands on it',
+    selectIdx === menuEntries.indexOf(SELECTED_RATION) + 1, 'idx='+selectIdx);
+  closeMenu();
+
   // --- hold-repeat (ControlHoldWait): trigger moves now, a held direction repeats every 8 ticks ---
   selectedItem = 0; gameState='play'; openMenu('item');
+  const seed = selectIdx;
   menuDirTrigger = 'down'; menuTick();
-  __check('direction trigger moves immediately', selectIdx === 2, 'idx='+selectIdx);
+  __check('direction trigger moves immediately', selectIdx === seed + 1, 'idx='+selectIdx);
   held.add('dir:down'); pushRecency('down');
   for (let t = 0; t < 7; t++) menuTick();
-  const heldNoMove = selectIdx === 2;
+  const heldNoMove = selectIdx === seed + 1;
   menuTick();
-  __check('held direction repeats only after 8 ticks', heldNoMove && selectIdx === 3, 'idx='+selectIdx);
+  __check('held direction repeats only after 8 ticks', heldNoMove && selectIdx === seed + 2, 'idx='+selectIdx);
   held.delete('dir:down');
   closeMenu();
 

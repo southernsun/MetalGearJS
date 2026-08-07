@@ -164,30 +164,34 @@ const test = `
   // (the DEMO_PRISONERS reachability check was removed along with the demo overlay)
 
   // ==== Passwords (cheat codes typed while paused, ChkPasswords) ====
-  reset(); passwordBuffer='XXDS4'; chkPasswords();
+  reset(); passwordBuffer='XXDS 4'; chkPasswords();
   __check('password DS 4: class +1 (SetMaxClass c=0 -> IncClassLv x1)', snake.class===1);
-  reset(); passwordBuffer='ANTAWAERAI'; chkPasswords();
+  reset(); passwordBuffer='ANTA WA ERAI'; chkPasswords();
   __check('password ANTA WA ERAI: class +3 = max (SetMaxClass c=1 -> IncClassLv x3)', snake.class===3);
   reset(); weapons.set(1,5); maxAmmoCheat=false; passwordBuffer='INTRUDER'; chkPasswords();
   __check('password INTRUDER: max ammo (weapons -> 0x999, cheat latched)',
     maxAmmoCheat===true && weapons.get(1)===0x999);
   reset(); items.set(SELECTED_RATION,1); maxRationsCheat=false; passwordBuffer='ISOLATION'; chkPasswords();
   __check('password ISOLATION: max rations (0x999)', maxRationsCheat===true && items.get(SELECTED_RATION)===0x999);
-  reset(); openedDoorIds.clear(); passwordBuffer='HIRAKEGOMA'; chkPasswords();
+  reset(); openedDoorIds.clear(); passwordBuffer='HIRAKE GOMA'; chkPasswords();
   __check('password HIRAKE GOMA: all 8 cards + Grey Fox cell (door 0x0B)',
     [0,1,2,3,4,5,6,7].every(c=>items.has(SELECTED_CARD1+c)) && openedDoorIds.has(0x0B));
   // #74: only the class-changing codes play the rank-up SFX (inside IncClassLv); the others are silent
   { const _pb = playBuf; let sfxN = 0; playBuf = () => { sfxN++; };
     reset(); passwordBuffer='INTRUDER'; chkPasswords();
     __check('#74 INTRUDER plays NO rank-up SFX', sfxN === 0, 'n='+sfxN);
-    reset(); snake.class=0; sfxN=0; passwordBuffer='XXDS4'; chkPasswords();
+    reset(); snake.class=0; sfxN=0; passwordBuffer='XXDS 4'; chkPasswords();
     __check('#74 DS 4 (class change) plays the rank-up SFX once', sfxN === 1, 'n='+sfxN);
     playBuf = _pb; }
   reset(); snake.class=0; passwordBuffer='NOTACODE'; chkPasswords();
   __check('a non-code leaves the game unchanged', snake.class===0);
-  // the buffer only accepts letters/digits, rolling to 12 chars
+  // #75: the buffer takes letters, digits AND the SPACE (the ROM's tables carry the 0x47 space
+  // code, so "DS 4" / "ANTA WA ERAI" / "HIRAKE GOMA" are typed with it); other keys are ignored.
   passwordBuffer=''; for (const k of ['a','1',' ','-','Z']) passwordKey(k);
-  __check('passwordKey ignores non-alphanumerics', passwordBuffer==='A1Z');
+  __check('#75 passwordKey keeps letters, digits and SPACE, drops the rest',
+    passwordBuffer==='A1 Z', JSON.stringify(passwordBuffer));
+  passwordBuffer=''; for (const k of 'DS 4') passwordKey(k);
+  __check('#75 the spaced code lands in the buffer verbatim', passwordBuffer==='DS 4');
 
   // ==== Save / load (serialise the progress; the cassette save's localStorage analog) ====
   setRoom = (n) => { currentRoom = n; };       // stub the heavy room rebuild

@@ -151,6 +151,28 @@ const test = `
   __check('two blasts in 33 standing iterations (every 16th), 8 damage, aimed at Snake',
     bullets.length === 2 && bullets.every((b) => b.dmg === 8 && b.sgAge === 0 && b.vx < 0),
     'n='+bullets.length);
+  // #133: InitShotGunnerShot (shotgunner.asm:194) calls the SAME CalcShot2 with a = 90h as
+  // InitGuardShot, so the blast must take the ROM's QUANTIZED-angle aim, not a smooth vector,
+  // and its magnitude must come from the 0x90 param — not the old 2.5 px/tick "tuned for feel".
+  {
+    const b0 = bullets[0];
+    const want = calcShot(boss.x, boss.y - 16, 0x90);
+    __check('#133 the blast velocity is calcShot(0x90)/2, the literal CalcShot2 aim',
+      Math.abs(b0.vx - want.vx / 2) < 1e-9 && Math.abs(b0.vy - want.vy / 2) < 1e-9,
+      'got ('+b0.vx.toFixed(4)+','+b0.vy.toFixed(4)+') want ('+(want.vx/2).toFixed(4)+','+(want.vy/2).toFixed(4)+')');
+    // On-axis the 0x90 param is 144*255/8192 = 4.4824 px per ROM iteration -> 2.2412 per 60Hz tick.
+    const onAxis = calcShot(100, 100, 0x90);   // snake is far to the left, near the same row
+    const mag = Math.hypot(onAxis.vx, onAxis.vy) / 2;
+    __check('#133 the aimed magnitude is the ROM 0x90 speed, not the old 2.5 px/tick',
+      mag > 2.0 && mag < 2.30 && Math.abs(mag - 2.5) > 0.15, 'mag='+mag.toFixed(4));
+    // The quantized aim means the velocity is NOT a Euclidean-normalised direction: with Snake
+    // off-axis the two must differ (that was the second half of the bug).
+    const dx = snake.x - boss.x, dy = (snake.y - 12) - (boss.y - 16);
+    const len = Math.hypot(dx, dy) || 1, euc = 2.5;
+    __check('#133 the quantized aim differs from the old dx/len vector',
+      Math.abs(b0.vx - dx / len * euc) > 0.05 || Math.abs(b0.vy - dy / len * euc) > 0.05,
+      'quantized ('+b0.vx.toFixed(3)+','+b0.vy.toFixed(3)+') vs euclidean ('+(dx/len*euc).toFixed(3)+','+(dy/len*euc).toFixed(3)+')');
+  }
   // the crate corner is safe
   bullets.length = 0; snake.x = 200; snake.y = 180;
   boss.anim = 0; boss.wait = 0x20;

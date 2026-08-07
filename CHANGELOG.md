@@ -19,6 +19,29 @@ Issue numbers link to [the tracker](https://github.com/southernsun/MetalGearJS/i
 
 ---
 
+## 0.11.0 — 2026-08-08
+
+Both remaining finds from the death-path sweep.
+
+### Added
+- **Wall cameras can be destroyed** (#135). `ID_CAMERA` has `idxActorLife` **5** and takes grenade
+  5 / rocket 10 / plastic bomb 5 / missile 5 — so **one explosive destroys it** — while hand gun and
+  SMG do **0**, which is why shooting one correctly appears to do nothing. Cameras were in no target
+  list at all, so no weapon could touch them. They now carry the ROM's `ActorShapeProject` box
+  (row 2, ±8; row 0 for laser cameras), the `ActorShapeExpl` box (row 1, ±20) and their damage row,
+  and on death run `ExplosionAnim` — the 3-frame small explosion over `0x10` iterations — then are
+  **removed**, ending their patrol and their alarm trigger. Laser cameras take 0 from every weapon
+  and stay indestructible; they die only with Metal Gear.
+
+### Fixed
+- **Jetpack troopers explode instead of vanishing** (#136). `KillJetpack` replaces the trooper with
+  a 3-frame explosion and only dismisses him at `0x10` iterations; he used to disappear on the same
+  frame. His reinforcement slot still frees immediately — `CountEnemyType` compares the full id byte
+  and `KillActor` sets bit 7, so a dying actor stops being counted at once (`respawnTick`'s live
+  count now excludes them).
+
+---
+
 ## 0.10.2 — 2026-08-07
 
 ### Fixed
@@ -35,6 +58,10 @@ Issue numbers link to [the tracker](https://github.com/southernsun/MetalGearJS/i
   counterpart. `inOpenDoor` is not a ROM routine — the ROM keeps one mutable collision map where the
   port layers four override predicates — so a ROM→port audit is structurally blind to it. The
   standing cause is tracked as **#137**.
+- `CLAUDE.md` gains **"Every escaped bug gets a post-mortem"**: with each fix, name the mechanism
+  that hid the bug, add the check that would have caught it, record it in `audit-gap-analysis.md`,
+  and file the standing cause separately when the fix only treats a symptom. It lists the five
+  known failure modes to check a new bug against before assuming it is novel.
 
 ---
 

@@ -113,8 +113,24 @@ const test = `
   snake.life=24; snake.invulnTimer=0; snake.x=jetpacks[0].x; snake.y=jetpacks[0].y;
   iter2(jetpackTick, 2);
   __check('jetpack body contact does NOT damage Snake (#42)', snake.life===24, 'life='+snake.life);
+  // #136 KillJetpack (Banks0123.asm:13320): shot dead he does NOT vanish — the 3-frame explosion
+  // replaces his sprite and DismissActor only runs at ANIM_CNT 0x10.
   jetpacks[0].life=0; iter2(jetpackTick, 1);
-  __check('shot dead, the jetpack leaves', jetpacks.length===0);
+  __check('#136 shot dead, the jetpack EXPLODES first (not removed on the same frame)',
+    jetpacks.length===1 && jetpacks[0].dying===0, 'n='+jetpacks.length);
+  iter2(jetpackTick, 4);
+  __check('#136 mid-explosion he is still in the list', jetpacks.length===1 && jetpacks[0].dying===4);
+  iter2(jetpackTick, 12);
+  __check('#136 DismissActor at 0x10 iterations: now he leaves', jetpacks.length===0);
+  // CountEnemyType compares the FULL id byte and KillActor sets bit 7, so a dying trooper stops
+  // counting toward the reinforcement cap at once — the 0x10-iteration explosion must not hold it.
+  jetpacks.push({ x:0x40, y:0x40, mode:'fly', wait:0x20, vx:0, vy:0, anim:0, life:0,
+                  shotShape:GUARD_SHAPE, reinforcement:true });
+  iter2(jetpackTick, 1);
+  __check('#136 a dying trooper still occupies the array', jetpacks.length===1 && jetpacks[0].dying===0);
+  __check('#136 but does NOT count as live for the respawn cap (CountEnemyType skips killed ids)',
+    jetpacks.filter((j)=>j.dying==null).length===0);
+  iter2(jetpackTick, 16); jetpacks.length = 0;
 
   // ==== Sentinels (room 39) + HideGuards ====
   // Room 39 has 4 sentinels in two pairs (Y 72 north, Y 176 south); HideGuardRoom39 culls the

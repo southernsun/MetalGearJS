@@ -93,6 +93,45 @@ actual data. Don't do that. Use ground truth:
   coordinate word and its decode, routine citations — and must flag what it could *not* decode
   (e.g. "RLE not unpacked") as a blocker. "Reads as corner brackets" is a guess, not a finding.
 
+## Every escaped bug gets a post-mortem
+
+A bug the user had to find is also a **failure of our checks**. Fixing it is half the work; the
+other half is finding out why nothing caught it, and closing that hole. Do this for any bug the
+user reports, any regression, and any gap a sweep turns up — not just the dramatic ones.
+
+With the fix, do all four:
+
+1. **Answer "why didn't we catch this?"** in one concrete sentence naming the *mechanism*, not a
+   mood. "The audit walks per-actor `logic/` files and this actor's death path lives in
+   `Banks0123.asm`" is a mechanism. "We missed it" and "not enough testing" are not.
+2. **Add the check that would have caught it** — a headless assertion, an exporter guard, a loud
+   warning on a silent fallback. If a green suite passed while the bug was live, the suite was
+   asserting the wrong thing; fix that too.
+3. **Record it in [`docs/audit-gap-analysis.md`](docs/audit-gap-analysis.md)** — the canonical
+   post-mortem index. Extend an existing failure mode if it fits one, or add a new one. Keep the
+   evidence (counts, routine names, addresses) so the claim is checkable later.
+4. **File the standing cause** as its own issue if the fix only treats a symptom (e.g. #137, the
+   four collision predicates behind three separate bugs).
+
+Known failure modes so far — check a new bug against these before assuming it is novel:
+
+- **Coverage denominator gaps.** `Banks0123.asm` is in no `coverage-map.json` component, so ~880
+  routines can never show as `todo`. A routine living there instead of in a per-actor `logic/` file
+  is invisible to every coverage number. (#132)
+- **Unregistered approximations.** An "approximated / documented divergence" comment that has no row
+  in [`docs/faithfulness-divergences.md`](docs/faithfulness-divergences.md) is a bug that was talked
+  out of being filed. The index is the only thing that forces a second look. (#131, #133)
+- **Port-invented abstractions.** Our sweeps run ROM → port ("is this routine ported?"), so anything
+  in the port with **no ROM counterpart** is structurally invisible — there is nothing to diff it
+  against. Ask the question the other way: *what is this stand-in for, and is that faithful?*
+  (#137)
+- **Tests that assert helpers, not behaviour.** Drive the real code path (hold a direction and step
+  `normalControl`), not the predicate that implements it. A fix that satisfies `freeAt`/`touchDoor`
+  can leave the game unchanged. (#129)
+- **Silent fallbacks.** A missing exported asset that degrades quietly reproduces the original bug
+  on an up-to-date build. Make the fallback shout (`warnStaleWallMask`), and load real assets in the
+  harnesses rather than `{}`.
+
 ## Git
 
 - **The user always commits themselves. Never run `git commit` (or `git push`).** Make and

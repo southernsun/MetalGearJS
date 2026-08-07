@@ -116,6 +116,51 @@ const test = `
   __check('after the flash the camera freezes (RenderCamera)', cam.status === 2);
   stopAlarm();
 
+  // --- #135: a wall camera is DESTRUCTIBLE by explosives, never by bullets ---
+  // idxActorLife[ID_CAMERA-1] = 5; weapondamage rows (index id-1): hand gun/SMG 0, grenade 5,
+  // rocket 10, plastic bomb 5, mine FF(none), missile 5. DecEnemyLife subtracts and clamps at 0,
+  // so 0 damage = no effect and one explosive (>= 5) destroys it. ActorShapeProject row 2 = +-8.
+  setRoom(31);
+  const dc = cameras[0];
+  __check('#135 the camera carries Life 5 and the ROM shot box (+-8)',
+    dc.life === 5 && dc.shotShape.distX === 8 && dc.shotShape.distY === 8, 'life=' + dc.life);
+  __check('#135 its damage row: bullets 0, grenade 5, rocket 10, bomb 5, mine 0, missile 5',
+    dc.dmgTable[1] === 0 && dc.dmgTable[2] === 0 && dc.dmgTable[3] === 5 && dc.dmgTable[4] === 10
+    && dc.dmgTable[5] === 5 && dc.dmgTable[6] === 0 && dc.dmgTable[7] === 5);
+  selectedWeapon = HAND_GUN;
+  __check('#135 a camera is a shot target at all (it was in no target list before)',
+    shotTargetsAll({ x: dc.x, y: dc.y, type: HAND_GUN, slot: 0 }, false).includes(dc));
+  // a HAND GUN bullet hits it but takes nothing off (this is why shooting one looks inert)
+  playerShots.length = 0;
+  playerShots.push({ x: dc.x, y: dc.y, vx: 0, vy: 0, range: 5, type: HAND_GUN, slot: 0 });
+  updatePlayerShots(); cameraTick();
+  __check('#135 a bullet does NOT destroy it (0 damage)',
+    cameras.includes(dc) && dc.life === 5 && dc.dying == null, 'life=' + dc.life);
+  __check('#135 but an explosive would: weaponDamage >= Life 5 for grenade/rocket/bomb/missile',
+    [GRENADE_LAUNCHER, ROCKET_LAUNCHER, PLASTIC_BOMB, MISSILE].every((w) => weaponDamage(dc, w) >= dc.life));
+  // the ROCKET damages on CONTACT (10 vs Life 5) -> destroyed, exploding for 0x10 iterations
+  playerShots.length = 0; selectedWeapon = ROCKET_LAUNCHER;
+  playerShots.push({ x: dc.x, y: dc.y, vx: 0, vy: 0, range: 5, type: ROCKET_LAUNCHER, slot: 0 });
+  updatePlayerShots(); cameraTick();
+  __check('#135 a rocket takes Life 5 -> 0 and starts the explosion',
+    dc.life === 0 && dc.dying === 0 && cameras.includes(dc), 'life=' + dc.life + ' dying=' + dc.dying);
+  for (let i = 0; i < 4; i++) cameraTick();
+  __check('#135 mid-explosion the camera is still listed', cameras.includes(dc) && dc.dying === 4);
+  for (let i = 0; i < 0x10; i++) cameraTick();
+  __check('#135 DismissActor at 0x10: the camera is REMOVED', !cameras.includes(dc));
+  // a laser camera takes 0 from every weapon -- only Metal Gear's death kills it
+  setRoom(111);
+  const lcam = cameras[0];
+  __check('#135 laser cameras take 0 damage from every weapon',
+    [1,2,3,4,5,6,7].every((w) => lcam.dmgTable[w] === 0) && lcam.life === 2);
+  selectedWeapon = ROCKET_LAUNCHER; playerShots.length = 0;
+  playerShots.push({ x: lcam.x, y: lcam.y, vx: 0, vy: 0, range: 5, type: ROCKET_LAUNCHER, slot: 0 });
+  updatePlayerShots(); cameraTick();
+  __check('#135 a rocket leaves a laser camera untouched',
+    cameras.includes(lcam) && lcam.life === 2 && lcam.dying == null);
+  playerShots.length = 0; selectedWeapon = 0;
+  setRoom(31);
+
   // --- laser cameras (room 111): fire under, damage, shadow, resume ---
   setRoom(111);
   __check('room 111 spawns its 2 ceiling laser cameras',

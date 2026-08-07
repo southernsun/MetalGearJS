@@ -27,8 +27,8 @@
 // is hand-maintained rather than injected. Bump it in the same commit as the change it describes:
 //   PATCH  fixes only          MINOR  new behaviour/systems          MAJOR  reserved for 1.0
 // APP_BUILD is the date of that bump — it is what tells you whether the server has the newest copy.
-const APP_VERSION = '0.10.2';
-const APP_BUILD = '2026-08-07';
+const APP_VERSION = '0.11.0';
+const APP_BUILD = '2026-08-08';
 const APP_VERSION_FULL = `v${APP_VERSION} (${APP_BUILD})`;
 
 // ---- Display ---------------------------------------------------------------
@@ -1807,7 +1807,20 @@ function jetpackTick() {
   if ((tickCounter & 1) !== 0) return;
   for (let i = jetpacks.length - 1; i >= 0; i--) {
     const j = jetpacks[i];
-    if (j.life <= 0) { playBuf(assets.guardDeadBuf); jetpacks.splice(i, 1); continue; }
+    // KillJetpack (Banks0123.asm:13320), the kill logic IdsKillLogic assigns to the three jetpack
+    // ids: the trooper is replaced by a 3-frame explosion — sprite 7Ah while ANIM_CNT < 5, 7Bh
+    // while < 0Ah, 7Ch after — and only DismissActor'd at 0x10. He used to vanish on the same frame.
+    // He does NOT hold his reinforcement slot while exploding: KillActor sets bit 7 on ACTOR.ID and
+    // CountEnemyType (:7411) compares the FULL byte, so a dying actor stops being counted the
+    // instant it is killed — see respawnTick's live count.
+    // (#136. The explosion COLOURS are identical to ExplosionAnim's — ExplosionSprColx1 and
+    // ExplosionSprColx3 are both `dw 4806h` — so the small-explosion sheet is reused. Not verified:
+    // whether pattern slots 7Ah-7Ch hold different art from 6Ah-6Ch; if so, export it separately.)
+    if (j.dying != null) {
+      if (++j.dying >= 0x10) jetpacks.splice(i, 1);
+      continue;
+    }
+    if (j.life <= 0) { j.dying = 0; playBuf(assets.guardDeadBuf); continue; }
     j.anim = (j.anim + 1) & 0xff;
     switch (j.mode) {
       case 'descend':                              // JetpackSwitchLogic: down to the switch
@@ -1853,6 +1866,13 @@ function drawJetpacks() {
   if (!jetguardSheet) return;
   for (const j of jetpacks) {
     const x = Math.round(j.x - 8);
+    if (j.dying != null) {                          // KillJetpack: the explosion replaces him (#136)
+      if (explosionSSheet) {
+        const f = j.dying < 5 ? 0 : j.dying < 10 ? 1 : 2;
+        ctx.drawImage(explosionSSheet, f * 16, 0, 16, 16, x, Math.round(j.y - 16), 16, 16);
+      }
+      continue;
+    }
     if (shadowSheet) ctx.drawImage(shadowSheet, 0, 0, 16, 16, x, Math.round(j.y + 30 - 8), 16, 16);
     ctx.drawImage(jetguardSheet, 0, 0, 16, 16, x, Math.round(j.y - 32), 16, 16);
     ctx.drawImage(jetguardSheet, 4 * 16, 0, 16, 16, x, Math.round(j.y - 16), 16, 16);
@@ -4649,6 +4669,18 @@ function buildCameras(n) {
     pt: 0, moving: true, wait: 0,                  // InitCamera: Moving=1, Wait=random (R reg)
     status: 0, flashCnt: 0, laserWait: 0,          // 0=move/scan, 1=flash, 2=frozen
     koLatch: false,                                // KO_POINTER_H: paused at a checkpoint
+    // A wall camera is DESTRUCTIBLE (#135). idxActorLife: ID_CAMERA 5, ID_CAMERA_LASER 2.
+    // ActorShapeProject: camera row 2 (+-8), laser camera row 0 (offY -16, distY 16, distX 8);
+    // ActorShapeExpl is row 1 for both (+-20). Damage rows (weapondamage.asm, index id-1):
+    // hand gun/SMG 0, grenade 5, rocket 10, plastic bomb 5, mine FF(none), missile 5 — so ONE
+    // explosive destroys a camera and bullets never do. The laser cameras take 0 from every
+    // weapon: they are killed only with Metal Gear (destroyMetalGear), never by the player.
+    life: c.laser ? 2 : 5,
+    shotShape: c.laser ? { offY: -16, distY: 16, offX: 0, distX: 8 }
+                       : { offY: 0, distY: 8, offX: 0, distX: 8 },
+    explShape: { offY: 0, distY: 20, offX: 0, distX: 20 },
+    dmgTable: c.laser ? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 }
+                      : { 1: 0, 2: 0, 3: 5, 4: 10, 5: 5, 6: 0, 7: 5 },
   }));
   laserShots = [];
 }
@@ -4659,7 +4691,22 @@ function buildCameras(n) {
 const LASER_CAM_CHECKPOINTS = [[0x10, 0x58], [0xC0, 0xF0]];
 
 function cameraTick() {
-  for (const c of cameras) {
+  for (let i = cameras.length - 1; i >= 0; i--) {
+    const c = cameras[i];
+    // KillActor -> ExplosionAnim (Banks0123.asm:13307), the kill logic IdsKillLogic assigns to
+    // ID_CAMERA / ID_LAND_MINE / ID_CAMERA_LASER: SFX 0x16, then the small-explosion sprites for
+    // 0x10 iterations (frame 1 while ANIM_CNT < 5, frame 2 while < 0x0A, frame 3 after) and
+    // DismissActor at 0x10 — the camera is REMOVED, ending its patrol and its alarm trigger. (#135)
+    if (c.dying != null) {
+      if (++c.dying >= 0x10) cameras.splice(i, 1);    // DismissActor (laser cameras never get here —
+                                                      //   every weapon does 0 damage to them)
+      continue;
+    }
+    if (c.life != null && c.life <= 0) {
+      c.dying = 0;
+      playBuf(assets.guardDeadBuf);                   // SFX 0x16 (enemy dead)
+      continue;
+    }
     if (c.laser) { laserCameraTick(c); continue; }    // LaserCameraLogic has NO alert freeze
     if (c.status === 1) {                             // CamAlertAnim: 0x20 iterations of red
       if (--c.flashCnt <= 0) c.status = 2;            // then frozen (RenderCamera)
@@ -4784,6 +4831,15 @@ const LASER_SHOT_DAMAGE = 0x10;   // ActorTouchDamage[ID_LASER_SHOT-1] (data/sha
 function drawCameras() {
   if (!cameraImg) return;
   for (const c of cameras) {
+    // ExplosionAnim replaces the camera's sprite with the small explosion while it dies (#135).
+    if (c.dying != null) {
+      if (explosionSSheet) {
+        const f = c.dying < 5 ? 0 : c.dying < 10 ? 1 : 2;   // cp 5 / cp 0Ah, then frame 3
+        ctx.drawImage(explosionSSheet, f * 16, 0, 16, 16,
+                      Math.round(c.x - 8), Math.round(c.y - 8), 16, 16);
+      }
+      continue;
+    }
     // CamAlertAnim alternates the normal colour and red on bit 2 of the countdown.
     const red = c.status === 1 && (c.flashCnt & 4) !== 0;
     ctx.drawImage(cameraImg, c.dir * 16, red ? 16 : 0, 16, 16,
@@ -5586,8 +5642,11 @@ function respawnTick() {
   // respawnKill` is exactly that set (the same predicate chkAlarmEnd uses).
   const id = info.id;
   const cap = (id === ID_GUARD_REDALERT_R || id === ID_JETPACK_R) ? 3 : 4;
+  // CountEnemyType (Banks0123.asm:7411) compares the FULL id byte, and KillActor sets bit 7 on a
+  // killed actor's ID — so an actor that is mid-death-explosion is NOT counted and its slot frees
+  // immediately, not 0x10 iterations later. (#136 added that explosion window for jetpacks.)
   const live = id === ID_JETPACK_R
-    ? jetpacks.length
+    ? jetpacks.filter((j) => j.dying == null).length
     : guards.filter((g) => g.state === 'alert' || g.respawnKill).length;
   if (live >= cap) return;
   const [x, y] = info.locs[tickCounter & 2 ? 1 : 0];
@@ -7254,9 +7313,10 @@ function shotCanDamage(b) {
 function shotTargetsAll(b, explosion) {
   const out = [];
   if (!shotCanDamage(b)) return out;
-  for (const t of [...guards, prisoner, boss, ...scorpions, powerSwitch,
+  for (const t of [...guards, prisoner, boss, ...scorpions, powerSwitch, ...cameras,
                    ...jetpacks, ...dogs, duck, ...midBosses, hindD, bigBoss]) {
     if (!t) continue;
+    if (t.dying != null) continue;             // already exploding — KillActor cleared COLLISION_CFG
     if (t === boss && boss.inv) continue;     // the Shotgunner's rolls disable collisions
     if (t.shotsOff || t.lorryHidden) continue; // COLLISION_CFG bit1 off (Arnold's bounce / hidden lorry shooter)
     // explosions use the actor's ActorShapeExpl box when it has its own (e.g. the Hind

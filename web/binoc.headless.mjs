@@ -87,7 +87,23 @@ const test = `
   __check('#114 q ignored while peeking', gameState === 'binoculars' && binoc !== null);
   binoc.mode = 'idle';
   binocOnKey('Escape');
-  __check('#114 Escape exits to play when idle', gameState === 'play' && binoc === null);
+  // ExitBinocularMode -> SwitchGameMode restores "always 3 = equipment menu", NOT play. The
+  // telescope therefore stays active until you pick a different item — closing the menu with the
+  // binoculars still selected re-enters it (ExitEquipMenu). User-reported.
+  __check('#114 Escape leaves the scope INTO THE EQUIPMENT MENU (GameMode 3), not play',
+    gameState === 'menu' && menuMode === 'item' && binoc === null, 'state=' + gameState);
+  // ...and closing that menu with the binoculars still selected puts you straight back in.
+  selectedItem = SELECTED_BINOCULARS; currentRoom = 10;
+  closeMenu();
+  __check('telescope STAYS ACTIVE: closing the menu re-enters binoculars',
+    gameState === 'binoculars' && binoc !== null, 'state=' + gameState);
+  // Selecting something else is the way out.
+  binocOnKey('Escape');                       // back to the menu
+  selectedItem = 0;                           // an empty slot = none
+  closeMenu();
+  __check('selecting a different item releases the telescope',
+    gameState === 'play' && binoc === null, 'state=' + gameState);
+  gameState = 'play'; binoc = null;
 
   // --- peek state machine (BinocularLogic): dir trigger -> show + TimerBinocular(0x80) ---
   connections = { '10': { up: null, left: 11, right: null, down: null } };

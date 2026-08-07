@@ -60,6 +60,7 @@ matches the ROM. (Several are auto-generated — regenerate, don't hand-edit.)
 | [room-maps](room-maps/) | Overview PNGs of the whole world: every room screenshot tiled and labelled with its number, laid out from `connections.json`, split at the elevator shafts, with door/elevator links annotated. *Auto-generated* by `dotnet run --project Tools/RoomViewer -- --export-map`. |
 | [room-audit](room-audit.md) + [room-audit-notes](room-audit-notes.md) | Per-room ROM-vs-port actor/item/door coverage (*auto-generated* by `node Tools/audit/audit-rooms.mjs`) plus a curated companion of gaps, ROM sources, and fixes. |
 | [sound-audit](sound-audit.md) + [sound-audit-notes](sound-audit-notes.md) | Per-room music / call-bit / shoot-secure audit (*auto-generated* by `node Tools/audit/audit-sound.mjs`) plus a curated companion. |
+| [versioning](versioning.md) | The port's version constant (`APP_VERSION`/`APP_BUILD`), where it surfaces (page footer, bug reports, console) and how to bump it. |
 | [faithfulness-divergences](faithfulness-divergences.md) | Curated record of **deliberate** ROM divergences (intentional, do-not-"fix") and comment-only nits. Unintentional gaps are filed as GitHub issues under the `faithfulness` label; behaviours deferred until a prerequisite system exists are tracked in issue #90. |
 
 Two standalone illustrated deep-dives (open in a browser):

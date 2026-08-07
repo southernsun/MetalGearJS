@@ -107,6 +107,49 @@ const test = `
   __check('#35 GAME OVER + F5 continues from the checkpoint', gameState === 'play' && currentRoom === 121);
   gameState = 'gameover'; gameOverTimer = 1; continueArmed = false; update();   // no F5 -> reboot to title
   __check('#35 GAME OVER with no F5 reboots to the title', gameState === 'title');
+
+  // ===== The checkpoint must carry the CONTROL MODE (#125) =====
+  // GameDataAreas (logic/checkpoints.asm:114-126) copies "Room" then "PlayerControlMod", so the
+  // mode is part of StoreGameStat/RestoreGameStat. Most SaveStatRooms pairs land in an ELEVATOR
+  // room, and restoring as a plain walker there means no X clamp and free movement through the shaft.
+  __check('#125 SaveStatRooms really do target elevator rooms',
+    ['240,3','241,15','247,109','250,115'].every((k) => SAVE_STAT_ROOMS.has(k)));
+  currentRoom = 240; snake.controlMod = CONTROL_ELEVATOR; snake.anim = ANIM_NORMAL;
+  snake.x = 0xD8; snake.y = 0xB4;
+  elevatorY = 0xB8; elevatorX = 0x70; elevatorLimitUp = 0x38; elevatorLimitDown = 0xB8;
+  const snap = serializeProgress();
+  __check('#125 the snapshot carries the control mode', snap.controlMod === CONTROL_ELEVATOR);
+  __check('#125 ...and the cabin state that goes with it',
+    snap.elev && snap.elev.y === 0xB8 && snap.elev.up === 0x38 && snap.elev.down === 0xB8);
+  // Simulate the death/continue round trip.
+  snake.controlMod = CONTROL_NORMAL; snake.anim = ANIM_NORMAL;
+  elevatorY = 0; elevatorLimitUp = 0; elevatorLimitDown = 0;
+  restoreProgress(snap);
+  __check('#125 continuing restores ELEVATOR mode, not a free walk',
+    snake.controlMod === CONTROL_ELEVATOR, 'mode=' + snake.controlMod);
+  __check('#125 the cabin and its limits come back too',
+    elevatorY === 0xB8 && elevatorLimitUp === 0x38 && elevatorLimitDown === 0xB8);
+  // The mode is what enforces the shaft: ElevatorCtrl walks horizontally with the X 104..243 clamp.
+  // (The clamp applies to a MOVE, so hold a direction rather than just teleporting him.)
+  assets.collision = { width: 32, height: 24, solid: new Array(32*24).fill(0), tiles: new Array(32*24).fill(0) };
+  snake.x = 120; held.add('dir:left'); pushRecency('left');
+  for (let k = 0; k < 60; k++) elevatorControl();
+  __check('#125 elevator mode holds Snake inside the cabin (X clamped at 104, no walking out)',
+    snake.x === 104, 'x=' + snake.x);
+  held.clear();
+  // A non-elevator checkpoint still restores a plain walk.
+  currentRoom = 8; snake.controlMod = CONTROL_NORMAL; snake.x = 100; snake.y = 100;
+  const snap2 = serializeProgress();
+  __check('#125 a normal-room snapshot carries no elevator state', snap2.elev === null);
+  snake.controlMod = CONTROL_ELEVATOR;
+  restoreProgress(snap2);
+  __check('#125 ...and restores a plain walk', snake.controlMod === CONTROL_NORMAL);
+  // Backward compatibility: a pre-#125 snapshot has neither field.
+  const old = serializeProgress(); delete old.controlMod; delete old.anim; delete old.elev;
+  snake.controlMod = CONTROL_ELEVATOR;
+  restoreProgress(old);
+  __check('#125 an older snapshot still loads (falls back to a walk)',
+    snake.controlMod === CONTROL_NORMAL && snake.anim === ANIM_NORMAL);
 })();
 `;
 

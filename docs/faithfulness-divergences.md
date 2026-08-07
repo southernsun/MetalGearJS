@@ -29,11 +29,10 @@ called out in `web/game.js` comments; this table is the index.
 | Room-entry open-floor scan | `3430-3441` (`transition`) | `nextroom.asm` `SetRoomEntryXY` (writes XY unconditionally) | ROM places Snake at a fixed entry point unconditionally; the port scans for an open tile near it, in case the exported collision marks the mirrored entry pixel solid. Robustness only. |
 | Roof "Relieve" alert delay | elevator-guard ceremony (`1114-1218`) | `guardelevator.asm` / `elevatorguardspawner.asm` | The ROM's multi-frame alert-delay handshake is collapsed to a single `0xF` delay; the net ceremony timing matches. |
 | Save medium | `603-666` | `saveload.asm` cassette `GameProgressBuffer` (+ checksum/verify) | Cassette tape → `localStorage`. The ROM's tape load/verify flow has no faithful browser equivalent. SAVE/LOAD reuse the pause-mode typing buffer. |
-| Password input | `617-618` (`passwordKey`) | `passwords.asm` (space code `0x47`) | The space character in "DS 4" / "ANTA WA ERAI" / "HIRAKE GOMA" is not modeled; codes match contiguously. (Behaviourally the cheats still trigger — see #75 if exact-keystroke fidelity is wanted.) |
 | Text-window grow-in | text window (`748-873`) | `textboxappear.asm` | The animated window grow-in is omitted; the box appears at full size. |
 | Intro black beat | intro scene `status -1` (`3847-4017`) | `introscene.asm` | A short black beat was added to the intro that the ROM does not have, to smooth the JS transition. |
 | Patrol look-around turn (Down/Right) | `PATROL_TURN` + patrol logic (`GUARD_LOOK_TICKS`) | `guard.asm:144` `GuardPatrolTurn` (`xor 2`) | The look-around turn (#39) is exact for Up→Left / Left→Up, but the ROM's `Direction xor 2` yields **out-of-range** direction values (0 / 6) for Down/Right facings — a genuine ROM bug (it then indexes the LOS jump-table and sprite table out of bounds). We port the routine's evident ±90° intent instead, completing the symmetric pair Down↔Right. The ~50% walk-through skip and the two-phase 0x10/0x10 timing are faithful. |
-| Binoculars (telescope) | `7502-7610` (`enterBinoculars`/`exitBinoculars`/`binocOnKey`/`drawBinoculars`) | `Banks0123.asm:12256-12603` `BinocularMode`/`DrawBinocRoom`/`ExitBinocularMode` | Three intentional differences: (1) exit returns to **play**, not the equipment menu — the port's "moving = selecting / close = play" menu model would re-enter binoculars immediately on the menu close; (2) no `EnemyList`/power/radio/alert backup-and-restore — the ROM needs it because `DrawBinocRoom` overwrites shared room RAM, but the port renders from a transient snapshot and never mutates play state; (3) F3 (enter/exit) is remapped to closing the item menu / Escape-E-Q, as the browser has no MSX function keys. The peek state machine, `TimerBinocular` 0x80, the exit lock while peeking (#114), the full `ClearPage0` wipe (#117), the own-room actor hiding (#87), banner/arrow positions (#115/#116), and the reticle art are all faithful — the reticle is now the **exported** `SprTarget` asset (`assets/target.png`, `--export-target`), not hand-drawn (#118). |
+| Binoculars (telescope) | `7502-7610` (`enterBinoculars`/`exitBinoculars`/`binocOnKey`/`drawBinoculars`) | `Banks0123.asm:12256-12603` `BinocularMode`/`DrawBinocRoom`/`ExitBinocularMode` | **CORRECTED 2026-08-07 (#124):** this row used to claim "exit returns to play, not the equipment menu" as intentional, reasoned as *"the port's moving = selecting / close = play menu model would re-enter binoculars immediately on the menu close"*. Re-entering immediately is exactly what the ROM does — `ExitBinocularMode` restores `GameMode 3` (`SwitchGameMode`, `:12425`), so the telescope stays active until a different item is selected. That was a **bug, not a divergence**, and is now ported. Two intentional differences remain: (1) no `EnemyList`/power/radio/alert backup-and-restore — the ROM needs it because `DrawBinocRoom` overwrites shared room RAM, but the port renders from a transient snapshot and never mutates play state; (2) F3 (enter/exit) is remapped to closing the item menu / Escape-E-Q, as the browser has no MSX function keys. The peek state machine, `TimerBinocular` 0x80, the exit lock while peeking (#114), the full `ClearPage0` wipe (#117), the own-room actor hiding (#87), banner/arrow positions (#115/#116), and the reticle art are all faithful — the reticle is now the **exported** `SprTarget` asset (`assets/target.png`, `--export-target`), not hand-drawn (#118). |
 
 > If you add a new deliberate divergence, (1) comment it at the call site in `web/game.js`,
 > (2) add a row here, and (3) note it in the change's OpenSpec tasks/notes — per `CLAUDE.md`.
@@ -65,11 +64,13 @@ lands. Tracked in GitHub issue **#90** (and the two latent ones already have the
 
 | ROM behaviour | Blocked on | Tracking |
 | --- | --- | --- |
-| Radio **antenna** requirement (no transceiver without the antenna in buildings 2/3) | Antenna item/system | #90 |
-| Radio **MapZone** gates (`MapZone >= 5` reply suppression; Big Boss transmitter-bug warning excluded in `MapZone == 4`) | MapZone tracking | #90, #78 |
-| Jennifer dead-brother reply suppression | Brother-alive state | #90 |
-| Rooms 16/116 electric floors inert | Electric-floor wiring for those rooms | #90 (overlaps #24/#26) |
-| Aimed-shot speed difficulty addend (`Dificulty*8 + param`) | Difficulty system | #60 |
+| Jennifer dead-brother reply suppression | Brother-alive state (`KillPrisoner` never sets `JennifBrotherDead`) | #90 |
+| Aimed-shot speed difficulty addend (`Dificulty*8 + param`) | A real difficulty value — the formula itself is now ported with `DIFFICULTY = 0` | #60 |
+
+**Cleared 2026-08-07:** the radio **antenna** requirement and the radio **MapZone** gates both
+landed once `idxMapZones` was ported (`mapZoneFor`, #78) — that also wired `SetAreaMusic5`'s
+transmitter-alert exemption. The **rooms 16/116 electric floors** turned out to be live already
+(room 16 via its `ID_GUARD_SWITCH` operator, room 116 via a normal `ID_POWER_SWITCH`).
 
 When a prerequisite system is implemented, port the corresponding behaviour and remove its row
 here.

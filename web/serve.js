@@ -121,6 +121,7 @@ function issueBody(meta, name, url) {
     `| State | ${meta.state}${meta.alert ? ' · ALERT' : ''} |`,
     `| Snake | life ${meta.life}/${meta.maxLife} · class ${meta.class} · facing ${meta.dir} @ (${pos.x}, ${pos.y}) |`,
     `| Captured | ${meta.when} |`,
+    `| Version | ${meta.version ? `${meta.version} (${meta.build || '?'})` : 'unknown (pre-0.9.0 build)'} |`,
     `| URL | ${meta.url || ''} |`,
     `| Browser | ${meta.ua || ''} |`,
     '',

@@ -134,6 +134,34 @@ const test = `
   __check('#44 a NON-card item draws no number', cardDigitAt(SELECTED_RATION, 3).length === 0);
   selectedItem = 0;
   __check('#44 no item selected draws no number', cardDigitAt(0, null).length === 0);
+
+  // ===== Versioning =====
+  // One source of truth (APP_VERSION/APP_BUILD) surfaced in the page footer, the console and every
+  // bug report. These checks exist so a bump can't half-land.
+  const vParts = APP_VERSION.split('.');
+  __check('version: APP_VERSION is semver-ish (three numeric parts)',
+    vParts.length === 3 && vParts.every((x) => x.length > 0 && [...x].every((c) => c >= '0' && c <= '9')),
+    APP_VERSION);
+  const bParts = APP_BUILD.split('-');
+  __check('version: APP_BUILD is an ISO date (YYYY-MM-DD)',
+    bParts.length === 3 && bParts[0].length === 4 && bParts[1].length === 2 && bParts[2].length === 2 &&
+    bParts.every((x) => [...x].every((c) => c >= '0' && c <= '9')),
+    APP_BUILD);
+  __check('version: the composed string carries both',
+    APP_VERSION_FULL.includes(APP_VERSION) && APP_VERSION_FULL.includes(APP_BUILD), APP_VERSION_FULL);
+  // showVersion() must tolerate a missing element (and never throw) — it runs before the game loop.
+  {
+    let wrote = null;
+    const realGet = document.getElementById;
+    document.getElementById = (id) => (id === 'version' ? { set textContent(v) { wrote = v; } } : realGet(id));
+    showVersion();
+    __check('version: showVersion stamps #version with the full string', wrote === APP_VERSION_FULL, String(wrote));
+    document.getElementById = () => null;
+    let threw = false;
+    try { showVersion(); } catch (e) { threw = true; }
+    __check('version: showVersion is safe when #version is absent', !threw);
+    document.getElementById = realGet;
+  }
 })();
 `;
 

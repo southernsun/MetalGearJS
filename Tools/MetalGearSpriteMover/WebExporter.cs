@@ -1001,12 +1001,17 @@ namespace MetalGearSpriteMover
         //   index is (pattern - 0D0h)/4. Frame 1 = D0/D4 cap, D8/DC x7, E0/E4 cap; frame 2 = E8/EC,
         //   F0/F4 x7, F8/FC. RollingBarrelLogic animates the two frames every 4 iterations.
         //
-        //   Colours: ActorSprColors7 = {0Bh, 4Ch} x9 — plane A = colour 0Bh, plane B = 4Ch (bit 6 =
-        //   the CC/OR-combine flag, colour 0Ch), so an overlapping pixel reads 0Bh|0Ch = 0Fh. All
-        //   four barrel rooms use spriteset 19 (SprSetRolBarrel) whose SprsetPal19 does not override
-        //   0Bh/0Ch/0Fh, and no non-dark RoomPalette touches them either, so these come from the base
-        //   palette: 0Bh from DefaultPalette (Banks0123.asm:3946, 64h/6 = R6 G6 B4) and 0Ch/0Fh from
-        //   the PalMenuWeapon overlay (data/palettes.asm:7/9 — 33h/3 = grey, 0/0 = black).
+        //   Colours: idxActorSprCols[ID_ROLLING_BARREL-1] = idxActorSprCols[14] = **ActorSprColors3**
+        //   = {02h, 4Dh} x9 — plane A = colour 02h, plane B = 4Dh (bit 6 = the CC/OR-combine flag,
+        //   colour 0Dh), so an overlapping pixel reads 02h|0Dh = 0Fh. That is the same pair the
+        //   GUARD uses, and unlike most slots BOTH are overridden per-spriteset by SetSprPal: all
+        //   four barrel rooms are spriteset 19, whose SprsetPal19 (data/palettes.asm:284) sets
+        //   slot 2 = 44h/4 -> rgb(146,146,146) and slot 0Dh = 22h/2 -> rgb(73,73,73). The overlap
+        //   slot 0Fh is not overridden, so it comes from the PalMenuWeapon base = black. A grey
+        //   metal drum.
+        //   (This first shipped using ActorSprColors7 — picked because it is also 18 bytes long, so
+        //   the byte count matched. The INDEX is what identifies the table; count is not evidence.
+        //   User-reported: "the colour is off".)
         public static void ExportBarrel(string outDir)
         {
             string attrAsm = LocateRepoFile("data", "actorspriteattr.asm");
@@ -1036,9 +1041,9 @@ namespace MetalGearSpriteMover
             }
             int cw = maxX - minX, chh = maxY - minY, sheetW = cw * frames.Length;
 
-            var planeA = Color.FromRgb(219, 219, 146);   // 0Bh — DefaultPalette 64h/6 (R6 G6 B4)
-            var planeB = Color.FromRgb(109, 109, 109);   // 0Ch — PalMenuWeapon 33h/3 (R3 G3 B3)
-            var overlap = Color.FromRgb(0, 0, 0);        // 0Bh|0Ch = 0Fh — PalMenuWeapon 0/0 (black)
+            var planeA = Color.FromRgb(146, 146, 146);   // slot 2   — SprsetPal19 44h/4
+            var planeB = Color.FromRgb(73, 73, 73);      // slot 0Dh — SprsetPal19 22h/2
+            var overlap = Color.FromRgb(0, 0, 0);        // 02h|0Dh = 0Fh — PalMenuWeapon 0/0 (black)
 
             var px = new byte[sheetW * chh * 4];
             for (int f = 0; f < frames.Length; f++)

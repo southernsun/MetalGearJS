@@ -135,14 +135,29 @@ const test = `
   snake.x=200; snake.y=150; snake.state='idle'; snake.controlMod=CONTROL_NORMAL;
   sfx.length=0; punchQueued=true; normalControl();
   __check('#55 an AIR punch is silent', sfx.length===0, 'sfx='+JSON.stringify(sfx));
-  // facing a solid tile -> SFX 9 only
+  // Facing a solid tile -> SFX 9 only. ChkPunchColl probes 2px AHEAD in the facing direction, so
+  // place the wall where a Snake standing flush against it would find it: shape 0's right probe is
+  // x+7, plus the 2px offset -> x+9.
   reset(); currentRoom=0; guards=[]; guard=null;
   snake.x=200; snake.y=150; snake.dir='right'; snake.state='idle'; snake.controlMod=CONTROL_NORMAL;
   const W2=assets.collision.width;
-  assets.collision.solid[(150>>3)*W2 + ((200+7)>>3)] = 1;
+  assets.collision.solid.fill(0);
+  assets.collision.solid[(150>>3)*W2 + ((200+7+2)>>3)] = 1;
   sfx.length=0; punchQueued=true; normalControl();
   __check('#55 punching a WALL plays SFX 9 only', sfx.length===1 && sfx[0]==='SFX9',
     JSON.stringify(sfx));
+  // The regression this guards: an un-offset probe reports clear when Snake is stopped against the
+  // wall, so nothing sounds. Put the wall ONLY where the 2px offset reaches and it must still fire.
+  reset(); currentRoom=0; guards=[]; guard=null;
+  snake.x=199; snake.y=150; snake.dir='right'; snake.state='idle'; snake.controlMod=CONTROL_NORMAL;
+  assets.collision.solid.fill(0);
+  const onlyAhead = (150>>3)*W2 + ((199+7+2)>>3);
+  if (((199+7)>>3) !== ((199+7+2)>>3)) {         // only meaningful when the two land in different tiles
+    assets.collision.solid[onlyAhead] = 1;
+    sfx.length=0; punchQueued=true; normalControl();
+    __check('#108 the wall thud uses the 2px-ahead probe (flush against a wall still sounds)',
+      sfx.includes('SFX9'), JSON.stringify(sfx));
+  }
   // connecting with a guard -> SFX 8
   reset(); currentRoom=0; snake.x=200; snake.y=150; snake.dir='left';
   snake.state='idle'; snake.controlMod=CONTROL_NORMAL;

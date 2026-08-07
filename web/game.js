@@ -17,6 +17,20 @@
 
 'use strict';
 
+// ---- Version ---------------------------------------------------------------
+// SINGLE SOURCE OF TRUTH for the build the player is running. Surfaced in three places:
+//   1. the page footer (index.html #version) — so a viewer can read it without opening devtools,
+//   2. every B bug report's metadata -> the GitHub issue table, so a report says which build it came
+//      from (the whole point: reports arrive from a deployed site, not from a dev checkout),
+//   3. a console banner on load.
+// The site deploys as STATIC files (web/deploy/DEPLOY.md — copy the folder, no build step), so this
+// is hand-maintained rather than injected. Bump it in the same commit as the change it describes:
+//   PATCH  fixes only          MINOR  new behaviour/systems          MAJOR  reserved for 1.0
+// APP_BUILD is the date of that bump — it is what tells you whether the server has the newest copy.
+const APP_VERSION = '0.9.0';
+const APP_BUILD = '2026-08-07';
+const APP_VERSION_FULL = `v${APP_VERSION} (${APP_BUILD})`;
+
 // ---- Display ---------------------------------------------------------------
 const VIEW_W = 256, VIEW_H = 192;   // native SCREEN 5 page (a room is 256x192)
 const HUD_H  = 20;                  // bottom HUD strip (the ROM HUD sits at screen Y 192-211)
@@ -742,6 +756,17 @@ function serializeProgress() {                  // the GameProgressBuffer equiva
     tankKO, dozerKO, ftKO, hindDKO, mgkDead, sgDead, bigBossDead, mgDestroyed, card7Taken, escaped,
     exitedLorry: [...guardExitedLorry],          // Guard1/2/3ExitedLorry
     switchOffMsx, schneiderCaptured,             // SwitchOffMSXF / SchneiderCaptured (radio gates)
+    // GameDataAreas (logic/checkpoints.asm:114-126) — the block StoreGameStat copies — starts
+    // `dw Room / db 20h` then `dw PlayerControlMod / db 20h`, so the CONTROL MODE and the player
+    // animation are part of the snapshot, not just the position. Most SaveStatRooms pairs land in
+    // an ELEVATOR room (240,3 · 241,15 · 247,109 · 250,115 …), so dropping the mode meant a
+    // continue put you in a lift shaft under free-walk rules — no X clamp, walking through the
+    // walls. (User-reported.)
+    controlMod: snake.controlMod, anim: snake.anim,
+    // The cabin state that goes with control mode 2; without it the mode is restored but the lift
+    // itself is wherever the last ride left it.
+    elev: snake.controlMod === CONTROL_ELEVATOR
+      ? { y: elevatorY, x: elevatorX, up: elevatorLimitUp, down: elevatorLimitDown } : null,
   };
 }
 function restoreProgress(s) {
@@ -762,7 +787,25 @@ function restoreProgress(s) {
   gameState = 'play';
   setRoom(s.room);
   snake.x = s.x; snake.y = s.y; snake.dir = s.dir;
-  snake.controlMod = CONTROL_NORMAL; snake.anim = ANIM_NORMAL; snake.state = 'idle';
+  // Restore the saved control mode / animation (see serializeProgress). Older snapshots predate
+  // these fields, so fall back to a plain walk.
+  snake.controlMod = s.controlMod != null ? s.controlMod : CONTROL_NORMAL;
+  snake.anim = s.anim != null ? s.anim : ANIM_NORMAL;
+  snake.state = 'idle';
+  if (snake.controlMod === CONTROL_ELEVATOR) {
+    if (s.elev) {
+      elevatorY = s.elev.y; elevatorX = s.elev.x;
+      elevatorLimitUp = s.elev.up; elevatorLimitDown = s.elev.down;
+    } else {                                     // pre-`elev` snapshot: rebuild from the room data
+      const ed = elevatorsData ? elevatorsData[s.room] : null;
+      elevatorLimitUp = ed ? ed.up : 0x38;
+      elevatorLimitDown = ed ? ed.down : 0xB8;
+      elevatorX = 0x70;
+      const fl = ed && ed.floors.find((f) => Math.abs(f.playerY - snake.y) < 8);
+      elevatorY = fl ? fl.elevY : elevatorLimitDown;
+    }
+    elevatorStatus = 0;
+  }
 }
 function saveGame() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(serializeProgress())); playBuf(assets.useItemBuf); } catch (e) {} }
 function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
@@ -1411,7 +1454,9 @@ let gasSheet = null;
 // ALL LIFE (ActorTouchDamage[ID_ROLLING_BARREL-1] = 0xFF).
 // The art is the REAL SprRollingBarrel, exported to assets/barrel.png +
 // barrel.json by `dotnet run --project Tools/MetalGearSpriteMover -- --export-barrel`
-// (RollBarrels1/2 OR-pairs laid out by SprOffsets7; colours 0Bh/0Ch OR-ing to 0Fh). It was a
+// (RollBarrels1/2 OR-pairs laid out by SprOffsets7; colours from idxActorSprCols[ID-1] =
+// ActorSprColors3 {02h,4Dh} resolved through SprsetPal19 -> grey 146 / dark grey 73, OR-ing to
+// slot 0Fh = black — a metal drum). It was a
 // single badly-drawn 16x16 blob (#20), then a procedural gradient cylinder (#111) — both wrong.
 const ROM_DIR_DOWN = 2, ROM_DIR_LEFT = 3;             // ACTOR.Direction values (1=Up 2=Down 3=Left 4=Right)
 let barrels = [];
@@ -3322,6 +3367,15 @@ function bugStream() {
   bugStreamHadAudio = hasAudio;
   return bugCombinedStream;
 }
+// Write the running build into the page footer and log it once. Safe if the element is missing
+// (the headless suites mock the DOM), so this never gates startup.
+function showVersion() {
+  try {
+    const el = document.getElementById('version');
+    if (el) el.textContent = APP_VERSION_FULL;
+  } catch (e) { /* no DOM (headless): the console line below still runs */ }
+  try { console.log(`Metal Gear browser port ${APP_VERSION_FULL}`); } catch (e) {}
+}
 function initBugReporter() {
   if (!bugReporterAvailable()) return;            // headless / unsupported browser: no-op
   bugVideoStream = canvas.captureStream(30);       // a 30fps mirror of the visible canvas
@@ -3478,6 +3532,7 @@ async function openBugReport() {
         life: snake.life, maxLife: snake.maxLife, class: snake.class,
         pos: { x: Math.round(snake.x), y: Math.round(snake.y) }, dir: snake.dir,
         alert: !!alertMode, when: new Date().toISOString(),
+        version: APP_VERSION, build: APP_BUILD,     // which build the report came from
         url: location.href, ua: navigator.userAgent,
       },
     };
@@ -7454,9 +7509,15 @@ function normalControl() {
       // chkPunch itself plays NO sound — an air punch is SILENT. The only punch sounds are
       // SFX 9 "punch wall" from ChkPunchColl (below) and SFX 8 "punch guard" from
       // ChkPunchEnemy4, played inside tryPunchGuard when a swing actually connects. (#55)
-      // ChkPunchColl (Banks0123.asm:9017): probe the tile one cell ahead in the facing direction;
-      // on a solid tile play SFX 9 "punch wall" (distinct from the 0x0A breakable-wall sound). (#108)
-      if (blocked(snake.x, snake.y, snake.dir)) playBuf(assets.punchWallBuf);
+      // ChkPunchColl (Banks0123.asm:9017-9051) offsets the shape-0 probe by **2 pixels in the
+      // facing direction** before calling ChkTileCollision_ — up `ld bc,-200h`, down `ld b,2`,
+      // left `ld d,-2`, right `ld d,2` (8.8 fixed, so 2 whole pixels). Probing at Snake's own
+      // position instead meant the test almost never fired: walking into a wall stops him one step
+      // SHORT of it, so the un-offset probe reports clear and the wall thud never played.
+      // (User-reported regression once #55 made the swing itself silent.)
+      const pd = DELTA[snake.dir];
+      if (blocked(snake.x + pd.dx * 2, snake.y + pd.dy * 2, snake.dir, true))
+        playBuf(assets.punchWallBuf);            // SFX 9 "punch wall" (#108)
       tryPunchGuard();
       return;
     }
@@ -7932,7 +7993,19 @@ function enterBinoculars() {        // ExitEquipMenu -> GAME_MODE_BINOCULARS (Bi
   binocDirTrigger = null;
   binoc = { home: currentRoom, mode: 'idle', timer: 0, lookDir: null, snap: binocSnapshot(currentRoom) };
 }
-function exitBinoculars() { gameState = 'play'; binoc = null; binocDirTrigger = null; }   // ExitBinocularMode -> play
+// ExitBinocularMode (Banks0123.asm:12402-12436) ends in SwitchGameMode with C = "Game mode to
+// restore (always 3 = equipment menu)" — F3 drops you back into the EQUIPMENT MENU, not into play.
+// Closing that menu with the binoculars still selected re-enters binocular mode (ExitEquipMenu,
+// menuequipment.asm:299), so the telescope STAYS ACTIVE until you select a different item (or an
+// empty slot = none). That loop is the mechanic, not an accident: it is how the ROM keeps you in
+// the scope. (This port used to return straight to play, which quietly removed it — user-reported.)
+function exitBinoculars() {
+  binoc = null; binocDirTrigger = null;
+  gameState = 'play';                              // satisfy openMenu's guard...
+  openMenu('item');                                // ...then GameMode 3, the equipment menu
+  // SwitchGameMode (:12425-12429) refuses to change mode in the elevator rooms (`cp 0F0h / ret nc`);
+  // openMenu's own fkeysBlocked() guard covers the same rooms, leaving us in play. Sane either way.
+}
 
 // BinocularMode input (Banks0123.asm:12256): the d-pad peeks a neighbour (ControlsTrigger edge, idle
 // only); F3 (Escape/E/Q here) exits — but ONLY when idle (BinoculStatus==1, showing the player's own
@@ -8621,6 +8694,7 @@ async function main() {
     canvas.addEventListener('click', () => unlockAudio(), { once: true });
   }
   startLoop();
+  showVersion();       // stamp the page footer + console with the running build
   initBugReporter();   // dev/QA: start the rolling 20s gameplay recorder for the B bug-report key
   // Dev hooks: ?alert forces the guard alert (for capture).
   if (new URLSearchParams(location.search).has('alert')) devForceAlert = true;

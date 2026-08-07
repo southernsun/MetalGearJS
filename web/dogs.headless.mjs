@@ -100,7 +100,33 @@ const test = `
   setRoom(58);
   const sleeper = dogs.find(d=>d.basement && d.status===0);
   __check('basement room: a placed dog lies ASLEEP (status 0)', !!sleeper);
-  __check('basement room also has a SPAWNED dog already running (status 1)', dogs.some(d=>d.basement && d.status===1));
+  // ID_SPAWN_DOG is an invisible SPAWNER, not a dog (InitSpawnDog, dogspawner.asm:7-21). Every
+  // basement room carries it at the SAME data coordinate (128,96) — inside a wall in several of
+  // them — so drawing it as a placed dog put a phantom dog in the scenery. (User-reported.)
+  __check('room 58 has ONE placed dog, not two', dogs.length===1, 'n='+dogs.length);
+  __check('no dog stands at the spawner data coordinate (128,96)',
+    !dogs.some(d=>d.x===128 && d.y===96));
+  __check('the spawner exists and is not in the drawn dog list', dogSpawner!==null);
+  // InitSpawnDog overwrites SpawnX/SpawnY with GetPlayerXY — the dogs enter where Snake did.
+  flushRoomEntryInit();
+  __check('InitSpawnDog takes the PLAYER position, not its data coordinate',
+    dogSpawner.x===snake.x && dogSpawner.y===snake.y,
+    '('+dogSpawner.x+','+dogSpawner.y+') snake=('+snake.x+','+snake.y+')');
+  __check('InitSpawnDog arms Timer 30h', dogSpawner.timer===0x30);
+  // SpawnDogLogic: one dog per 30h iterations while NumBasementDogs lasts, then DismissActor0.
+  numBasementDogs = 3;
+  const before = dogs.length, dogSpawnerX0 = dogSpawner.x;
+  let spawned = 0, firstAt = -1;
+  for (let i=1; i<=0x30*2*6 && dogSpawner; i++) {      // 4 timer expiries: 3 spawns + the dismiss
+    tickCounter=(tickCounter+1)&0xff; dogSpawnerTick();
+    if (dogs.length > before + spawned) { spawned++; if (firstAt<0) firstAt=i; }
+  }
+  __check('SpawnDogLogic releases exactly NumBasementDogs dogs', spawned===3, 'spawned='+spawned);
+  __check('the first arrives after 30h ROM iterations', firstAt===0x30*2, 'tick='+firstAt);
+  __check('a SPAWNED dog enters already running (status 1) at the spawn point',
+    dogs[before] && dogs[before].status===1 && dogs[before].x===dogSpawnerX0);
+  __check('the spawner dismisses itself once the budget is spent (DismissActor0)', dogSpawner===null);
+  __check('NumBasementDogs is drained to 0', numBasementDogs===0);
   sleeper.wait=1; basementDogMove(sleeper);
   __check('the sleeper wakes and runs toward the player in Y (status 1)', sleeper.status===1 && (sleeper.dir===1||sleeper.dir===2));
   const rx=sleeper.x, ry=sleeper.y; basementDogMove(sleeper);

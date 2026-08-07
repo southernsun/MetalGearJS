@@ -431,11 +431,35 @@ internal static class Program
         // share TilesWallPrison2 (1 row x 4 cols), type 14 = TilesWallPrison1 (13 rows x 3),
         // type 15 = TilesWallPrison (12 rows x 2) â€” data/doors.asm:992-1024. Rendered with the
         // tileset/palette of the room each wall lives in (54 / 164 / 165 / 164).
-        void SaveWallBlock(string label, int room, string file)
+        // A breakable wall's tile block is NOT uniformly solid. Collision in the ROM is per TILE
+        // NUMBER (IdxColisTiles[tileset], one bit each), and these blocks mix solid tiles with
+        // WALKABLE ones -- e.g. TilesWallPrison1 (room 165) and TilesBasemWall59 (room 59) are both
+        // 3 columns wide whose RIGHTMOST column (tiles 35h / 41h) is walkable. That column is the
+        // lane the player has to stand in to punch the wall (ChkTouchDoor) and, in room 59, to walk
+        // along at all. Export the real per-cell mask so the port can stop blocking that lane.
+        // (Issues #129, #130.)
+        var wallSolid = new Dictionary<int, string>();
+        void SaveWallBlock(string label, int room, string file, int type = 0)
         {
             var scene = renderer.BuildScene(room);
             byte[] m = data.Asm.Bytes(label);
             int rows = m[0], cols = m[1];
+            if (type > 0)
+            {
+                byte[] collBytes = data.Asm.Bytes(data.Asm.Symbols("IdxColisTiles")[data.GfxSetId(room)]);
+                var rowsOut = new List<string>();
+                for (int r = 0; r < rows; r++)
+                {
+                    var bits = new List<string>();
+                    for (int c = 0; c < cols; c++)
+                    {
+                        int t = m[2 + r * cols + c] & 0xFF;
+                        bits.Add(((collBytes[t >> 3] >> (7 - (t & 7))) & 1).ToString());
+                    }
+                    rowsOut.Add("[" + string.Join(",", bits) + "]");
+                }
+                wallSolid[type] = "[" + string.Join(",", rowsOut) + "]";
+            }
             using var bmp = new System.Drawing.Bitmap(cols * 8, rows * 8, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             for (int r = 0; r < rows; r++)
                 for (int c = 0; c < cols; c++)
@@ -449,10 +473,10 @@ internal static class Program
         }
         if (data.RoomDefined(165))
         {
-            SaveWallBlock("TilesWallPrison2", 54, "wall-12.png");
-            SaveWallBlock("TilesWallPrison2", 164, "wall-13.png");
-            SaveWallBlock("TilesWallPrison1", 165, "wall-14.png");
-            SaveWallBlock("TilesWallPrison", 164, "wall-15.png");
+            SaveWallBlock("TilesWallPrison2", 54, "wall-12.png", 12);
+            SaveWallBlock("TilesWallPrison2", 164, "wall-13.png", 13);
+            SaveWallBlock("TilesWallPrison1", 165, "wall-14.png", 14);
+            SaveWallBlock("TilesWallPrison", 164, "wall-15.png", 15);
         }
 
         // The basement / building-3 breakable BOMB walls (DrawBasemWall* + DrawWallBuil3_108,
@@ -460,42 +484,56 @@ internal static class Program
         // 923-1082) use the SAME tile-block format as the prison walls, rendered in each wall's
         // home-room tileset. Render types 7-11 + 16-19. Where one type spans two rooms with the
         // same tileset (9: 59/96, 17: 93/169, 8: 61/115) the namesake room is used.
-        void SaveWallIf(string label, int room, string file) { if (data.RoomDefined(room)) SaveWallBlock(label, room, file); }
-        SaveWallIf("TilesBasemWall60",  60,  "wall-7.png");
-        SaveWallIf("TilesBasemWall61",  61,  "wall-8.png");
-        SaveWallIf("TilesBasemWall59",  59,  "wall-9.png");
-        SaveWallIf("TilesBasemWall58",  58,  "wall-10.png");
-        SaveWallIf("TilesBasemWall63",  63,  "wall-11.png");
-        SaveWallIf("TilesWallBld3_108", 108, "wall-16.png");
-        SaveWallIf("TilesBasemWall93",  93,  "wall-17.png");
-        SaveWallIf("TilesBasemWall100", 100, "wall-18.png");
-        SaveWallIf("TilesBasemWall112", 112, "wall-19.png");
+        void SaveWallIf(string label, int room, string file, int type) { if (data.RoomDefined(room)) SaveWallBlock(label, room, file, type); }
+        SaveWallIf("TilesBasemWall60", 60, "wall-7.png", 7);
+        SaveWallIf("TilesBasemWall61", 61, "wall-8.png", 8);
+        SaveWallIf("TilesBasemWall59", 59, "wall-9.png", 9);
+        SaveWallIf("TilesBasemWall58", 58, "wall-10.png", 10);
+        SaveWallIf("TilesBasemWall63", 63, "wall-11.png", 11);
+        SaveWallIf("TilesWallBld3_108", 108, "wall-16.png", 16);
+        SaveWallIf("TilesBasemWall93", 93, "wall-17.png", 17);
+        SaveWallIf("TilesBasemWall100", 100, "wall-18.png", 18);
+        SaveWallIf("TilesBasemWall112", 112, "wall-19.png", 19);
 
         // type -> sprite + offset from the door's (x,y), plus `shear` = vertical pixels
         // shifted per column when drawing (reproduces drawdoors.asm). North/south draw
         // upright (shear 0); west/east are angled side doors: DrawDoorWest shifts +4 per
         // column, DrawDoorEast -4, giving the recessed-wall parallelogram.
-        File.WriteAllText(Path.Combine(outDir, "door-gfx.json"),
-            "{\n" +
-            "  \"1\": {\"img\":\"door-north.png\",\"w\":24,\"h\":32,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"2\": {\"img\":\"door-south.png\",\"w\":32,\"h\":8,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"3\": {\"img\":\"door-west.png\",\"w\":8,\"h\":32,\"offX\":0,\"offY\":0,\"shear\":4},\n" +
-            "  \"4\": {\"img\":\"door-east.png\",\"w\":8,\"h\":32,\"offX\":0,\"offY\":0,\"shear\":-4},\n" +
-            "  \"5\": {\"img\":\"door-elevator.png\",\"w\":24,\"h\":32,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"7\": {\"img\":\"wall-7.png\",\"w\":32,\"h\":48,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"8\": {\"img\":\"wall-8.png\",\"w\":32,\"h\":8,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"9\": {\"img\":\"wall-9.png\",\"w\":24,\"h\":104,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"10\": {\"img\":\"wall-10.png\",\"w\":40,\"h\":104,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"11\": {\"img\":\"wall-11.png\",\"w\":40,\"h\":96,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"12\": {\"img\":\"wall-12.png\",\"w\":32,\"h\":8,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"13\": {\"img\":\"wall-13.png\",\"w\":32,\"h\":8,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"14\": {\"img\":\"wall-14.png\",\"w\":24,\"h\":104,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"15\": {\"img\":\"wall-15.png\",\"w\":16,\"h\":96,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"16\": {\"img\":\"wall-16.png\",\"w\":64,\"h\":80,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"17\": {\"img\":\"wall-17.png\",\"w\":16,\"h\":96,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"18\": {\"img\":\"wall-18.png\",\"w\":40,\"h\":96,\"offX\":0,\"offY\":0,\"shear\":0},\n" +
-            "  \"19\": {\"img\":\"wall-19.png\",\"w\":48,\"h\":40,\"offX\":0,\"offY\":0,\"shear\":0}\n" +
-            "}\n");
+        // `solid` (wall types only) is the per-cell collision mask of the tile block, straight from
+        // the ROM's IdxColisTiles bitmap -- see SaveWallBlock above.
+        var dg = new System.Text.StringBuilder("{\n");
+        var gfxRows = new (int type, string body)[]
+        {
+            (1,  "{\"img\":\"door-north.png\",\"w\":24,\"h\":32,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (2,  "{\"img\":\"door-south.png\",\"w\":32,\"h\":8,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (3,  "{\"img\":\"door-west.png\",\"w\":8,\"h\":32,\"offX\":0,\"offY\":0,\"shear\":4}"),
+            (4,  "{\"img\":\"door-east.png\",\"w\":8,\"h\":32,\"offX\":0,\"offY\":0,\"shear\":-4}"),
+            (5,  "{\"img\":\"door-elevator.png\",\"w\":24,\"h\":32,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (7,  "{\"img\":\"wall-7.png\",\"w\":32,\"h\":48,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (8,  "{\"img\":\"wall-8.png\",\"w\":32,\"h\":8,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (9,  "{\"img\":\"wall-9.png\",\"w\":24,\"h\":104,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (10, "{\"img\":\"wall-10.png\",\"w\":40,\"h\":104,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (11, "{\"img\":\"wall-11.png\",\"w\":40,\"h\":96,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (12, "{\"img\":\"wall-12.png\",\"w\":32,\"h\":8,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (13, "{\"img\":\"wall-13.png\",\"w\":32,\"h\":8,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (14, "{\"img\":\"wall-14.png\",\"w\":24,\"h\":104,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (15, "{\"img\":\"wall-15.png\",\"w\":16,\"h\":96,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (16, "{\"img\":\"wall-16.png\",\"w\":64,\"h\":80,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (17, "{\"img\":\"wall-17.png\",\"w\":16,\"h\":96,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (18, "{\"img\":\"wall-18.png\",\"w\":40,\"h\":96,\"offX\":0,\"offY\":0,\"shear\":0}"),
+            (19, "{\"img\":\"wall-19.png\",\"w\":48,\"h\":40,\"offX\":0,\"offY\":0,\"shear\":0}"),
+        };
+        for (int i = 0; i < gfxRows.Length; i++)
+        {
+            var g = gfxRows[i];
+            string body = g.body;
+            if (wallSolid.TryGetValue(g.type, out var mask))
+                body = body.Substring(0, body.Length - 1) + ",\"solid\":" + mask + "}";
+            dg.Append("  \"").Append(g.type).Append("\": ").Append(body)
+              .Append(i == gfxRows.Length - 1 ? "\n" : ",\n");
+        }
+        dg.Append("}\n");
+        File.WriteAllText(Path.Combine(outDir, "door-gfx.json"), dg.ToString());
         Console.WriteLine("Doors: wrote door-{north,south,west,east,elevator}.png + prison walls + door-gfx.json");
     }
 

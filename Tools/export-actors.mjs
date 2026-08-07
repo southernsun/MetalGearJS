@@ -110,7 +110,7 @@ for (let room = 0; room < roomActorLabels.length; room++) {
       : { id: a[1], y: num(a[3] + 'h'), x: num(a[4] + 'h') });
   const guards = [], prisoners = [], pitfalls = [], scorpions = [], gas = [], barrels = [],
         jetpacks = [], bridges = [], dogs = [], mines = [];
-  let helpme = false, powerswitch = null, duck = null, fakemadnar = null;
+  let helpme = false, powerswitch = null, duck = null, fakemadnar = null, dogSpawner = false;
   // PATH-SLOT BOOKKEEPING (issue #122). The ROM does NOT use one running counter — each actor kind
   // computes its own index from a CountEnemyType over a specific set, then GetPathPoints does
   // `dec b` (index = count-so-far, including itself, minus 1). Four distinct rules:
@@ -179,12 +179,20 @@ for (let room = 0; room < roomActorLabels.length; room++) {
       guards.push({ y: a.y, x: a.x, switch: true });
     } else if (a.id === 'ID_DOG') {
       dogs.push({ y: a.y, x: a.x });               // DogLogic (room 207)
-    } else if (a.id === 'ID_DOG_BASEMENT' || a.id === 'ID_SPAWN_DOG') {
-      // InitDogBasement / InitSpawnDog (dogbasement.asm, dogspawner.asm; basement rooms 6/10/55/56/
-      // 58-63): free-roaming sleep -> run -> chase dogs (DogBasementLogic). The spawner's running-
-      // dog-from-the-edge entry + the NumBasementDogs cross-room carry-over count are approximated
-      // by a placed dog (documented divergence); a spawned dog (ID_SPAWN_DOG) starts running.
-      dogs.push({ y: a.y, x: a.x, basement: true, spawn: a.id === 'ID_SPAWN_DOG' });
+    } else if (a.id === 'ID_DOG_BASEMENT') {
+      // InitDogBasement (dogbasement.asm; basement rooms 6/10/55/56/58-63): a free-roaming
+      // sleep -> run -> chase dog (DogBasementLogic), placed at its data coordinate.
+      dogs.push({ y: a.y, x: a.x, basement: true });
+    } else if (a.id === 'ID_SPAWN_DOG') {
+      // InitSpawnDog (dogspawner.asm:7-21) is NOT a dog — it is an invisible SPAWNER. It overwrites
+      // its own SpawnX/SpawnY with the PLAYER's position, sets COLLISION_CFG = 0 (no collision with
+      // the player or his shots) and never assigns a SpriteId. SpawnDogLogic then releases one
+      // ID_DOG_BASEMENT every 30h iterations while NumBasementDogs (the count of dogs in the room
+      // you just LEFT) lasts, then dismisses itself.
+      // Its data coordinate is meaningless — every basement room carries it at the same (128,96),
+      // which is inside a wall in several of them. Exporting it as a placed dog drew a phantom
+      // second dog standing in the scenery. (User-reported.)
+      dogSpawner = true;
     } else if (a.id === 'ID_COWARD_DUCK') {
       duck = { y: a.y, x: a.x };                   // Coward Duck (room 193, CARD8)
     } else if (a.id === 'ID_SENTINEL') {
@@ -234,9 +242,9 @@ for (let room = 0; room < roomActorLabels.length; room++) {
   if (SLEEPY_ROOMS.has(room)) for (const g of guards) { g.sleeping = true; g.sleepAwake = true; }
   if (guards.length || prisoners.length || pitfalls.length || helpme || scorpions.length ||
       gas.length || barrels.length || powerswitch || jetpacks.length || bridges.length ||
-      dogs.length || duck || fakemadnar || mines.length)
+      dogs.length || duck || fakemadnar || mines.length || dogSpawner)
     out[room] = { guards, prisoners, pitfalls, helpme, scorpions, gas, barrels, powerswitch,
-                  jetpacks, bridges, dogs, duck, fakemadnar, mines };
+                  jetpacks, bridges, dogs, duck, fakemadnar, mines, dogSpawner };
 }
 // --- Invariants (issue #122). These caught real bugs; keep them loud. ---
 for (const [room, r] of Object.entries(out)) {

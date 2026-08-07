@@ -27,7 +27,7 @@
 // is hand-maintained rather than injected. Bump it in the same commit as the change it describes:
 //   PATCH  fixes only          MINOR  new behaviour/systems          MAJOR  reserved for 1.0
 // APP_BUILD is the date of that bump — it is what tells you whether the server has the newest copy.
-const APP_VERSION = '0.9.0';
+const APP_VERSION = '0.10.0';
 const APP_BUILD = '2026-08-07';
 const APP_VERSION_FULL = `v${APP_VERSION} (${APP_BUILD})`;
 
@@ -520,6 +520,12 @@ function setRoom(n) {
   const r = rooms.get(n);
   if (!r) { console.warn('Room not loaded:', n); return; }
   previousRoom = currentRoom;
+  // SetupEnemyRoom (Banks0123.asm:6128) counts the basement dogs with CountEnemyType(ID_DOG_BASEMENT)
+  // and stores it in NumBasementDogs BEFORE it erases the EnemyList — so the value is the number of
+  // dogs in the room being LEFT. That is the budget the next room's ID_SPAWN_DOG releases, which is
+  // how a dog pack follows you through the basement. Counted here for the same reason: buildDogs()
+  // below replaces `dogs` with the new room's.
+  numBasementDogs = dogs.reduce((c, d) => c + (d.basement && d.life > 0 ? 1 : 0), 0);
   currentRoom = n;
   if (gameState === 'play') chkSaveGameStatus(n);   // ChkSaveGameStatus: arm a checkpoint on the pair
   if (n === 111) switchOffMsx = true;               // ChkSwitchMsxOff: room 111 arms Big Boss's MSX order
@@ -1479,6 +1485,9 @@ function flushRoomEntryInit() {
   if (!roomEntryInitPending) return;
   roomEntryInitPending = false;
   initBarrelDirections();
+  // InitSpawnDog (dogspawner.asm:8-18): SpawnX/SpawnY = GetPlayerXY, i.e. the dogs come in where
+  // Snake entered. (The routine's `cp 20` guard on Player X is dead code — both branches store D.)
+  if (dogSpawner) { dogSpawner.x = snake.x; dogSpawner.y = snake.y; }
 }
 function initBarrelDirections() {
   // InitRollingBarrel (rollingbarrels.asm:115-128): DE = +80h (right) by default; PlayerX >= 80h
@@ -1819,17 +1828,44 @@ function drawJetpacks() {
 // collisions. Life 2, touch damage 2.
 let dogs = [];
 let dogSheet = null;
+// NumBasementDogs (Variables.asm) — how many basement dogs were in the room just left; the
+// ID_SPAWN_DOG spawner in the room you enter releases exactly that many. Set in setRoom().
+let numBasementDogs = 0;
+// The room's ID_SPAWN_DOG, or null. It is NOT a dog: InitSpawnDog (dogspawner.asm:7-21) assigns no
+// sprite, sets COLLISION_CFG = 0 (no collision with the player OR his shots), and overwrites its
+// SpawnX/SpawnY with the PLAYER's position — its own data coordinate is never used. Every basement
+// room carries it at the same (128,96), which is inside a wall in several of them, so exporting it
+// as a placed dog drew a phantom second dog standing in the scenery. (User-reported.)
+let dogSpawner = null;
 function buildDogs(n) {
   const a = actorsData && actorsData[n];
   dogs = ((a && a.dogs) || []).map((d) => ({
     x: d.x, y: d.y, vx: 0, vy: 0, anim: 0, life: 2, shotShape: GUARD_SHAPE,
     basement: !!d.basement,
-    // InitDogBasement: a placed dog lies asleep (status 0, Timer 0x40); a SPAWNED dog (ID_SPAWN_DOG)
-    // enters already running (status 1). A surface dog (room 207) uses the sleep/listen/charge DogLogic.
-    status: d.basement ? (d.spawn ? 1 : 0) : 0,
+    // InitDogBasement: a placed dog lies asleep (status 0, Timer 0x40). A surface dog (room 207)
+    // uses the sleep/listen/charge DogLogic.
+    status: 0,
     wait: d.basement ? 0x40 : 0x20 + (((Math.random() * 4) | 0) * 8),
     dir: d.basement ? (snake && snake.y < d.y ? 1 : 2) : 2,
   }));
+  // Timer 30h; position deferred to flushRoomEntryInit (it must read Snake's ENTRY position).
+  dogSpawner = (a && a.dogSpawner) ? { x: 0, y: 0, timer: 0x30 } : null;
+}
+// SpawnDogLogic (dogspawner.asm:31-46), once per ROM iteration: count the timer down; on 0, spawn
+// one ID_DOG_BASEMENT at the spawn point and decrement NumBasementDogs — reloading the timer with
+// 30h — until the budget is empty, then DismissActor0 removes the spawner. A spawned dog enters
+// already running (InitDogBasement's spawned path), unlike a placed one which lies asleep.
+function dogSpawnerTick() {
+  if (!dogSpawner || (tickCounter & 1) !== 0) return;      // ROM iteration boundary
+  if (--dogSpawner.timer > 0) return;
+  if (numBasementDogs <= 0) { dogSpawner = null; return; } // DismissActor0
+  numBasementDogs--;
+  dogSpawner.timer = 0x30;
+  dogs.push({
+    x: dogSpawner.x, y: dogSpawner.y, vx: 0, vy: 0, anim: 0, life: 2, shotShape: GUARD_SHAPE,
+    basement: true, status: 1, wait: 0,
+    dir: snake.y < dogSpawner.y ? 1 : 2,
+  });
 }
 const DOG_SPEEDS = { 1: [-3, 0], 2: [3, 0], 3: [0, -3], 4: [0, 3] };  // (dy, dx)
 function dogAim(d) {
@@ -1895,6 +1931,7 @@ function basementDogMove(d) {
   }
 }
 function dogTick() {
+  dogSpawnerTick();
   if ((tickCounter & 1) !== 0) return;
   for (let i = dogs.length - 1; i >= 0; i--) {
     const d = dogs[i];
@@ -3729,11 +3766,26 @@ function inOpenDoor(px, py) {
 // it is bombed/punched open — the ROM's DrawWall writes the wall's tiles into the room collision
 // map and EraseBasemWall removes them on break. Several of these walls sit over an otherwise-OPEN
 // passage in the exported room collision, so without this they were walk-through without bombing.
+//
+// The block is NOT uniformly solid. The ROM resolves collision per TILE NUMBER through
+// IdxColisTiles[tileset] (one bit each), and these tile blocks deliberately mix solid tiles with
+// WALKABLE ones — 8 of the 13 wall types have at least one walkable cell. Treating the whole rect
+// as solid stole the very lane the player must stand in: TilesWallPrison1 (room 165, type 14) and
+// TilesBasemWall59 (room 59, type 9) are both 3 columns whose RIGHTMOST column (tiles 35h / 41h)
+// is walkable, and ChkTouchDoor's punch box reaches only 26px from the wall origin. With all 24px
+// solid, Snake could get no closer than 7px past the block — 62 vs the 57 the box needed in room
+// 165, 30 vs 25 in room 59 — so the cell wall could never be punched open (no prison escape) and
+// room 59's side lane could not be walked at all. `solid` comes from the ROM's own bitmap via
+// RoomViewer's SaveWallBlock. Issues #129, #130.
 function closedWallSolid(px, py) {
   for (const d of activeDoors) {
     if (d.open || d.opening) continue;
     if (d.type < 7 || d.type > 19) continue;
-    if (pointInRect(d.rect, px, py)) return true;
+    if (!pointInRect(d.rect, px, py)) continue;
+    const mask = (doorGfx[String(d.type)] || {}).solid;
+    if (!mask) return true;                       // no exported mask -> whole block solid
+    const row = mask[(py - d.rect.y) >> 3], col = row && row[(px - d.rect.x) >> 3];
+    if (col) return true;                         // this cell's tile is a solid one
   }
   return false;
 }

@@ -40,6 +40,9 @@ sandbox.__coll7 = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'rooms', '
 sandbox.__coll6 = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'rooms', '6.collision.json'), 'utf8'));
 sandbox.__coll11 = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'rooms', '11.collision.json'), 'utf8'));
 sandbox.__coll60 = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'rooms', '60.collision.json'), 'utf8'));
+sandbox.__coll165 = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'rooms', '165.collision.json'), 'utf8'));
+sandbox.__coll59 = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'rooms', '59.collision.json'), 'utf8'));
+sandbox.__dgfx = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'door-gfx.json'), 'utf8'));
 
 let src = fs.readFileSync(path.join(dir, 'game.js'), 'utf8').replace(/\bmain\(\);\s*$/, '// main() stripped\n');
 const results = [];
@@ -47,7 +50,7 @@ sandbox.__check = (name, cond, extra='') => results.push({ name, ok: !!cond, ext
 
 const test = `
 ;(function(){
-  doorsData = __doors; doorTypes = __dtypes; doorGfx = {};
+  doorsData = __doors; doorTypes = __dtypes; doorGfx = __dgfx;
   assets.collision = __coll7; currentRoom = 7; gameState = 'play';
   // Walk Snake down into room 7's south lock-5 door (id 4, leads to room 6's upper area).
   function push(card) {
@@ -131,6 +134,55 @@ const test = `
   openDoor(w60);                                       // ChkBasementWall: an exploding bomb opens it
   __check('once bombed open the wall is passable again',
           closedWallSolid(wx, wy) === false && inOpenDoor(wx, wy) === true);
+
+  // --- #129/#130: a wall tile block is NOT uniformly solid -------------------------------------
+  // Collision in the ROM is per TILE NUMBER (IdxColisTiles[tileset], one bit each) and these blocks
+  // mix solid tiles with WALKABLE ones. Treating the whole rect as solid sealed off the lane the
+  // player has to stand in: room 165's cell wall could never be punched (no prison escape, #130)
+  // and room 59's side lane could not be walked at all (#129). The mask is exported straight from
+  // the ROM bitmap by RoomViewer's SaveWallBlock.
+  const m14 = doorGfx['14'].solid, m9 = doorGfx['9'].solid;
+  __check('#130 type 14 (TilesWallPrison1) is 13 rows x 3 cols',
+          m14.length === 13 && m14[0].length === 3);
+  __check('#130 its rightmost column is WALKABLE (tile 35h), the left two solid',
+          m14.every(r => r[0] === 1 && r[1] === 1 && r[2] === 0));
+  __check('#129 type 9 (TilesBasemWall59) likewise: cols 1-2 solid, col 3 walkable (tile 41h)',
+          m9.length === 13 && m9.every(r => r[0] === 1 && r[1] === 1 && r[2] === 0));
+
+  // Room 165 (Snake's cell): the punch box is x 32..57 but the block spans 32..55. With the whole
+  // block solid Snake could reach only x=62 and ChkTouchDoor never passed.
+  assets.collision = __coll165; currentRoom = 165; buildDoors(165);
+  const w165 = activeDoors.find(x => x.lock === 15);
+  __check('#130 room 165 carries the lock-15 prison wall (ChkPrisonWalls)',
+          !!w165 && w165.type === 14 && w165.rect.x === 32 && w165.rect.w === 24);
+  __check('#130 the wall still blocks its solid columns (x 32..47)',
+          closedWallSolid(36, 70) === true && closedWallSolid(44, 70) === true);
+  __check('#130 but its third column (x 48..55) is walkable — the punch lane',
+          closedWallSolid(52, 70) === false);
+  snake.x = 56; snake.y = 72; snake.anim = ANIM_NORMAL;
+  __check('#130 Snake can stand at x=56 in front of the wall', freeAt(56, 72) === true);
+  __check('#130 and ChkTouchDoor then passes there', touchDoor(w165) === true);
+  // ChkPrisonWalls: facing PunchWallDirs[14-7]=3 (Left) + CONTROL_PUNCH, one decrement per frame.
+  snake.dir = 'left'; snake.controlMod = CONTROL_PUNCH;
+  const life0 = prisonWall1Life;
+  chkPunchOpenDoors();
+  __check('#130 punching the wall decrements PrisonWall1Life', prisonWall1Life === life0 - 1);
+  prisonWall1Life = 1; chkPunchOpenDoors();
+  __check('#130 the wall opens when its life hits 0 — the prison escape',
+          w165.open === true && prisonWall1Life <= 0);
+  snake.controlMod = CONTROL_NORMAL;
+
+  // Room 59: the same shape, and the lane the user could not walk along.
+  assets.collision = __coll59; currentRoom = 59; buildDoors(59);
+  const w59 = activeDoors.find(x => x.lock === 16);
+  __check('#129 room 59 wall spans x 0..23 with the lane at x 16..23',
+          w59.rect.x === 0 && w59.rect.w === 24 &&
+          closedWallSolid(8, 60) === true && closedWallSolid(20, 60) === false);
+  __check('#129 Snake can walk the lane beside it (x=24 clear over the wall rows)',
+          freeAt(24, 60) === true && freeAt(24, 100) === true);
+  __check('#129 and ChkTouchDoor passes there, so the wall sounds hollow',
+          (snake.x = 24, snake.y = 100, touchDoor(w59)) === true);
+  assets.collision = __coll60; currentRoom = 60; buildDoors(60);
 
   // --- in-room wall (dest === room): opening it does NOT teleport (ChkEnterDoor2's 0x20 bit) ---
   __check('room 60 wall is an IN-ROOM wall (dest === its own room)', w60.dest === 60);

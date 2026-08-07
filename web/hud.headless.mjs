@@ -46,6 +46,11 @@ src = src.replace(/\bmain\(\);\s*$/, '// main() stripped for harness\n');
 // Asserts appended in the SAME scope (so they can see snake/assets/update/draw/etc.).
 const results = [];
 function check(name, cond, extra='') { results.push({ name, ok: !!cond, extra }); }
+// CHANGELOG.md's newest entry, so the version constants and the changelog cannot drift apart.
+const __clog = fs.readFileSync(path.join(dir, '..', 'CHANGELOG.md'), 'utf8');
+const __clogTop = (__clog.match(/^##\s+(\d+\.\d+\.\d+)\s+—\s+(\d{4}-\d{2}-\d{2})/m) || []).slice(1);
+sandbox.__clogVersion = __clogTop[0] || null;
+sandbox.__clogDate = __clogTop[1] || null;
 sandbox.__check = check;
 sandbox.__atlas = atlas; sandbox.__iconAtlas = iconAtlas; sandbox.__calls = calls;
 sandbox.__fontMeta = fontMetaJson;
@@ -162,6 +167,14 @@ const test = `
     __check('version: showVersion is safe when #version is absent', !threw);
     document.getElementById = realGet;
   }
+
+  // ===== The changelog is tied to the version =====
+  __check('changelog: it has a parseable newest entry', __clogVersion !== null && __clogDate !== null,
+    String(__clogVersion) + ' / ' + String(__clogDate));
+  __check('changelog: its newest version matches APP_VERSION',
+    __clogVersion === APP_VERSION, __clogVersion + ' vs ' + APP_VERSION);
+  __check('changelog: its newest date matches APP_BUILD',
+    __clogDate === APP_BUILD, __clogDate + ' vs ' + APP_BUILD);
 })();
 `;
 

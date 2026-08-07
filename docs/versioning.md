@@ -28,6 +28,13 @@ server". There is no build step to inject a git SHA or a timestamp, and the `/re
 only dynamic piece. A committed constant is therefore the only thing guaranteed to match what is
 actually being served.
 
+## The changelog
+
+[`CHANGELOG.md`](../CHANGELOG.md) is the record of what each version contains, newest first. **Every
+change goes in it and bumps the version in the same commit** — `web/hud.headless.mjs` asserts that
+the changelog's newest entry matches `APP_VERSION`/`APP_BUILD`, so a half-finished bump fails the
+suite.
+
 ## Bumping it
 
 Change both constants in the same commit as the work they describe:
@@ -39,8 +46,8 @@ Change both constants in the same commit as the work they describe:
 `APP_BUILD` is the date of the bump. It is what tells you whether the server has the newest copy:
 if the footer date is older than your last deploy, the files did not land.
 
-`web/hud.headless.mjs` asserts the shape of both constants and that `showVersion()` stamps the
-element (and does not throw when it is absent), so a half-finished bump fails the suite.
+`web/hud.headless.mjs` asserts the shape of both constants, that `showVersion()` stamps the element
+(and does not throw when it is absent), and that `CHANGELOG.md`'s newest entry agrees with them.
 
 ## Current version
 

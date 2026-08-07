@@ -27,7 +27,7 @@
 // is hand-maintained rather than injected. Bump it in the same commit as the change it describes:
 //   PATCH  fixes only          MINOR  new behaviour/systems          MAJOR  reserved for 1.0
 // APP_BUILD is the date of that bump — it is what tells you whether the server has the newest copy.
-const APP_VERSION = '0.10.1';
+const APP_VERSION = '0.10.2';
 const APP_BUILD = '2026-08-07';
 const APP_VERSION_FULL = `v${APP_VERSION} (${APP_BUILD})`;
 
@@ -3808,8 +3808,24 @@ function blockedShape(x, y, dir, allowOff, probes) {
 }
 
 const pointInRect = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+// An open DOORWAY (render types 1-6) is passable even where the room's collision map says wall —
+// the door graphic is drawn over solid tiles, so opening it has to override them.
+//
+// A broken BREAKABLE WALL (types 7-19) is NOT that. RestoreSavedTiles (logic/doors/erasedoor.asm:399)
+// redraws the *saved background* over the wall's block, so what is walkable afterwards is whatever
+// the background was — and for most of these walls the background is only partly open. Room 59's
+// 3x13 block has solid tiles at the top (tile rows 4-7) and bottom (12-16) with the passage in the
+// middle (rows 8-11); the ROM leaves those stubs standing. Blanket-opening the whole rect let Snake
+// walk into the leftover wall above and below the hole. (User-reported.)
+//
+// Verified safe across every breakable wall in the game: all 20 have at least one FULLY open row
+// behind them, so bombing always yields a real passage.
 function inOpenDoor(px, py) {
-  for (const d of activeDoors) if (d.open && pointInRect(d.rect, px, py)) return true;
+  for (const d of activeDoors) {
+    if (!d.open) continue;
+    if (d.type >= 7 && d.type <= 19) continue;    // a broken wall defers to the restored background
+    if (pointInRect(d.rect, px, py)) return true;
+  }
   return false;
 }
 // A CLOSED breakable wall (DrawWall render types 7-19) is a solid tile block at the door XY until

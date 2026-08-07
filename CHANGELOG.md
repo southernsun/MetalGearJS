@@ -19,6 +19,25 @@ Issue numbers link to [the tracker](https://github.com/southernsun/MetalGearJS/i
 
 ---
 
+## 0.10.2 — 2026-08-07
+
+### Fixed
+- **You could walk into the leftover stubs of a bombed wall.** `inOpenDoor` treated an open door's
+  whole rect as passable — correct for doorWAYS (types 1-6), which are drawn over solid tiles and
+  must override them, but wrong for breakable walls: `RestoreSavedTiles` redraws the *saved
+  background*, so the background's own collision decides. Room 59's block is open only in tile rows
+  8-11; rows 4-7 and 12-16 stay solid and the ROM leaves those stubs standing. Checked across all
+  20 breakable walls — every one has a fully-open row behind it, so bombing always yields a real
+  passage. (#129 follow-up, user-reported.)
+
+### Changed
+- `docs/audit-gap-analysis.md` gains **failure mode 3**: port-invented abstractions with no ROM
+  counterpart. `inOpenDoor` is not a ROM routine — the ROM keeps one mutable collision map where the
+  port layers four override predicates — so a ROM→port audit is structurally blind to it. The
+  standing cause is tracked as **#137**.
+
+---
+
 ## 0.10.1 — 2026-08-07
 
 ### Fixed

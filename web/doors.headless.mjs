@@ -132,8 +132,29 @@ const test = `
           w60.rect.w === 32 && w60.rect.h === 48);
   __check('a CLOSED lock-16 bomb wall blocks movement (closedWallSolid)', closedWallSolid(wx, wy) === true);
   openDoor(w60);                                       // ChkBasementWall: an exploding bomb opens it
-  __check('once bombed open the wall is passable again',
-          closedWallSolid(wx, wy) === false && inOpenDoor(wx, wy) === true);
+  // Bombing it stops the WALL blocking, but does NOT blanket-open its rect: RestoreSavedTiles
+  // redraws the saved background, so the room's own collision decides what is walkable. An open
+  // wall must therefore be excluded from inOpenDoor (which exists for doorWAYS drawn over solid
+  // tiles) — otherwise Snake walks into the wall stubs left above and below the hole. (#129 follow-up)
+  __check('once bombed open the wall itself no longer blocks', closedWallSolid(wx, wy) === false);
+  __check('a broken wall does NOT blanket-open its rect (the background decides)',
+          inOpenDoor(wx, wy) === false);
+  {
+    // There must still be a real passage: at least one tile row inside the rect fully open.
+    const c = __coll60, x0 = w60.rect.x >> 3, y0 = w60.rect.y >> 3;
+    const cols = w60.rect.w >> 3, rows = w60.rect.h >> 3;
+    let openRow = -1, solidRow = -1;
+    for (let ty = y0; ty < y0 + rows; ty++) {
+      let open = 0;
+      for (let tx = x0; tx < x0 + cols; tx++) if (!c.solid[ty * c.width + tx]) open++;
+      if (open === cols && openRow < 0) openRow = ty;
+      if (open < cols && solidRow < 0) solidRow = ty;
+    }
+    __check('the bombed wall leaves a genuinely open row (the passage)', openRow >= 0, 'row=' + openRow);
+    __check('and the still-solid background rows keep blocking',
+            solidRow < 0 || blockedShape(w60.rect.x + 4, solidRow * 8 + 4, 'left', false, PROBES) === true,
+            'solidRow=' + solidRow);
+  }
 
   // --- #129/#130: a wall tile block is NOT uniformly solid -------------------------------------
   // Collision in the ROM is per TILE NUMBER (IdxColisTiles[tileset], one bit each) and these blocks
@@ -215,6 +236,24 @@ const test = `
   __check('#130 Snake WALKS up to x=56 at the cell wall', snake.x === 56, 'x=' + snake.x);
   __check('#130 ChkTouchDoor passes where the walk ends',
           touchDoor(activeDoors.find((x) => x.lock === 15)) === true);
+
+  // Room 59 after the bomb: the middle band opens, the top/bottom stubs stay solid. Driven
+  // through normalControl, since that is where the previous two bugs actually lived.
+  assets.collision = __coll59; currentRoom = 59; buildDoors(59);
+  guards.length = 0; guard = null;
+  snake.anim = ANIM_NORMAL; snake.controlMod = CONTROL_NORMAL;
+  const w59c = activeDoors.find((x) => x.lock === 16);
+  openDoor(w59c);                                        // the plastic bomb breaks it
+  snake.x = 40; snake.y = 76; snake.dir = 'left';        // tile rows 8-11 = the passage
+  walkUntilStuck('left', 120);
+  __check('#129 through the BOMBED wall: the middle passage is walkable',
+          snake.x < 16, 'x=' + snake.x);
+  snake.x = 40; snake.y = 44; snake.dir = 'left';        // tile rows 4-7 = the top stub
+  walkUntilStuck('left', 120);
+  __check('#129 the TOP stub of the broken wall still blocks', snake.x >= 24, 'x=' + snake.x);
+  snake.x = 40; snake.y = 124; snake.dir = 'left';       // tile rows 14-16 = the bottom stub
+  walkUntilStuck('left', 120);
+  __check('#129 the BOTTOM stub of the broken wall still blocks', snake.x >= 24, 'x=' + snake.x);
 
   assets.collision = __coll60; currentRoom = 60; buildDoors(60);
 

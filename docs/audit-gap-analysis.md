@@ -5,7 +5,7 @@ Prompted by issue **#132** (the destroyed power switch drew no wreck). The 2026-
 behaviour in an already-audited actor was absent. This is the post-mortem: what the audit's method
 could not see, verified against the source rather than guessed.
 
-Two distinct failure modes, with different fixes.
+Three distinct failure modes, with different fixes.
 
 ---
 
@@ -105,6 +105,47 @@ The index is the only thing that forces a second look.
 
 ---
 
+## Failure mode 3 — port abstractions the ROM has no counterpart for
+
+Found when the #129 fix shipped, was reported still broken, was fixed properly, and *then* exposed a
+third bug in the same area. All three trace to one thing.
+
+**The ROM keeps ONE collision map and mutates it.** `DrawWall` stamps a wall's tiles in;
+`RestoreSavedTiles` writes the saved background back when it breaks. "Does this pixel block?" is a
+single lookup, always.
+
+**The port keeps the room map immutable and layers predicates over it** — four of them:
+`closedWallSolid`, `closedDoorBlocking`, `doorBlockRect`, `inOpenDoor`, consulted in a particular
+order (`normalControl` asks `closedDoorBlocking` *before* `blocked`). Four places to state one fact.
+Every bug in this area is a disagreement between them:
+
+| Bug | Disagreement |
+|---|---|
+| #129, first fix | the per-cell mask went into `closedWallSolid`; `normalControl` checks `closedDoorBlocking` first, which used the whole rect via a `doorBlockRect` exception written for room 165 only. Room 165 worked, room 59 did not. |
+| broken-wall stubs | `inOpenDoor` blanket-opens an open door's rect — right for doorWAYS drawn over solid tiles, wrong for a broken wall, where the ROM restores the background. Room 59's block is open only in tile rows 8-11; Snake walked into the stubs at rows 4-7 and 12-16. |
+
+**Why no audit could have found it.** Both sweeps so far run **ROM → port**: *for each ROM routine,
+is it ported?* `inOpenDoor` is not a ROM routine. The ROM has no concept of "an open door's
+rectangle is passable" — there is nothing in the disassembly to diff it against. A complete
+ROM-side audit scores 100% and still misses this entirely.
+
+The missing question runs the other way: **this port function has no ROM counterpart — what is it
+standing in for, and is that stand-in faithful?** Port-invented abstractions are exactly where
+divergence hides, because there is no source to check them against. Tracked as **#137**.
+
+### And a testing lesson
+
+The first #129 fix passed every assertion in the suite while the game was unchanged, because the
+tests asserted the *predicates* (`freeAt`, `touchDoor`, `closedWallSolid`) rather than the
+behaviour. A test that drives `normalControl` — hold a direction, step until Snake stops — would
+have failed immediately. Movement-driven assertions are now in `doors.headless.mjs`; one of them
+promptly caught `capture.headless.mjs` silently running with `doorGfx = {}`, testing the
+stale-asset fallback rather than the real masks.
+
+**Rule:** assert the behaviour a player would observe, not the helper that implements it.
+
+---
+
 ## The sweep, run
 
 Action 4 below, carried out. The ROM dispatches every actor death through `KillActor` →
@@ -139,6 +180,8 @@ dispatch table is an exhaustive list — every actor is in it exactly once, so n
 | 3 | Triage all 13 unregistered approximation claims — each is either a bug to file or a row to add | tracked in **#133** |
 | 4 | When auditing an actor, read its `Banks0123.asm` death/removal path, not just its `logic/actors/` file | **done — see above** |
 | 5 | Treat any `VDP_Copy_*` from a non-save-buffer source as authored art to decode | convention |
+| 6 | Audit port-invented abstractions (no ROM counterpart) — collision predicates first | tracked in **#137** |
+| 7 | Assert observable behaviour (drive `normalControl`), not the helper predicates | **done** for doors/walls |
 
 ### Checks worth running again
 

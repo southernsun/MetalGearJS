@@ -216,6 +216,24 @@ const test = `
   __check('shooting the switch turns the floor OFF', powerSwitch===null && powerSwitchOn===false);
   snake.invulnTimer=0; chkElectricFloor();
   __check('the dead floor no longer zaps', snake.life===22);
+  // ErasePowerSw (Banks0123.asm:13603-13645): the blown switch leaves a WRECK on the wall, drawn as
+  // two 8x8 room tiles at PowerSwitchX/Y = the actor position offset by (-4,-8). Not a sprite and
+  // not an explosion — a page-1 VDP tile copy. (It used to just vanish, leaving clean wall.)
+  __check('#132 the blown switch leaves a wreck at (X-4, Y-8)',
+    powerSwitchOff !== null && powerSwitchOff.x === 56 && powerSwitchOff.y === 52,
+    JSON.stringify(powerSwitchOff));
+  __check('#132 the wreck is the NORMAL-room variant, not room 40s roof pair',
+    powerSwitchOff.roof === false);
+  // SetupEnemyRoom zeroes PowerSwitchY on every room change and InitPowerSwitch re-arms the switch.
+  buildPowerSwitch(37);
+  __check('#132 leaving the room clears the wreck and re-arms the switch',
+    powerSwitchOff === null && powerSwitch !== null && powerSwitchOn === true);
+  // Room 40 (the roof floor) reads PowSwOffGfxX = {50h,70h} -> room tiles 4Ah/4Eh instead.
+  currentRoom=40; powerSwitch={x:100,y:100,life:0,dmgTable:POWER_SWITCH_DMG,
+                               shotShape:{offY:0,distY:8,offX:0,distX:8}};
+  powerSwitchOn=true; powerSwitchTick();
+  __check('#132 room 40 uses the roof tile pair', powerSwitchOff && powerSwitchOff.roof === true);
+  currentRoom=37; buildPowerSwitch(37);
 
   // ==== Room-116 "Metal Gear floor switch": the electrified floor before Metal Gear (tiles 0x40/0x41) ====
   gameState='play'; snake.life=24; snake.invulnTimer=0;
@@ -376,6 +394,27 @@ const test = `
 vm.createContext(sandbox);
 try { vm.runInContext(src + test, sandbox, { filename: 'game.js+test' }); }
 catch (e) { console.error('HARNESS ERROR:', e); process.exit(2); }
+
+// ---- the destroyed-switch ART is a decoded ROM asset, not something drawn here (#132) ----
+// The two source tiles are pinned by the ROM: ErasePowerSw's X table {30h,38h} / PowSwOffGfxX
+// {50h,70h} at SY 10h, inverted through TileToVramAdd's page-1 grid (x=(A&1Fh)*8, y=(A>>5)*8).
+// Assert the exported metadata AND a byte hash of each PNG, so a silent re-export is caught.
+{
+  const meta = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'powerswitch-off.json'), 'utf8'));
+  sandbox.__check('#132 normal rooms decode ROM tiles 0x46/0x47 at offset (-4,-8), 8x16',
+    meta.normal.tiles[0] === 0x46 && meta.normal.tiles[1] === 0x47 &&
+    meta.normal.offX === -4 && meta.normal.offY === -8 &&
+    meta.normal.w === 8 && meta.normal.h === 16, JSON.stringify(meta.normal.tiles));
+  sandbox.__check('#132 room 40 decodes ROM tiles 0x4A/0x4E (PowSwOffGfxX)',
+    meta.roof.tiles[0] === 0x4A && meta.roof.tiles[1] === 0x4E, JSON.stringify(meta.roof.tiles));
+  for (const [file, want] of [['powerswitch-off.png', 'e0de6d4b'], ['powerswitch-off-roof.png', 'd490b29e']]) {
+    const buf = fs.readFileSync(path.join(dir, 'assets', file));
+    let h = 0x811c9dc5;                                     // FNV-1a over the PNG bytes
+    for (const b of buf) { h ^= b; h = Math.imul(h, 0x01000193) >>> 0; }
+    sandbox.__check(`#132 ${file} matches the decoded ROM tiles`, h.toString(16) === want,
+      'hash=' + h.toString(16) + ' bytes=' + buf.length);
+  }
+}
 
 let pass = 0;
 for (const r of results) { console.log((r.ok ? 'PASS ' : 'FAIL ') + r.name + (r.extra ? '  ['+r.extra+']' : '')); if (r.ok) pass++; }

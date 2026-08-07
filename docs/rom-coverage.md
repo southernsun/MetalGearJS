@@ -44,6 +44,18 @@ Honesty notes:
 | Ending, checkpoints, save/load + passwords | 4 | 64 | 4 | 0 | 68 | 94% | 97% |
 | **Overall (gameplay)** | | **1327** | **128** | **0** | **1455** | **91%** | **96%** |
 
+## Main-bank blind spot (not scored)
+
+`Banks0123.asm` (13784 lines, 877 routine labels) belongs to no
+component above, so **none of it is in the table**. Of its labels,
+**420 are cited somewhere in `web/game.js` and 457 are never mentioned.**
+
+Much of the bank is genuinely out of scope (VDP/VRAM plumbing, bank switching, MSX
+hardware), so this is a *watch list*, not a backlog. It is printed because a routine
+living here rather than in a per-actor `logic/` file is invisible to every number above —
+the gap that hid the destroyed power switch (`ErasePowerSw`, issue #132). See
+[`audit-gap-analysis.md`](audit-gap-analysis.md).
+
 ## Offline tooling (not routine-counted)
 
 These reimplement ROM **data decoding** in the C# export tools rather than porting game

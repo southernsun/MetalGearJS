@@ -45,6 +45,7 @@ public sealed class GameData
             "data/palettes.asm", "data/roomsconnections.asm", "data/doors.asm",
             "data/weapongfxxy.asm", "data/itemgfxxy.asm",   // HUD icon coordinate tables (DrawWeaponHUD/DrawItemHUD)
             "data/tileblocks.asm",                          // radio screen / portrait tile maps (DrawTilesBlock)
+            "data/musicradioconfig.asm",                    // idxMapZones — the ROM's per-room AREA partition
             "logic/konamilogo.asm",                         // KonamiLogoPal + KonamiLogoTiles (boot logo)
             "logic/mainmenu.asm",                           // MenuPalette + MGLogoColors + Metal/GearTilesDat
         })

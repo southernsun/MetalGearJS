@@ -32,6 +32,26 @@ implemented as the spawner it actually is.
   replacing the placed-dog approximation. (#131)
 - **Per-cell wall collision masks** — `door-gfx.json` now carries each breakable wall's `solid`
   mask, decoded from the ROM's `IdxColisTiles` bitmap by `RoomViewer`'s `SaveWallBlock`.
+- **`mapzones.json`** — the ROM's own per-room area table (`idxMapZones`), exported by
+  `--export-mapzones`.
+- **Destroyed power switch** — blowing the controller with the remote missile now leaves the ROM's
+  **wreck** on the wall instead of clean wall (`ErasePowerSw`). The art is decoded, not drawn: the
+  ROM VDP-copies two 8×8 tiles from page 1, and `PowSwOffGfxX`'s two words invert through
+  `TileToVramAdd`'s page-1 grid to room tiles `46h`/`47h` (normal rooms) and `4Ah`/`4Eh` (room 40),
+  exported byte-exact by the new `--export-powerswitch`. The wreck lasts the room visit only —
+  `SetupEnemyRoom` clears `PowerSwitchY` and re-arms the switch on every room change. (#132)
+
+### Changed
+- **Audit post-mortem** — [`docs/audit-gap-analysis.md`](docs/audit-gap-analysis.md) records why the
+  faithfulness audit missed #132 and #131: `Banks0123.asm` (877 routine labels, 457 never mentioned
+  in the port) is in no coverage component, and 13 in-code "documented divergence" claims have no
+  row in the divergences index. `rom-coverage.md` now reports the main-bank gap instead of omitting
+  it; the unregistered claims are tracked in #133.
+- **Room maps are now one PNG per building floor** (12 maps, was 10 grouped by walk-component).
+  The split uses `idxMapZones`, and the floor numbering is pinned by the elevator car stops plus
+  three explicit radio lines (uniform → "basement of building no.1", mask → "1st floor",
+  parachute → "floor 2"). All 235 rooms are still placed; derivation is written up in
+  [`docs/room-maps/README.md`](docs/room-maps/README.md).
 
 ### Fixed
 - **Breakable walls were solid across their whole tile block.** ROM collision is per *tile number*,
@@ -43,6 +63,12 @@ implemented as the spawner it actually is.
   - **room 59's side lane could not be walked at all**, hiding the room behind it (#129).
 - The dog spawner is no longer drawn as a dog standing at (128,96) — inside a wall in several
   basement rooms (#131).
+- **Shotgunner blast used a hand-set speed and the wrong aim.** `InitShotGunnerShot` calls the same
+  `CalcShot2` with `a = 90h` as `InitGuardShot`, so the blast takes the ROM's **quantized** aim
+  (`CalcQuadrantDegree`'s 64 quadrants → `SinTable`) at the `0x90` shot speed — 4.48 px per ROM
+  iteration at `Dificulty 0`, not the 2.5 px/tick constant, and not a Euclidean-normalised vector.
+  Difficulty scaling now reaches the shotgunner as well. The `GUARD_BULLET_SPEED` constant is gone.
+  (First two items triaged out of #133.)
 
 ---
 

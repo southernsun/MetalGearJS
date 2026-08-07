@@ -71,6 +71,56 @@ internal static class Program
             return;
         }
 
+        // Headless: --export-powerswitch — the DESTROYED power-switch image.
+        // ErasePowerSw (Banks0123.asm:13617-13645) does not use a sprite: it VDP-copies two 8x8
+        // tiles from page 1 to the screen at (switchX-4, switchY-8), the second 8px below the
+        // first. The source X pair comes from a 2-word table -- room 40 (the roof floor) reads
+        // PowSwOffGfxX = {50h, 70h}, every other room reads the word BEFORE it, {30h, 38h} --
+        // and SY is always 10h. TileToVramAdd (:2687) lays the room tileset out in page 1 as a
+        // 32-wide grid, tile A at x=(A&1Fh)*8, y=(A>>5)*8, so SY 10h = tile row 2 and those X
+        // values invert to tile numbers 46h/47h (normal rooms) and 4Ah/4Eh (room 40).
+        if (args.Length > 0 && args[0] == "--export-powerswitch")
+        {
+            string psOut = args.Length > 1 ? args[1] : RomPaths.DefaultOutDir();
+            var psRenderer = new Render.RoomRenderer(data);
+            var psJson = new System.Text.StringBuilder("{\n");
+            var psRows = new (int room, int upper, int lower, string file)[]
+            {
+                (37, 0x46, 0x47, "powerswitch-off.png"),        // rooms 37/110/116 - the {30h,38h} word
+                (40, 0x4A, 0x4E, "powerswitch-off-roof.png"),   // room 40 - PowSwOffGfxX {50h,70h}
+            };
+            for (int i = 0; i < psRows.Length; i++)
+            {
+                var r = psRows[i];
+                var scene = psRenderer.BuildScene(r.room);
+                using var bmp = new System.Drawing.Bitmap(8, 16, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                foreach (var (tile, oy) in new[] { (r.upper, 0), (r.lower, 8) })
+                {
+                    var t = scene.Tiles[tile];
+                    for (int y = 0; y < 8; y++)
+                        for (int x = 0; x < 8; x++)
+                            bmp.SetPixel(x, oy + y, scene.Palette[t.Get(x, y)]);
+                }
+                bmp.Save(Path.Combine(psOut, r.file), System.Drawing.Imaging.ImageFormat.Png);
+                psJson.Append("  \"").Append(r.room == 40 ? "roof" : "normal").Append("\": {\"img\":\"")
+                      .Append(r.file).Append("\",\"w\":8,\"h\":16,\"offX\":-4,\"offY\":-8,\"tiles\":[")
+                      .Append(r.upper).Append(',').Append(r.lower).Append("]}")
+                      .Append(i == psRows.Length - 1 ? "\n" : ",\n");
+                Console.WriteLine($"  room {r.room}: tiles 0x{r.upper:X2}/0x{r.lower:X2} -> {r.file}");
+            }
+            psJson.Append("}\n");
+            File.WriteAllText(Path.Combine(psOut, "powerswitch-off.json"), psJson.ToString());
+            Console.WriteLine("PowerSwitch: wrote powerswitch-off{,-roof}.png + powerswitch-off.json");
+            return;
+        }
+
+        // Headless: --export-mapzones — regenerate only mapzones.json (idxMapZones).
+        if (args.Length > 0 && args[0] == "--export-mapzones")
+        {
+            ExportMapZones(data, args.Length > 1 ? args[1] : RomPaths.DefaultOutDir());
+            return;
+        }
+
         // Debug: --doors-audit â€” list every room's doors with their lock type (IdDoorsLogic & 0x1F)
         // and dest, flag card/elevator doors, and dump elevator rooms' connections. Helps pick a
         // keycard-door room + an elevator shaft to export.
@@ -378,6 +428,7 @@ internal static class Program
         ExportRadio(data, outDir);
         ExportTitle(data, outDir);
         ExportPitfall(renderer, data, outDir);
+        ExportMapZones(data, outDir);
 
         // Legacy single-room files for the movement/punch prototype.
         using (var bmp = renderer.DrawRoom(start))
@@ -1156,6 +1207,27 @@ internal static class Program
     /// (dest &lt; 0xF0) and its destination is in the exported set â€” that also drops the
     /// fake/special doors (lorry locators, the Metal Gear lock), whose dests are out of cluster.
     /// </summary>
+    /// <summary>web/assets/mapzones.json — the ROM's own area partition (`idxMapZones`, a nibble
+    /// per room; Banks0123.asm:1063). MapZone gates radio reception ("values of 5 or more need the
+    /// antenna"), but the table is simply which AREA a room belongs to, and it partitions the world
+    /// into 11 contiguous zones that line up exactly with the walk-connected regions plus the
+    /// elevator splits — i.e. one zone per building floor. Used by --export-map to group the maps.
+    /// </summary>
+    private static void ExportMapZones(GameData data, string outDir)
+    {
+        byte[] t = data.Asm.Bytes("idxMapZones");
+        var sb = new System.Text.StringBuilder("{\n");
+        for (int room = 0; room < t.Length * 2; room++)
+        {
+            int z = (room % 2 == 0) ? (t[room >> 1] >> 4) & 0xF : t[room >> 1] & 0xF;
+            sb.Append("  \"").Append(room).Append("\": ").Append(z)
+              .Append(room == t.Length * 2 - 1 ? "\n" : ",\n");
+        }
+        sb.Append("}\n");
+        File.WriteAllText(Path.Combine(outDir, "mapzones.json"), sb.ToString());
+        Console.WriteLine($"MapZones: wrote mapzones.json ({t.Length * 2} rooms)");
+    }
+
     private static void WriteDoorsJson(string doorsPath, string typesPath, GameData data,
                                        List<int> rooms, HashSet<int> exported)
     {

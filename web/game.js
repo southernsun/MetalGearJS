@@ -151,8 +151,10 @@ const GUARD_CHASE_SPEED = SPEED;      // alert == Snake (ROM DirectionSpeeds2 ==
 const ALERT_ICON_TICKS  = 0x10;       // SetAlertRoom (chkdiscover.asm:313-314): AlertIconTimer = 0x10
                                       //   (16 iters, ~0.27s) — the "!" flash, NOT a persistent badge (#57)
 const GUARD_MAX_BULLETS = 6;          // ROM caps active guard bullets at 6
-const GUARD_BULLET_SPEED = 2.5;       // px/tick; derived from the 0x90 shot-speed param (exact
-                                      //   8.8 fixed-point scaling approximated — tuned for feel)
+// (There is no hand-set enemy-bullet magnitude any more. Every aimed enemy shot goes through
+// calcShot(), the literal CalcShot2 port — ShotSpeed = Dificulty*8 + param, decomposed over
+// CalcQuadrantDegree's 64 quadrants via SinTable. At Dificulty 0 the 0x90 param yields 4.48 px per
+// ROM iteration on-axis. The old GUARD_BULLET_SPEED constant's last user was the shotgunner. #133.)
 const TOUCH_DAMAGE  = actorTouchDmg(ID_GUARD_SLOW);   // ActorTouchDamage[ID_GUARD_SLOW] = 2 (guard body)
 // Guard TOUCH box (ChkTouchEnemy2: ActorsShapeTouch[ID_GUARD-1] = 8 → ImpactAreasInfo row 8,
 // data/shapes.asm: 0, 8, 0, 0Ch). ChkArea (logic/punchenemy.asm): touch iff
@@ -407,6 +409,13 @@ async function loadAssets() {
   [barrelSheet, barrelMeta] = await Promise.all([
     loadImage('assets/barrel.png').catch(() => null),    // SprRollingBarrel column, 2 roll frames
     loadJSON('assets/barrel.json').catch(() => null),
+  ]);
+  // The DESTROYED power switch (ErasePowerSw): two room tiles, exported byte-exact — see
+  // powerSwitchOff below.
+  [powSwOffImg, powSwOffRoofImg, powSwOffMeta] = await Promise.all([
+    loadImage('assets/powerswitch-off.png').catch(() => null),
+    loadImage('assets/powerswitch-off-roof.png').catch(() => null),
+    loadJSON('assets/powerswitch-off.json').catch(() => null),
   ]);
   respawnData = await loadJSON('assets/respawn.json').catch(() => null);
   guardPalettes = await loadJSON('assets/guard-palettes.json').catch(() => null);
@@ -1546,6 +1555,11 @@ const ELECTRIC_TILES = { 16: [0x60, 0x61], 37: [0x60, 0x61], 110: [0x60, 0x61],
                          40: [0x45, 0x46], 116: [0x40, 0x41] };
 let powerSwitch = null;        // { x, y, life, jetpack } — the room's destructible switch
 let powerSwitchOn = false;
+// PowerSwitchY/PowerSwitchX (Banks0123.asm:13608) — where the WRECKED switch is drawn once it has
+// been blown up, or null for "no power switch destroyed". ErasePowerSw/ChkDrawDestroyPS (:13617,
+// :13647) redraw it every frame while PowerSwitchOn == 0 and the coordinates are non-zero.
+let powerSwitchOff = null;
+let powSwOffImg = null, powSwOffRoofImg = null, powSwOffMeta = null;
 let powerFadeBright = 1, powerFadeDelta = 1;   // PowerSwitchLogic palette fade: BRIGHT 1..7 (white at 7)
 // weapondamage.asm row for ID_POWER_SWITCH (index 0x2C-1=43): every weapon is 0xFF (no damage)
 // EXCEPT the remote-control MISSILE (=5). With LIFE 2, only the missile (weapon id 7) can blow the
@@ -1554,6 +1568,11 @@ const POWER_SWITCH_DMG = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 5 };
 function buildPowerSwitch(n) {
   const a = actorsData && actorsData[n];
   const p = a && a.powerswitch;
+  // SetupEnemyRoom (Banks0123.asm:6094-6106) zeroes PowerSwitchOn AND PowerSwitchY/X on every room
+  // change, and InitPowerSwitch re-arms the switch — so a blown switch is NOT remembered: the wreck
+  // shows for the rest of this room visit only, and the switch (and its floor) is back if you leave
+  // and return. Reproduced literally.
+  powerSwitchOff = null;
   // A JETPACK switch (room 40) does NOT arm the floor at entry — the jetpack guard's
   // descend-and-flip event creates the real power switch mid-scene (JetpackSwitchLogic2).
   if (p && p.jetpack) { powerSwitch = null; powerSwitchOn = false; return; }
@@ -1578,6 +1597,15 @@ function chkElectricFloor() {
 }
 function powerSwitchTick() {
   if (powerSwitch && powerSwitch.life <= 0) {      // shot dead: the floor dies with it
+    // ErasePowerSw (Banks0123.asm:13603-13645): mark it destroyed, remember where it stood as
+    // PowerSwitchY = ACTOR.Y - 8 / PowerSwitchX = ACTOR.X - 4, SetRoomPal (the floor colour stops
+    // pulsing) and DismissActor, then draw the WRECK there — two 8x8 room tiles, the second 8px
+    // below the first, VDP-copied from page 1. It is not a sprite and not an explosion: room 40
+    // (the roof floor) reads PowSwOffGfxX = {50h,70h}, every other room the word before it,
+    // {30h,38h}; SY is always 10h, and TileToVramAdd's page-1 grid (tile A at x=(A&1Fh)*8,
+    // y=(A>>5)*8) inverts those to room tiles 46h/47h and 4Ah/4Eh. Exported byte-exact by
+    // `--export-powerswitch`. (The port used to just delete the switch, leaving clean wall.)
+    powerSwitchOff = { x: powerSwitch.x - 4, y: powerSwitch.y - 8, roof: currentRoom === 40 };
     powerSwitch = null;
     powerSwitchOn = false;
   }
@@ -1622,6 +1650,16 @@ function electricTint(img, bright) {
   c2.drawImage(img, 0, 0);
   electricTintCache.set(key, cv);
   return cv;
+}
+// ChkDrawDestroyPS (Banks0123.asm:13647-13658): while a switch has been blown up in this room
+// (PowerSwitchY non-zero and PowerSwitchOn == 0), the wreck is re-rendered over the background.
+// Two 8x8 room tiles stacked into an 8x16 image at (PowerSwitchX, PowerSwitchY) — the switch's
+// own position offset by (-4,-8), so it sits centred on where the panel was.
+function drawDestroyedPowerSwitch() {
+  if (!powerSwitchOff) return;
+  const img = powerSwitchOff.roof ? powSwOffRoofImg : powSwOffImg;
+  if (!img) return;
+  ctx.drawImage(img, powerSwitchOff.x, powerSwitchOff.y);
 }
 function drawPowerSwitchFloor() {
   if (!powerSwitchOn) return;
@@ -5203,8 +5241,9 @@ function radioReplyGate(p) {
 // + Banks0123.asm ChkAlarmEnd. The alarm is game-wide, not per-guard: raised by being seen
 // (GuardSetAlarm) or by noise (an unsuppressed shot in a non-secure room, ChkAlertTrigger). A red alert
 // (RedAlertRooms bit) arms reinforcements; the alarm ends via ChkAlarmEnd/StopAlert (alert room
-// cleared/left, or an elevator) restoring patrol. Single guard per room → reinforcements respawn that
-// one guard up to NumRespawnGuards times (the ROM spawns distinct actors — documented divergence).
+// cleared/left, or an elevator) restoring patrol. Reinforcements are distinct actors, spawned by
+// respawnTick() at the room's RespawnInfo locations — see #128. (The note that used to sit here,
+// excusing a single reused guard, outlived the code that made it true. #133.)
 const RED_ALERT_ROOMS = [1, 0x1C, 3, 0, 0xA3, 0x10, 0x58, 0, 4, 1, 0x9F, 0, 0, 8, 0, 1];  // chkdiscover.asm (128 bits)
 const ROOM_SHOT_SECURE = new Set([                                                        // checkweaponalert.asm
   5, 6, 9, 10, 20, 29, 37, 50, 64, 65, 66, 67, 68, 71, 83, 102, 103, 110, 119, 120, 150, 193, 208, 209,
@@ -5226,9 +5265,9 @@ let roomAlert = -1;           // RoomAlert — the room where the alarm was trig
 
 // Raise the global alarm (GuardSetAlarm → SetAlert → SetAlertMode). No-op if already up. Sets the
 // alert level from RedAlertRooms, records the trigger room, plays the alert music, and pulls the
-// current room's guard into the chase. (Reinforcements — the ROM's NumRespawnGuards spawning NEW
-// guards from room exits — need the multi-actor system and are deferred; red alert here = the red
-// alert sign, not in-place respawns.)
+// current room's guard into the chase. Reinforcements (NumRespawnGuards, the RespawnInfo type and
+// its two spawn points) are live in respawnTick() — this comment claimed they were "deferred" long
+// after #128 implemented them.
 function raiseAlarm(room, forceRed, respawnSeed) {
   if (alertMode) return;
   alertMode = true;
@@ -6217,10 +6256,15 @@ function sgTick(b) {
         damage(SG_TOUCH_DMG);
       if (snake.y >= 166 && snake.x >= 170) return;                 // safe behind the boxes
       if ((b.anim & 0x0F) !== 0) return;                            // shoot every 16th iteration
-      const dx = snake.x - b.x, dy = (snake.y - 12) - (b.y - 16);
-      const len = Math.hypot(dx, dy) || 1;                          // CalcShot2: aimed, speed 0x90
-      bullets.push({ x: b.x, y: b.y - 16, vx: dx / len * GUARD_BULLET_SPEED,
-                     vy: dy / len * GUARD_BULLET_SPEED, dmg: SG_SHOT_DMG, sgAge: 0, srcId: ID_SGUNNER_SHOT });
+      // InitShotGunnerShot (shotgunner.asm:188-199) calls the SAME `CalcShot2` with `a = 90h` as
+      // InitGuardShot — so the blast takes the ROM's quantized-angle aim (CalcQuadrantDegree's
+      // 64 quadrants + SinTable), not a Euclidean-normalised vector, and its speed is the
+      // 0x90 shot-speed param, not a tuned constant. Halved for our 60Hz ticks, exactly like
+      // fireGuardBullet. (Was `dx/len * 2.5` — a hand-tuned magnitude on a smoothly-aimed
+      // vector: both the speed and the aim were wrong. #133.)
+      const v = calcShot(b.x, b.y - 16, 0x90);
+      bullets.push({ x: b.x, y: b.y - 16, vx: v.vx / 2, vy: v.vy / 2,
+                     dmg: SG_SHOT_DMG, sgAge: 0, srcId: ID_SGUNNER_SHOT });
       playBuf(assets.shotgunBuf);                                   // SFX 0x0F
       return;
     }
@@ -8320,6 +8364,7 @@ function draw() {
   drawElevator();                                 // the cabin, in elevator rooms
   drawCameras();                                  // wall cameras + live laser shots
   drawPowerSwitchFloor();                         // the live electric tiles' pulse
+  drawDestroyedPowerSwitch();                     // ChkDrawDestroyPS: the wrecked switch
   drawBridges();                                  // the roof walkways (under the actors)
   drawBoss();                                     // Machine Gun Kid (room 20)
   drawScorpions();                                // the desert wildlife

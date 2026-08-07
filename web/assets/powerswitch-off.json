@@ -1,0 +1,4 @@
+{
+  "normal": {"img":"powerswitch-off.png","w":8,"h":16,"offX":-4,"offY":-8,"tiles":[70,71]},
+  "roof": {"img":"powerswitch-off-roof.png","w":8,"h":16,"offX":-4,"offY":-8,"tiles":[74,78]}
+}

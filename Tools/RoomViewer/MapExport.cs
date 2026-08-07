@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
@@ -50,21 +50,42 @@ internal static class MapExport
         public int Id, Type, Lock, Dest;
     }
 
-    // Human labels for the areas, taken from docs/SESSION-STATE.md ("The connected world",
-    // "THE 2026-06-12 FULL-GAME RUN"). Keyed by the lowest room of the component so the mapping
-    // survives re-exports. Anything not listed falls back to a plain room-range name.
-    private static readonly Dictionary<int, (string Slug, string Title)> AreaNames = new()
+    // One map per BUILDING FLOOR, keyed by the ROM's own area partition `idxMapZones`
+    // (data/musicradioconfig.asm, exported to mapzones.json). MapZone is the radio-reception zone
+    // ("values of 5 or more need the antenna", Banks0123.asm:1063), but the table is simply which
+    // AREA a room is in: 11 contiguous zones that line up exactly with the walk-connected regions
+    // once the elevator shafts are cut, and they carry the door-only interior rooms with them.
+    //
+    // The vertical order comes from the elevator shafts (doors.json dest 240-250, chained by
+    // connections.json), and three of the floor numbers are confirmed by the game's own radio text:
+    //   Building 1 shaft, lower car 241: room 63 -> zone 4, room 15 -> zone 0, room 27 -> zone 1
+    //                     upper car 242: room 39 -> zone 2, room 53 -> zone 3
+    //     "ENEMY'S UNIFORM IS AVAILABLE IN THE BASEMENT OF BUILDING NO.1" -> uniform is in room 122 = zone 4
+    //     "GO TO THE SOUTH PART OF THE 1ST FLOOR TO GET YOUR MASK"        -> a mask is in room 174 = zone 0
+    //     "The Parachute is on floor 2"                                   -> parachute is in room 139 = zone 1
+    //   Building 2 shaft, lower car 243: room 95 -> zone 8, room 81 -> zone 6, room 72 -> zone 5
+    //                     upper car 244: room 88 -> zone 7
+    //   Long underground car 247-250: room 109 (zone 9) at the top, room 115 (zone 10) at the bottom
+    //     -- "METAL GEAR IS IN 100TH BASEMENT OF BUILDING NO.3".
+    // (One radio line disagrees: "The Flashlight is on Floor 1" while the LIGHT item sits in room
+    // 151 = zone 2. The three anchors above and the shaft order agree with each other, so the
+    // ladder below follows them.)
+    private static readonly Dictionary<int, (string Slug, string Title)> ZoneNames = new()
     {
-        [0] = ("building1-1f-courtyard-water", "Building 1 - 1F, courtyard, water & north corridors"),
-        [16] = ("building1-2f-laser-loop", "Building 1 - 2F laser/camera loop"),
-        [28] = ("building1-2f-branch", "Building 1 - 2F branch (elevator 240 from room 3)"),
-        [40] = ("building1-upper", "Building 1 - upper floor (elevator 242)"),
-        [54] = ("basement-dark-building2-gas", "Basement/prison -> dark corridor -> Building 2 gas floor"),
-        [79] = ("building2-main", "Building 2 - main floor"),
-        [88] = ("building2-upper", "Building 2 - upper floor (elevator 244)"),
-        [111] = ("building3", "Building 3"),
-        [224] = ("escape-ladders", "Escape ladders"),
+        [4]  = ("building1-b1-basement", "Building 1 - Basement (B1): prison, cells & dark corridor"),
+        [0]  = ("building1-1f", "Building 1 - 1F: start, courtyard & north corridors"),
+        [1]  = ("building1-2f", "Building 1 - 2F: laser / camera loop"),
+        [2]  = ("building1-3f", "Building 1 - 3F"),
+        [3]  = ("building1-4f", "Building 1 - 4F: top floor & roof"),
+        [5]  = ("outside-desert-water", "Outside - desert, water channel & Building 2 approach"),
+        [6]  = ("building2-1f", "Building 2 - 1F"),
+        [7]  = ("building2-2f", "Building 2 - 2F"),
+        [8]  = ("building2-b1-gas", "Building 2 - Basement (B1): gas floor"),
+        [9]  = ("underground-to-building3", "Underground - passage to Building 3 (elevator 247)"),
+        [10] = ("building3", "Building 3 - deep basement (Metal Gear)"),
     };
+    // Draw order: each building bottom-up, then the shafts.
+    private static readonly int[] ZoneOrder = { 4, 0, 1, 2, 3, 5, 8, 6, 7, 9, 10 };
 
     public static void Run(string[] args)
     {
@@ -89,36 +110,41 @@ internal static class MapExport
             }
         foreach (var l in doorSources.Values) l.Sort();
 
-        // Connected components over the walk-graph, never traversing an elevator room.
-        var comps = Components(rooms.Where(r => !IsElevator(r)), conn, cutElevators: true);
-        comps.Sort((a, b) => b.Count != a.Count ? b.Count - a.Count : a.Min() - b.Min());
-
-        var cores = comps.Where(c => c.Count > 1).ToList();
-        var singles = comps.Where(c => c.Count == 1).Select(c => c[0]).OrderBy(r => r).ToList();
-
-        // Attach each door-only room to the area it opens off (following door chains).
-        var owner = new Dictionary<int, int>();
-        for (int i = 0; i < cores.Count; i++) foreach (int r in cores[i]) owner[r] = i;
-        for (int pass = 0; pass < 16; pass++)
+        // Group by the ROM's MapZone — one map per building floor (see ZoneNames above). Elevator
+        // rooms are excluded: they are the cut points BETWEEN floors and get their own map.
+        var zoneOf = LoadMapZones(Path.Combine(assetsDir, "mapzones.json"));
+        var byZone = new Dictionary<int, List<int>>();
+        var unzoned = new List<int>();
+        foreach (int r in rooms.Where(r => !IsElevator(r)).OrderBy(r => r))
         {
-            bool changed = false;
-            foreach (int s in singles)
-            {
-                if (owner.ContainsKey(s)) continue;
-                foreach (int src in doorSources.GetValueOrDefault(s, new List<int>()))
-                    if (owner.TryGetValue(src, out int o)) { owner[s] = o; changed = true; break; }
-            }
-            if (!changed) break;
+            if (!zoneOf.TryGetValue(r, out int z)) { unzoned.Add(r); continue; }
+            if (!byZone.TryGetValue(z, out var l)) byZone[z] = l = new List<int>();
+            l.Add(r);
         }
 
+        // Within a zone, a room that has at least one walk connection to another room in the SAME
+        // zone belongs on the grid; the rest are door-only interiors drawn in the strip below it.
+        var cores = new List<List<int>>();
         var interiors = new List<List<int>>();
-        for (int i = 0; i < cores.Count; i++) interiors.Add(new List<int>());
-        var orphans = new List<int>();
-        foreach (int s in singles)
+        var zoneIds = new List<int>();
+        foreach (int z in ZoneOrder.Concat(byZone.Keys.Where(k => !ZoneOrder.Contains(k)).OrderBy(k => k)))
         {
-            if (owner.TryGetValue(s, out int o)) interiors[o].Add(s);
-            else orphans.Add(s);
+            if (!byZone.TryGetValue(z, out var members)) continue;
+            var set = new HashSet<int>(members);
+            var core = new List<int>();
+            var inner = new List<int>();
+            foreach (int r in members)
+            {
+                bool walks = false;
+                if (conn.TryGetValue(r, out var c))
+                    foreach (var n in c)
+                        if (n.HasValue && n.Value != r && set.Contains(n.Value)) { walks = true; break; }
+                (walks ? core : inner).Add(r);
+            }
+            if (core.Count == 0) { core = inner; inner = new List<int>(); }   // all-interior zone
+            cores.Add(core); interiors.Add(inner); zoneIds.Add(z);
         }
+        var orphans = unzoned;
 
         int placed = 0, index = 0;
         var summary = new StringBuilder();
@@ -127,9 +153,11 @@ internal static class MapExport
         for (int i = 0; i < cores.Count; i++)
         {
             index++;
-            var name = AreaNames.GetValueOrDefault(cores[i].Min());
+            int z = zoneIds[i];
+            var name = ZoneNames.TryGetValue(z, out var n)
+                ? n : (Slug: $"zone{z}", Title: $"MapZone {z}");
             placed += Compose(outDir, roomsDir, conn, doors, doorSources, index,
-                              name.Slug, name.Title, cores[i], interiors[i], summary);
+                              name.Slug, $"{name.Title}  [MapZone {z}]", cores[i], interiors[i], summary);
         }
 
         // The elevator shafts themselves: the cut points, drawn as one map so the shaft chains
@@ -477,6 +505,19 @@ internal static class MapExport
     {
         using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
         return doc.RootElement.GetProperty("rooms").EnumerateArray().Select(e => e.GetInt32()).ToList();
+    }
+
+    /// <summary>mapzones.json — room -> MapZone (`idxMapZones`), the ROM's area partition that
+    /// this exporter groups the maps by. Written by --export-mapzones / --export-web.</summary>
+    private static Dictionary<int, int> LoadMapZones(string path)
+    {
+        var map = new Dictionary<int, int>();
+        if (!File.Exists(path))
+            throw new FileNotFoundException(
+                "mapzones.json is missing — run `dotnet run --project Tools/RoomViewer -- --export-mapzones` first.", path);
+        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+        foreach (var p in doc.RootElement.EnumerateObject()) map[int.Parse(p.Name)] = p.Value.GetInt32();
+        return map;
     }
 
     private static Dictionary<int, int?[]> LoadConnections(string path)

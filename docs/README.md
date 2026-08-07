@@ -55,6 +55,7 @@ matches the ROM. (Several are auto-generated — regenerate, don't hand-edit.)
 |-----|--------|
 | [SESSION-STATE](SESSION-STATE.md) | The browser-port handoff/orientation doc: how to run and re-export the `web/` game, controls, the OpenSpec change log, known divergences, and current coverage. **Start here for the port.** |
 | [rom-coverage](rom-coverage.md) | Per-component matrix of how much of the original ROM's gameplay routines are reimplemented (done/partial/todo, strict vs blended %). *Auto-generated* by `node Tools/coverage/coverage.mjs`. |
+- [`audit-gap-analysis.md`](audit-gap-analysis.md) — why the faithfulness audit missed #132/#131, and the two method gaps behind it.
 | [rom-data-formats](rom-data-formats.md) | The ROM's data-storage formats the exporters parse: graphics planes, door/item/radio/text tables, sound opcodes. |
 | [room-rendering](room-rendering.md) | The room render pipeline traced ROM → RoomViewer → `web/game.js` (metatiles, tile decode, palettes, water/ladder tile constants). |
 | [room-maps](room-maps/) | Overview PNGs of the whole world: every room screenshot tiled and labelled with its number, laid out from `connections.json`, split at the elevator shafts, with door/elevator links annotated. *Auto-generated* by `dotnet run --project Tools/RoomViewer -- --export-map`. |

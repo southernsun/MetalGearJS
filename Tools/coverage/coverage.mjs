@@ -109,6 +109,35 @@ function render(results, tooling) {
   L.push(`| **Overall (gameplay)** | | **${tot.done}** | **${tot.partial}** | **${tot.todo}** | **${tot.inScope}** | **${oPct}%** | **${oBlend}%** |`);
   L.push('');
 
+  // ---- the main-bank blind spot (see docs/audit-gap-analysis.md) --------------------------
+  // Banks0123.asm is the main bank and is in NO component's file list, so none of its ~880
+  // routines are in the denominator above. That is what let the destroyed power switch
+  // (ErasePowerSw/DrawDestroyPowSw, #132) sit unported behind a 92%-covered component: the
+  // per-actor file logic/actors/powerswitch.asm holds only the fade half of the actor.
+  // Reported here rather than scored, because a large part of the bank IS genuinely out of
+  // scope (VDP/VRAM plumbing, bank switching, MSX hardware) and inventing a denominator for
+  // it would over- or under-claim. The point is that the number is visible, not zero.
+  {
+    const bank = parseLabels('Banks0123.asm');
+    if (!bank.missing) {
+      const js = fs.readFileSync(path.join(REPO, 'web', 'game.js'), 'utf8');
+      const stem = (n) => n.replace(/[0-9_]+$/, '');
+      const uncited = bank.labels.filter((n) => !js.includes(n) && !js.includes(stem(n)));
+      L.push('## Main-bank blind spot (not scored)');
+      L.push('');
+      L.push(`\`Banks0123.asm\` (${bank.lines} lines, ${bank.labels.length} routine labels) belongs to no`);
+      L.push('component above, so **none of it is in the table**. Of its labels,');
+      L.push(`**${bank.labels.length - uncited.length} are cited somewhere in \`web/game.js\` and ${uncited.length} are never mentioned.**`);
+      L.push('');
+      L.push('Much of the bank is genuinely out of scope (VDP/VRAM plumbing, bank switching, MSX');
+      L.push('hardware), so this is a *watch list*, not a backlog. It is printed because a routine');
+      L.push("living here rather than in a per-actor `logic/` file is invisible to every number above —");
+      L.push('the gap that hid the destroyed power switch (`ErasePowerSw`, issue #132). See');
+      L.push('[`audit-gap-analysis.md`](audit-gap-analysis.md).');
+      L.push('');
+    }
+  }
+
   if (tooling && tooling.length) {
     L.push('## Offline tooling (not routine-counted)');
     L.push('');

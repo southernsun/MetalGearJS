@@ -34,6 +34,10 @@ implemented as the spawner it actually is.
   mask, decoded from the ROM's `IdxColisTiles` bitmap by `RoomViewer`'s `SaveWallBlock`.
 - **`mapzones.json`** — the ROM's own per-room area table (`idxMapZones`), exported by
   `--export-mapzones`.
+- **Dev options are discoverable** — `?help` renders every URL option and key binding in the page,
+  from a single `DEV_OPTIONS`/`DEV_KEYS` registry that the console banner also points at (the list
+  previously existed only as scattered comments). New `?showroom`, and **F2** toggles the current
+  room number on screen at any time.
 - **Destroyed power switch** — blowing the controller with the remote missile now leaves the ROM's
   **wreck** on the wall instead of clean wall (`ErasePowerSw`). The art is decoded, not drawn: the
   ROM VDP-copies two 8×8 tiles from page 1, and `PowSwOffGfxX`'s two words invert through

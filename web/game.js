@@ -3398,6 +3398,14 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'p' || e.key === 'P') { e.preventDefault(); togglePause(); }
 });
 
+// F2 toggles the room-number readout (same thing ?showroom turns on at boot), so you can
+// identify a room without reloading. Dev/QA only — not a ROM key.
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'F2') return;
+  e.preventDefault();
+  devShowRoom = !devShowRoom;
+});
+
 // Password / SAVE / LOAD entry: while PAUSED, typed letters/digits roll into the password buffer
 // (the ROM checks it on ExitPauseMode). 'p' is the pause toggle, not a buffer char.
 window.addEventListener('keydown', (e) => {
@@ -3449,7 +3457,11 @@ function showVersion() {
     const el = document.getElementById('version');
     if (el) el.textContent = APP_VERSION_FULL;
   } catch (e) { /* no DOM (headless): the console line below still runs */ }
-  try { console.log(`Metal Gear browser port ${APP_VERSION_FULL}`); } catch (e) {}
+  try {
+    console.log(`Metal Gear browser port ${APP_VERSION_FULL}`);
+    // Point at the option list rather than dumping it — ?help renders DEV_OPTIONS/DEV_KEYS.
+    console.log('Dev options: add ?help to the URL (or F2 for the room number).');
+  } catch (e) {}
 }
 function initBugReporter() {
   if (!bugReporterAvailable()) return;            // headless / unsupported browser: no-op
@@ -8646,6 +8658,82 @@ function perfSample(now, updMs, drwMs, ticks) {
     perf.frames = 0; perf.lastSample = now;
   }
 }
+// ---- Dev URL options: ONE registry, used by ?help, the console banner and the parser ---------
+// Kept as data so the three can never drift apart (the previous list lived only in scattered
+// comments at the bottom of main(), so nothing told you what existed).
+const DEV_OPTIONS = [
+  ['?room=N',    'Jump straight into room N (0-235). Snake is placed on open floor; ladder and water rooms enter their own mode. Skips the title.'],
+  ['?showroom',  'Show the current room number on screen (top-right). Toggle any time with F2 — no URL needed.'],
+  ['?arsenal',   'Grant every weapon with ammo, the suppressor, 3 rations, all 8 keycards and the key items. Needed before the 1-7 weapon keys do anything (see below).'],
+  ['?goggles',   'Grant + select the infrared goggles (for the laser rooms).'],
+  ['?alert',     'Force the guard alert on.'],
+  ['?red',       'Force a RED alert (arms reinforcements).'],
+  ['?sleep',     'Make the current room’s guard start asleep.'],
+  ['?capture',   'Drop Snake inside room 8’s capture trigger zone.'],
+  ['?mgko',      'Destroy Metal Gear on spawn (use with ?room=118): opens door 99 and starts the self-destruct countdown, skipping the 16-bomb puzzle.'],
+  ['?collision', 'Tint solid tiles, to see the collision map.'],
+  ['?perf',      'Performance HUD: fps, ticks/frame, update/draw ms, actor counts, heap (for the slowdown bug #2).'],
+  ['?help',      'Show this list in the page.'],
+  ['#auto',      'Skip the title and boot straight into play.'],
+];
+const DEV_KEYS = [
+  ['Arrows',      'Move'],
+  ['Space / M',   'Fire (hold for SMG autofire)'],
+  ['N / Shift',   'Punch'],
+  ['1 - 7',       'Select weapon — handgun, SMG, grenade, rocket, mine, plastic bomb, missile. Like the ROM’s F1-F7 SelectWeapon, a weapon you do NOT own is ignored: without ?arsenal only the handgun responds.'],
+  ['0',           'Holster (no weapon)'],
+  ['Q / E',       'Open the weapon / item menu'],
+  ['I',           'Cycle the selected item'],
+  ['R',           'Radio (the ROM’s F4)'],
+  ['P',           'Pause — while paused, typed letters/digits go to the password buffer'],
+  ['F2',          'Toggle the room-number display'],
+  ['F5',          'Continue (on the GAME OVER screen)'],
+  ['B',           'File a bug report with the last ~20s of gameplay'],
+];
+// ?help renders the registry into the page as a plain overlay (no canvas drawing, so it is
+// readable at any scale and selectable/copyable).
+function showDevHelp() {
+  if (typeof document === 'undefined' || !document.body) return;
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const row = ([k, d]) => `<tr><td style="padding:2px 12px 2px 0;color:#9ef0a0;white-space:nowrap;vertical-align:top"><code>${esc(k)}</code></td><td style="padding:2px 0;color:#d8d8d8">${esc(d)}</td></tr>`;
+  const box = document.createElement('div');
+  box.id = 'dev-help';
+  box.setAttribute('style',
+    'position:fixed;inset:0;z-index:9999;overflow:auto;background:rgba(8,10,14,.95);' +
+    'color:#d8d8d8;font:13px/1.5 ui-monospace,Consolas,monospace;padding:24px');
+  box.innerHTML =
+    `<div style="max-width:900px;margin:0 auto">` +
+    `<h2 style="color:#9ef0a0;margin:0 0 4px">Metal Gear JS — dev options</h2>` +
+    `<p style="margin:0 0 18px;color:#8a8a8a">${esc(APP_VERSION_FULL)} — press Esc or click to close</p>` +
+    `<h3 style="color:#9ef0a0;margin:0 0 6px">URL options</h3>` +
+    `<p style="margin:0 0 8px;color:#8a8a8a">Combine with <code>&amp;</code>, e.g. ` +
+    `<code>?room=37&amp;arsenal&amp;showroom</code></p>` +
+    `<table style="border-collapse:collapse;margin-bottom:22px">${DEV_OPTIONS.map(row).join('')}</table>` +
+    `<h3 style="color:#9ef0a0;margin:0 0 6px">Keys</h3>` +
+    `<table style="border-collapse:collapse">${DEV_KEYS.map(row).join('')}</table>` +
+    `</div>`;
+  const close = () => box.remove();
+  box.addEventListener('click', close);
+  window.addEventListener('keydown', function onEsc(e) {
+    if (e.key === 'Escape') { close(); window.removeEventListener('keydown', onEsc); }
+  });
+  document.body.appendChild(box);
+}
+// The room-number readout (?showroom / F2). Drawn top-right so it clears the HUD's life bar.
+let devShowRoom = false;
+function drawRoomHud() {
+  if (!devShowRoom) return;
+  const label = 'ROOM ' + currentRoom;
+  ctx.save();
+  ctx.font = '8px monospace';
+  ctx.textBaseline = 'top';
+  const w = Math.ceil(ctx.measureText(label).width) + 6;
+  ctx.fillStyle = 'rgba(0,0,0,.65)';
+  ctx.fillRect(VIEW_W - w - 2, 2, w, 11);
+  ctx.fillStyle = '#9ef0a0';
+  ctx.fillText(label, VIEW_W - w + 1, 4);
+  ctx.restore();
+}
 function drawPerfHud() {
   const m = (typeof performance !== 'undefined' && performance.memory)
     ? (performance.memory.usedJSHeapSize / 1048576).toFixed(0) + 'M' : 'n/a';
@@ -8678,6 +8766,7 @@ function loop(now) {
   while (acc >= TICK_MS) { update(); acc -= TICK_MS; ticks++; }
   const t1 = devPerf ? performance.now() : 0;
   draw();
+  drawRoomHud();                                   // ?showroom / F2
   if (devPerf) { perfSample(now, t1 - t0, performance.now() - t1, ticks); drawPerfHud(); }
   requestAnimationFrame(loop);
 }
@@ -8826,6 +8915,8 @@ async function main() {
   if (new URLSearchParams(location.search).has('red')) devForceRed = true;   // force red alert (reinforcements)
   if (new URLSearchParams(location.search).has('collision')) devShowCollision = true;   // tint solid tiles
   if (new URLSearchParams(location.search).has('perf')) devPerf = true;   // ?perf: perf HUD for the slowdown bug (#2)
+  if (new URLSearchParams(location.search).has('showroom')) devShowRoom = true;   // ?showroom: room number on screen (F2 toggles)
+  if (new URLSearchParams(location.search).has('help')) showDevHelp();            // ?help: the DEV_OPTIONS/DEV_KEYS overlay
   // ?sleep: make the current room's guard start asleep (no cluster room carries the ROM sleeping flag
   // yet, so this dev hook lets the sleep/wake behaviour be exercised).
   if (new URLSearchParams(location.search).has('sleep') && guard) { guard.sleepy = true; guard.asleep = true; }

@@ -28,16 +28,18 @@ const recCtx = makeCtx();
 const el = () => ({ getContext: () => recCtx, addEventListener(){}, classList:{add(){},remove(){}},
                     style:{}, blur(){}, width:0, height:0 });
 
+const H = {};              // captured window listeners, exposed to the sandbox as __H
 const sandbox = {
   console, Math, Date, JSON, Set, Map, Array, Object, URLSearchParams, isNaN, parseInt, parseFloat,
   requestAnimationFrame: () => 0,
   document: { getElementById: () => el(), addEventListener(){} },
-  window: { addEventListener(){}, AudioContext: undefined, webkitAudioContext: undefined },
+  window: { addEventListener(t, fn) { (H[t] ||= []).push(fn); }, AudioContext: undefined, webkitAudioContext: undefined },
   location: { search: '', hash: '', href: '' },
   fetch: () => Promise.reject(new Error('no fetch in harness')),
   Image: class { set src(_) {} },
   performance: { now: () => 0 },
 };
+sandbox.__H = H;           // captured window keydown listeners (see the input checks below)
 sandbox.globalThis = sandbox;
 
 let src = fs.readFileSync(path.join(dir, 'game.js'), 'utf8');
@@ -175,6 +177,46 @@ const test = `
     __clogVersion === APP_VERSION, __clogVersion + ' vs ' + APP_VERSION);
   __check('changelog: its newest date matches APP_BUILD',
     __clogDate === APP_BUILD, __clogDate + ' vs ' + APP_BUILD);
+  // ==== Input bindings: the weapon number keys (user asked whether 1-7/0 still work) ==========
+  // The ROM selects weapons with F1-F7 -> SelectWeapon; browsers reserve the F-keys, so the port
+  // binds 1-7 (and 0 = holster). SelectWeapon IGNORES a weapon you do not own, which is why the
+  // keys look dead on a fresh boot -- only the handgun responds until ?arsenal or real pickups.
+  // Pinned here so "are the number keys broken?" is answerable by the suite, not by guesswork.
+  {
+    const press = (key) => {
+      const ev = { key, repeat: false, preventDefault(){}, stopImmediatePropagation(){}, stopPropagation(){} };
+      for (const fn of (__H.keydown || [])) fn(ev);
+    };
+    gameState = 'play'; equipRemoved = false;
+    weapons.clear(); for (let i = 1; i <= 7; i++) weapons.set(i, 30);
+    selectedWeapon = 1;
+    press('3'); __check('weapon key 3 selects weapon 3', selectedWeapon === 3, 'sel='+selectedWeapon);
+    press('7'); __check('weapon key 7 selects weapon 7', selectedWeapon === 7, 'sel='+selectedWeapon);
+    press('0'); __check('key 0 holsters (selectedWeapon 0)', selectedWeapon === 0, 'sel='+selectedWeapon);
+    press('1'); __check('weapon key 1 selects the handgun', selectedWeapon === 1, 'sel='+selectedWeapon);
+    // SelectWeapon's ownership gate — NOT a bug: the ROM does the same.
+    weapons.clear(); weapons.set(1, 30); selectedWeapon = 1;
+    press('5');
+    __check('an UNOWNED weapon key is ignored (ROM SelectWeapon)', selectedWeapon === 1, 'sel='+selectedWeapon);
+    // EquipRemoved (after capture) blocks selection entirely.
+    weapons.set(5, 30); equipRemoved = true; selectedWeapon = 1;
+    press('5');
+    __check('EquipRemoved blocks weapon selection', selectedWeapon === 1, 'sel='+selectedWeapon);
+    equipRemoved = false;
+    // F2 toggles the room readout; ?showroom sets the same flag at boot.
+    const r0 = devShowRoom;
+    press('F2'); __check('F2 toggles the room-number readout', devShowRoom === !r0);
+    press('F2'); __check('F2 toggles it back', devShowRoom === r0);
+    // The dev-option registry is the single source for ?help and the console banner.
+    __check('every DEV_OPTIONS entry has a key and a description',
+      DEV_OPTIONS.length >= 12 && DEV_OPTIONS.every((o) => o.length === 2 && o[0] && o[1]),
+      'n='+DEV_OPTIONS.length);
+    __check('DEV_KEYS documents the 1-7 weapon binding and its ownership rule',
+      DEV_KEYS.some((k) => k[0] === '1 - 7' && /do NOT own/.test(k[1])));
+    __check('DEV_OPTIONS documents ?showroom and ?help',
+      DEV_OPTIONS.some((o) => o[0] === '?showroom') && DEV_OPTIONS.some((o) => o[0] === '?help'));
+  }
+
 })();
 `;
 

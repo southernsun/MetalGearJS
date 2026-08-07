@@ -29,8 +29,11 @@ been done once and written down.
   `Tools/audit`. Re-render/re-export through these instead of inventing a one-off.
 - **[`docs/faithfulness-divergences.md`](docs/faithfulness-divergences.md)** — the canonical
   record of deliberate & deferred divergences (do-not-"fix" list).
-- **`web/*.headless.mjs`** — the headless-test pattern (load the real `web/game.js` in a vm
-  sandbox, assert against ROM-derived numbers).
+- **`web/*.headless.mjs`** — the headless suites (load the real `web/game.js` in a `node:vm`
+  sandbox, assert against ROM-derived numbers). **Run them all with `node Tools/test.mjs`**
+  (`node Tools/test.mjs doors rank` to filter, `--verbose` for every line). CI runs the same
+  command on push and PR. `web/render.headless.mjs` is the odd one out: it records the 2D-context
+  call list and asserts what is actually DRAWN — add a check there for any new visible element.
 
 If a doc and the disassembly disagree, **the disassembly wins — and fix the doc** (they drift;
 e.g. the coordinate-word byte order in `rom-data-formats.md` was wrong until 2026-06).

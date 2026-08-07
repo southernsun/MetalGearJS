@@ -33,6 +33,19 @@ Both remaining finds from the death-path sweep.
   **removed**, ending their patrol and their alarm trigger. Laser cameras take 0 from every weapon
   and stay indestructible; they die only with Metal Gear.
 
+### Added
+- **`node Tools/test.mjs`** — one command to run every headless suite, with a per-suite summary and
+  assertion counts (`node Tools/test.mjs doors rank` filters, `--verbose` prints every line). CI now
+  calls it instead of an inline shell loop. There was no single entry point before: no
+  `package.json`, no `npm test`, and the suites live in `web/` — so "how do I run the tests?" had no
+  obvious answer even though 28 suites and CI already existed.
+- **`web/render.headless.mjs`** — the first suite that asserts what is actually **drawn**. It
+  records the 2D-context call list with arguments and queries it: the room bitmap blits at the
+  origin, a blown power switch blits its wreck at (96,8), a dying camera swaps its sprite for the
+  explosion, the `?showroom` readout appears, and `draw()` throws in none of the eight game states.
+  Deliberately not a golden-image hash — those fail on every legitimate change and get updated
+  reflexively until they mean nothing.
+
 ### Fixed
 - **Jetpack troopers explode instead of vanishing** (#136). `KillJetpack` replaces the trooper with
   a 3-frame explosion and only dismisses him at `0x10` iterations; he used to disappear on the same

@@ -19,11 +19,4 @@ jobs:
       # under node:vm against the checked-in web/assets, so no disassembly or npm install is
       # needed. (The C# tools / exporters require the sibling disassembly and are not run here.)
       - name: Run headless test suites
-        run: |
-          fail=0
-          for f in web/*.headless.mjs; do
-            echo "::group::$f"
-            node "$f" || fail=1
-            echo "::endgroup::"
-          done
-          exit $fail
+        run: node Tools/test.mjs --verbose
